@@ -283,7 +283,7 @@ So:
   read, and each source's phase; the Kafka Connect worker exports Debezium's
   lag behind the database and each connector's state
   ([metrics-labels.md](metrics-labels.md#postgres-cdc-sources)). The
-  alerting rules in `deploy/base/victoria-metrics/alerts` watch them, and
+  alerting rules in `deploy/base/alerting/rules` watch them, and
   link to the [runbook](runbook.md#a-postgres-source-fails).
 - **A lost slot:** Debezium does not fail when the database has invalidated
   its slot: it tries to take it again for half an hour. The controller

@@ -24,12 +24,46 @@ it and runs in the namespace `customer-c-7f3k2q`, with brokers
 - [Rotating a customer's password](#rotating-a-customers-password)
 - [Upgrading Strimzi](#upgrading-strimzi)
 - [Upgrading Kafka](#upgrading-kafka)
+- [Alerting](#alerting)
+- [Partitions are not in sync](#partitions-are-not-in-sync)
+- [No active controller](#no-active-controller)
+- [A customer is not ready](#a-customer-is-not-ready)
+- [A broker's volume fills up](#a-brokers-volume-fills-up)
+- [Tiered storage falls behind](#tiered-storage-falls-behind)
+- [The Kafka agent is not reconciling](#the-kafka-agent-is-not-reconciling)
+- [Client telemetry reaches its limit](#client-telemetry-reaches-its-limit)
+- [A scrape target is down](#a-scrape-target-is-down)
 - [A Postgres source fails](#a-postgres-source-fails)
 - [A source's database is unreachable](#a-sources-database-is-unreachable)
 - [A replication slot left behind](#a-replication-slot-left-behind)
 - [A lost replication slot](#a-lost-replication-slot)
 
 ## Where to look
+
+**Alerts** come first. vmalert evaluates the rules of
+`deploy/base/alerting/rules` and Alertmanager sends pages to PagerDuty and
+Slack, and warnings to Slack ([Alerting](#alerting)). Each alert names the
+customer (`tenant`), its cluster and the environment, and links its section:
+
+| Alert | Severity | Section |
+| --- | --- | --- |
+| `KafkaOfflinePartitions`, `KafkaUnderMinISRPartitions` | page | [Partitions are not in sync](#partitions-are-not-in-sync) |
+| `KafkaNoActiveController` | page | [No active controller](#no-active-controller) |
+| `KafkaBrokersDown` | page | [A broker is down](#a-broker-is-down) |
+| `CustomerNotReady` | page | [A customer is not ready](#a-customer-is-not-ready) |
+| `KafkaUnderReplicatedPartitions` | warn | [Partitions are not in sync](#partitions-are-not-in-sync) |
+| `KafkaVolumeNearlyFull` | warn | [A broker's volume fills up](#a-brokers-volume-fills-up) |
+| `TieredStorageCopyErrors`, `TieredStorageCopyLagGrowing` | warn | [Tiered storage falls behind](#tiered-storage-falls-behind) |
+| `ListenerCertificateExpiring` | warn | [Certificates](#certificates) |
+| `KafkaAgentNotReconciling` | warn | [The Kafka agent is not reconciling](#the-kafka-agent-is-not-reconciling) |
+| `ClientTelemetryNearLimit` | warn | [Client telemetry reaches its limit](#client-telemetry-reaches-its-limit) |
+| `ScrapeTargetDown` | warn | [A scrape target is down](#a-scrape-target-is-down) |
+| `PostgresSourceSlotLost` | page | [A lost replication slot](#a-lost-replication-slot) |
+| `PostgresSourceFailed`, `PostgresSourceSlotNearLimit` | page | [A Postgres source fails](#a-postgres-source-fails) |
+| `PostgresSourceTaskFailed`, `PostgresSourceBehind`, `PostgresSourceRetainedWALHigh`, `PostgresSourcePausedLong` | warn | [A Postgres source fails](#a-postgres-source-fails) |
+| `PostgresSourceDatabaseUnreachable` | warn | [A source's database is unreachable](#a-sources-database-is-unreachable) |
+| `PostgresSourceSlotNotDropped` | warn | [A replication slot left behind](#a-replication-slot-left-behind) |
+| `Watchdog` | none | [Alerting](#alerting) |
 
 - **The operator console** (`/operator`) lists every customer with a dot per
   condition of its `Customer`: `CertificateIssued`, `KafkaReady`,
@@ -65,7 +99,7 @@ it and runs in the namespace `customer-c-7f3k2q`, with brokers
   worker logs as `kubectl -n customer-c-7f3k2q logs changeport-connect-connect-0`.
   Their metrics (`changeport_source_*`, `debezium_streaming_*`,
   `kafka_connect_*`, by `tenant` and `source`) and the alerts on them, in
-  `deploy/base/victoria-metrics/alerts/postgres-sources.yaml`, link to the
+  `deploy/base/alerting/rules/postgres-sources.yaml`, link to the
   sections below.
 
 ## Provisioning a customer
@@ -192,8 +226,10 @@ kubectl -n object-store exec deploy/seaweedfs -- \
 
 ## A broker is down
 
-**Signs:** `KafkaReady` turns false; the cluster's under-replicated partitions
-rise; a broker pod is not ready or restarts.
+**Signs:** `KafkaBrokersDown` pages once a production or `dev-ha` cluster has
+had fewer active brokers than its three for five minutes; `KafkaReady` turns
+false; the cluster's under-replicated partitions rise; a broker pod is not
+ready or restarts.
 
 On a production or `dev-ha` cluster, one broker down does not stop the
 customer: every partition has three copies, two of which must be in sync, so
@@ -301,6 +337,9 @@ Three kinds of certificate are involved; all renew themselves.
 
   The usual cause is the DNS challenge: cert-manager's Pod Identity role
   may only change the `kafka.*` hosted zones.
+  `ListenerCertificateExpiring` warns when one has less than 14 days left,
+  which means renewal has been failing for weeks: cert-manager exports when
+  each certificate expires, and VictoriaMetrics scrapes it.
 - **Strimzi's cluster and clients CAs**, inside each customer's cluster, for
   the brokers' internal listener and the platform's mTLS users
   (`changeport-agent`, `changeport-console`): Strimzi's defaults, renewed
@@ -313,6 +352,192 @@ Three kinds of certificate are involved; all renew themselves.
 
 The `letsencrypt` and `letsencrypt-staging` ClusterIssuers, and external-dns,
 come with the domain and the EKS environments (#8, #28).
+
+## Alerting
+
+vmalert (`deploy/base/alerting`) evaluates the rules of
+`deploy/base/alerting/rules` every 30 seconds against VictoriaMetrics, and
+writes their state back to it, so that a restart resumes the alerts that
+were pending. Alertmanager routes what fires:
+
+- **Pages** (`severity: page`), for what hurts customers now, go to
+  PagerDuty and to Slack.
+- **Warnings** (`severity: warn`), to act on within hours, go to Slack.
+- **The Watchdog** always fires, every minute, to a dead man's switch,
+  which raises its own alarm once it stops hearing from it: vmalert,
+  Alertmanager or VictoriaMetrics is down, or the network to the receivers.
+- A page about a cluster silences the warnings it explains: its
+  under-replicated partitions and its scrape targets down.
+
+The receivers' secrets are the Secret `alertmanager-receivers` in the
+`metrics` namespace, out of the repository. Write it from `.env`
+(`ALERTMANAGER_DEV_SLACK_API_URL`, `ALERTMANAGER_DEV_PAGERDUTY_ROUTING_KEY`
+and `ALERTMANAGER_DEV_WATCHDOG_URL`, and the same with `PROD`; see
+`.env.sample`) with:
+
+```bash
+just alerting-config dev
+CONFIRM=prod just alerting-config prod
+```
+
+Alertmanager reads them each time it sends, so nothing restarts.
+
+On kind, everything goes to the alert receiver of
+`deploy/overlays/kind/alert-receiver.yaml`, which prints each alert:
+`kubectl -n metrics logs deploy/alert-receiver`. To see what fires, or to
+silence an alert during planned work:
+
+```bash
+kubectl -n metrics port-forward svc/alertmanager 9093   # http://localhost:9093
+kubectl -n metrics port-forward svc/vmalert 8880        # http://localhost:8880
+```
+
+`hack/alerting-test.sh` (in the `failover` suite) freezes a broker of a
+three-broker customer on kind and waits for the page, then for it to
+resolve; `just alerting-check` validates the rules and Alertmanager's
+configuration.
+
+## Partitions are not in sync
+
+Alerts: `KafkaOfflinePartitions` and `KafkaUnderMinISRPartitions` page,
+`KafkaUnderReplicatedPartitions` warns.
+
+- **Offline partitions** have no leader: nobody can write or read them.
+  All their replicas' brokers are down, or their only in-sync replica's.
+- **Under min.insync.replicas,** fewer replicas are in sync than the topic
+  needs: producers with `acks=all` fail. On a production cluster, two of
+  three brokers are down or behind.
+- **Under-replicated** partitions have a follower that is behind, usually
+  while a broker restarts or catches up after one was down.
+
+1. Find which brokers are down or behind: [A broker is down](#a-broker-is-down),
+   and [An availability zone is down](#an-availability-zone-is-down) when
+   all of a zone's are.
+2. Brokers that run but stay behind: check their volumes
+   ([A broker's volume fills up](#a-brokers-volume-fills-up)), their CPU
+   (`kubectl -n customer-c-7f3k2q top pods`) and the network between zones.
+3. Do not move partitions by hand while brokers come back: they catch up by
+   themselves.
+
+## No active controller
+
+Alert: `KafkaNoActiveController`.
+
+The cluster's KRaft controllers have no leader, or no broker reports
+metrics at all. Without an active controller, nothing changes in the
+cluster: no topics, no new leaders, and brokers that restart cannot rejoin.
+A production cluster's three nodes are each a controller, so this takes two
+of them down.
+
+1. Check the pods and the Kafka resource:
+
+   ```bash
+   kubectl -n customer-c-7f3k2q get pods -o wide
+   kubectl -n customer-c-7f3k2q get kafka c-7f3k2q -o jsonpath='{.status.conditions}'
+   ```
+
+2. Pods that run but report nothing: check that VictoriaMetrics scrapes
+   them ([A scrape target is down](#a-scrape-target-is-down)).
+3. Otherwise bring the nodes back as in [A broker is down](#a-broker-is-down);
+   the controllers elect a leader once a majority is back.
+
+## A customer is not ready
+
+Alert: `CustomerNotReady`.
+
+The provisioning controller has not seen the customer's cluster ready for a
+quarter of an hour: it is stuck being created, or one of its parts broke.
+The `Customer`'s Ready condition names the part it waits for, as the
+operator console shows it ([Where to look](#where-to-look)):
+
+- `CertificatePending`: see [Certificates](#certificates).
+- `KafkaPending`: the brokers; see [A broker is down](#a-broker-is-down).
+- `UsersPending`: the Strimzi User Operator; its logs are in the entity
+  operator pod.
+- `AgentPending`: [The Kafka agent is not reconciling](#the-kafka-agent-is-not-reconciling).
+- `ProvisioningFailed` or `InvalidSpec`: the provisioner's logs.
+
+## A broker's volume fills up
+
+Alert: `KafkaVolumeNearlyFull`, from the kubelets' volume stats.
+
+A broker keeps only recent data locally, a day per topic, and the rest in
+tiered storage, so a volume that fills up usually means tiered storage
+does not keep up, or a customer writes far more than their plan.
+
+1. Check tiered storage first ([Tiered storage falls behind](#tiered-storage-falls-behind)).
+2. Check what grew: the console's topic sizes, or
+   `kafka_log_log_size` by topic in VictoriaMetrics.
+3. Grow the volume if the customer outgrew it: production volumes can grow,
+   not shrink. Never delete data from a broker's volume by hand.
+
+## Tiered storage falls behind
+
+Alerts: `TieredStorageCopyErrors`, `TieredStorageCopyLagGrowing`.
+
+The brokers copy each closed segment to the platform's tiered storage
+bucket, under the customer's prefix, and keep it locally until it is
+copied. Copies that fail or fall behind fill the brokers' volumes.
+
+1. Read the brokers' logs for the copy errors:
+
+   ```bash
+   kubectl -n customer-c-7f3k2q logs c-7f3k2q-dual-role-0 | grep -i -E 'remote|s3|RemoteLogManager'
+   ```
+
+2. Access denied: the brokers' Pod Identity association or role
+   (`provisioner` associates them; the tiered storage isolation test checks
+   the policy). Throttled or slow: S3 or the network.
+3. Once copies succeed, the lag shrinks by itself.
+
+## The Kafka agent is not reconciling
+
+Alert: `KafkaAgentNotReconciling`.
+
+The agent next to each cluster turns tiered storage on for new topics,
+keeps client telemetry set up and measures consumer lag. While it does not
+reconcile, new topics stay on the brokers only and lag goes stale.
+
+```bash
+kubectl -n customer-c-7f3k2q get pods -l app.kubernetes.io/name=changeport-agent
+kubectl -n customer-c-7f3k2q logs deploy/changeport-agent
+```
+
+Usually it cannot reach or authenticate to the brokers, for example after a
+cluster CA renewal before its restart ([Certificates](#certificates)), or
+the cluster is down.
+
+## Client telemetry reaches its limit
+
+Alert: `ClientTelemetryNearLimit`.
+
+The metrics customers' clients push (KIP-714) have a limit per broker,
+2,000 series in 24 hours ([metrics-labels.md](metrics-labels.md)), so that a
+customer with many short-lived clients cannot overload the metrics store.
+Past it, new clients' series are dropped; the brokers' own are not.
+
+Usually a customer runs many clients that restart often, each with a new
+instance ID. Tell them, and raise the job's `series_limit` in
+`deploy/base/victoria-metrics/scrape.yaml` if their usage is legitimate.
+
+## A scrape target is down
+
+Alert: `ScrapeTargetDown`.
+
+VictoriaMetrics cannot scrape a broker, an agent, a Kafka Connect worker,
+the provisioner, cert-manager or a kubelet for 10 minutes, so its metrics
+and the alerts on them are missing.
+
+1. Is the pod down? Then it is the problem itself, such as
+   [A broker is down](#a-broker-is-down).
+2. Otherwise check what VictoriaMetrics says about the target:
+
+   ```bash
+   kubectl -n metrics port-forward svc/victoria-metrics 8428   # http://localhost:8428/targets
+   ```
+
+   A NetworkPolicy that blocks the metrics port, or a changed port, are the
+   usual causes.
 
 ## Rotating a customer's password
 

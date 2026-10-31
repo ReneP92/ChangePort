@@ -124,6 +124,16 @@ console-reload:
 dev-user:
     hack/dev-user.sh
 
+# Give an EKS environment's Alertmanager its receivers from .env (see .env.sample)
+[group('Platform components')]
+alerting-config env:
+    hack/alerting-config.sh {{env}}
+
+# Validate the alerting rules and Alertmanager's configuration (needs Docker)
+[group('Platform components')]
+alerting-check:
+    hack/alerting-check.sh
+
 # Give the console on kind its Clerk keys from .env (see .env.sample)
 [group('Images')]
 console-config:
@@ -208,6 +218,11 @@ cdc-test customer="demo":
 [group('Local development (kind + Strimzi)')]
 cdc-recovery-test customer="demo":
     hack/cdc-recovery-test.sh {{customer}}
+
+# Freeze a broker of a three-broker customer until alerting pages, and see the page resolve
+[group('Local development (kind + Strimzi)')]
+alerting-test customer="ha":
+    hack/alerting-test.sh {{customer}}
 
 # Check that a customer's first Postgres source brings Kafka Connect and the schema registry, and the last takes them
 [group('Local development (kind + Strimzi)')]

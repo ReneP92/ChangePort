@@ -21,7 +21,8 @@
 # Postgres CDC source, and the CDC runtime test checks that a customer's
 # first source brings Kafka Connect and the schema registry, and the last
 # takes them. The failover suite freezes a zone and drains a broker of a
-# three-zone customer under load. The cdc suite takes a Postgres CDC source
+# three-zone customer under load, then freezes one of its brokers until
+# alerting pages, and the page resolves once it is back. The cdc suite takes a Postgres CDC source
 # of the demo customer from created through streaming and paused to deleted,
 # then makes the database lose a source's slot and recovers it as the
 # runbook says.
@@ -68,7 +69,7 @@ core_suite() {
   log "Checking that every image was preloaded"
   missing=$(kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}{range .spec.initContainers[*]}{" "}{.image}{end}{range .spec.containers[*]}{" "}{.image}{end}{"\n"}{end}' |
     awk '$1 != "kube-system" && $1 != "local-path-storage" { for (i = 2; i <= NF; i++) print $i }' | sort -u |
-    grep -vxF -f <(printf '%s\n' "${KIND_PRELOAD_IMAGES[@]}" "$(content_tag "$KAFKA_IMAGE")" "$(content_tag "$AGENT_IMAGE")" "$(content_tag "$CONNECT_IMAGE")" "$(content_tag "$REGISTRY_GATEWAY_IMAGE")" "$(content_tag "$PROVISIONER_IMAGE")" "$(content_tag "$CONSOLE_IMAGE")") || true)
+    grep -vxF -f <(printf '%s\n' "${KIND_PRELOAD_IMAGES[@]}" "${KIND_CONTROL_PLANE_IMAGES[@]}" "$(content_tag "$KAFKA_IMAGE")" "$(content_tag "$AGENT_IMAGE")" "$(content_tag "$CONNECT_IMAGE")" "$(content_tag "$REGISTRY_GATEWAY_IMAGE")" "$(content_tag "$PROVISIONER_IMAGE")" "$(content_tag "$CONSOLE_IMAGE")") || true)
   [[ -z "$missing" ]] || die "pods run images that are not built or preloaded by hack/lib.sh:"$'\n'"$missing"
 
   if [[ ${KEEP:-0} != 1 ]]; then
@@ -88,7 +89,12 @@ core_suite() {
 }
 
 if [[ $SUITE == core || $SUITE == all ]]; then core_suite; fi
-if [[ $SUITE == failover || $SUITE == all ]]; then "$ROOT/hack/failover-test.sh"; fi
+if [[ $SUITE == failover || $SUITE == all ]]; then
+  # The alerting test freezes a broker of the failover test's customer, and
+  # deprovisions it then.
+  KEEP=1 "$ROOT/hack/failover-test.sh" ha
+  "$ROOT/hack/alerting-test.sh" ha
+fi
 if [[ $SUITE == cdc || $SUITE == all ]]; then
   "$ROOT/hack/cdc-test.sh" "$DEMO_CUSTOMER"
   "$ROOT/hack/cdc-recovery-test.sh" "$DEMO_CUSTOMER"

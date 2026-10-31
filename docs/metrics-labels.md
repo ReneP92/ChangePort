@@ -52,6 +52,7 @@ consumer group's lag with `consumer_group` and `topic` added:
 | `changeport_consumergroup_lag_seconds` | Age of the oldest message the group has not consumed yet, the highest over the topic's partitions |
 | `changeport_consumergroup_lag_messages` | Messages the group has not consumed yet, summed over the topic's partitions |
 | `changeport_consumergroup_lag_capped` | 1 when the lag is older than 23 hours, so `lag_seconds` is a lower bound |
+| `changeport_agent_last_success_timestamp_seconds` | When the agent last reconciled the cluster's topic settings |
 
 The agent measures lag every 30 seconds without reading any message. It
 reads each group's committed offsets and the partitions' end offsets, looks
@@ -66,11 +67,36 @@ outside Kafka are not. When a lookup fails, for example while a topic
 switches to tiered storage, the group keeps its last value instead of
 reporting a wrong one.
 
+## Customers, certificates and volumes
+
+The provisioning controller, in the provisioner, exports each customer's
+cluster as it sees it, with `tenant`; the `changeport-provisioner` job copies
+`tenant` into `cluster`. A customer being deprovisioned has none of these
+series, so it raises no alerts:
+
+| Metric | Meaning |
+| --- | --- |
+| `changeport_customer_ready` | 1 while the `Customer` is Ready |
+| `changeport_customer_brokers` | The brokers the cluster runs, as its profile (`profile`) says |
+| `changeport_customer_provisioned_timestamp_seconds` | When the cluster first became Ready; absent before, so that alerts about a cluster that is down wait for it |
+
+Two jobs read what Kubernetes components know about customers, each series
+with the `tenant` (and `cluster`) of its `namespace`, `customer-<tenant>`:
+
+- `cert-manager` scrapes cert-manager's controller:
+  `certmanager_certificate_expiration_timestamp_seconds` and
+  `certmanager_certificate_ready_status`, by certificate (`name`).
+- `kubelet` scrapes every node's kubelet through the API server:
+  `kubelet_volume_stats_used_bytes`, `kubelet_volume_stats_capacity_bytes`
+  and `kubelet_volume_stats_available_bytes`, by claim
+  (`persistentvolumeclaim`), only for customers' namespaces. Volumes that
+  report no usage, such as kind's host paths, have none.
+
 ## Postgres CDC sources
 
 A customer's Postgres sources (docs/cdc.md) have series from two places,
 each with `tenant`, `cluster`, `env` and `source`, the source's name. The
-alerting rules in `deploy/base/victoria-metrics/alerts` watch them.
+alerting rules in `deploy/base/alerting/rules` watch them.
 
 The source controller, in the provisioner, reads each source's replication
 slot in the customer's database every minute and exports what it found; the

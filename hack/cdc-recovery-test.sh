@@ -63,7 +63,7 @@ cdcsql -step role -password "$password" | pg
 cdcsql -step tables -tables "$tables" | pg
 create_source_as_console "$namespace" "$source_name" "$id" "$password" "$tables" 3600000
 wait_phase Streaming
-check_source_alerts "$customer" "$source_name" ""
+check_alerts "$customer" "$source_name" ""
 
 log "The paused source holds back more WAL than the database allows, which invalidates its slot"
 set_state Stopped
@@ -85,7 +85,7 @@ set_state Running
 wait_phase Failed
 message=$(source_field '.status.conditions[?(@.type=="Ready")].message')
 grep -q "lost the replication slot $slot" <<<"$message" || die "the failed source says: $message"
-check_source_alerts "$customer" "$source_name" PostgresSourceSlotLost,PostgresSourceFailed
+check_alerts "$customer" "$source_name" PostgresSourceSlotLost,PostgresSourceFailed
 
 log "Recovering as the runbook says"
 # 1. Pause the source, which stops its connector.
@@ -123,5 +123,5 @@ for _ in $(seq 20); do
 done
 LC_ALL=C grep -qF "$marker" <<<"$seen" || die "the change after the recovery did not reach $source_name.public.customers"
 pg -c "UPDATE customers SET name = 'Customer 1' WHERE id = 1"
-check_source_alerts "$customer" "$source_name" ""
+check_alerts "$customer" "$source_name" ""
 log "Recovery test passed: source $source_name lost its slot, failed and alerted, and streams again from a new slot"

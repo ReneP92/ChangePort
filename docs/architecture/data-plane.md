@@ -23,7 +23,7 @@ The platform components come from `deploy/overlays/eks-<env>`:
 - the Strimzi cluster operator, watching every namespace;
 - cert-manager;
 - Strimzi Drain Cleaner;
-- VictoriaMetrics;
+- VictoriaMetrics, with vmalert and Alertmanager for alerts;
 - the provisioner, whose controller turns each `Customer` resource into a
   Kafka cluster; and
 - the console.

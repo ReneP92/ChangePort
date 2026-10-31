@@ -1,0 +1,154 @@
+# vmalert evaluates the alerting rules every 30 seconds against
+# VictoriaMetrics, writes their state back to it so that a restart resumes
+# pending alerts, and sends what fires to Alertmanager. CHANGEPORT_ENV, which
+# the overlays set as for VictoriaMetrics, labels every alert, also those
+# without series of their own, such as Watchdog.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmalert
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vmalert
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vmalert
+    spec:
+      containers:
+        - name: vmalert
+          image: victoriametrics/vmalert:v1.154.1
+          args:
+            - -rule=/rules/*.yaml
+            - -datasource.url=http://victoria-metrics:8428
+            - -remoteWrite.url=http://victoria-metrics:8428
+            - -remoteRead.url=http://victoria-metrics:8428
+            - -notifier.url=http://alertmanager:9093
+            - -evaluationInterval=30s
+            - -external.label=env=%{CHANGEPORT_ENV}
+          env:
+            - name: CHANGEPORT_ENV
+              value: kind
+          ports:
+            - name: http
+              containerPort: 8880
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: rules
+              mountPath: /rules
+              readOnly: true
+      volumes:
+        - name: rules
+          configMap:
+            name: vmalert-rules
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmalert
+spec:
+  selector:
+    app.kubernetes.io/name: vmalert
+  ports:
+    - name: http
+      port: 8880
+      targetPort: http
+---
+# Alertmanager keeps its silences and what it has notified on its volume.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alertmanager-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+spec:
+  replicas: 1
+  # One pod at a time owns the data volume.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alertmanager
+    spec:
+      securityContext:
+        fsGroup: 65534
+      containers:
+        - name: alertmanager
+          image: quay.io/prometheus/alertmanager:v0.34.2
+          args:
+            - --config.file=/config/alertmanager.yaml
+            - --storage.path=/alertmanager
+            # A single instance, not a cluster.
+            - --cluster.listen-address=
+          ports:
+            - name: http
+              containerPort: 9093
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /alertmanager
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: receivers
+              mountPath: /etc/alertmanager/receivers
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: alertmanager-data
+        - name: config
+          configMap:
+            name: alertmanager-config
+        # The receivers' secrets, written by just alerting-config; absent
+        # where the overlay routes elsewhere.
+        - name: receivers
+          secret:
+            secretName: alertmanager-receivers
+            optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+spec:
+  selector:
+    app.kubernetes.io/name: alertmanager
+  ports:
+    - name: http
+      port: 9093
+      targetPort: http

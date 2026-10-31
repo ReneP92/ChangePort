@@ -133,7 +133,8 @@ three workers, one per zone like the three availability zones on EKS, with
 for load balancers. It then installs the platform components from
 `deploy/overlays/kind` (Strimzi 1.3.0 watching all namespaces, cert-manager
 with a local CA, Strimzi Drain Cleaner, SeaweedFS as the S3 store for tiered
-storage, VictoriaMetrics for metrics, and a Postgres 17 in `source-postgres`
+storage, VictoriaMetrics for metrics with vmalert and Alertmanager for
+alerts, which go to a local alert receiver, and a Postgres 17 in `source-postgres`
 that stands in for a customer's database for the Postgres CDC source),
 provisions the `demo` customer
 (namespace `customer-demo`, a single-node KRaft cluster on Kafka 4.3.1) with
@@ -197,6 +198,15 @@ and that every series carries its tenant and the other labels in
 
 ```bash
 just metrics-test
+```
+
+The alerting test freezes a broker of a three-broker customer and waits for
+the page to reach the alert receiver, then for it to resolve
+([docs/runbook.md](docs/runbook.md#alerting)); `just alerting-check`
+validates the rules and Alertmanager's configuration:
+
+```bash
+just alerting-test
 ```
 
 Kafka has no broker-wide default for tiered storage, so the Kafka agent

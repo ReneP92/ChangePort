@@ -83,6 +83,18 @@ PYTHON_IMAGE=python:3.13-slim@sha256:d98cc29d3266e535dd9da1099688d9cb3ca47538135
 # shellcheck disable=SC2034
 CONFLUENT_KAFKA_PYTHON=2.16.0
 
+# What runs on the kind control-plane node, apart from customers' brokers on
+# the workers (deploy/overlays/kind): the metrics and alerting pipeline, with
+# its alert receiver, and the provisioner, whose image is built locally.
+# Images are loaded by tag: one saved by digest alone has no name to import
+# under, and containerd then fails to create its containers.
+KIND_CONTROL_PLANE_IMAGES=(
+  victoriametrics/victoria-metrics:v1.154.1
+  victoriametrics/vmalert:v1.154.1
+  quay.io/prometheus/alertmanager:v0.34.2
+  python:3.13.17-slim
+)
+
 CLUSTER_NAME=${CLUSTER_NAME:-changeport}
 KUBE_CONTEXT="kind-${CLUSTER_NAME}"
 BIN_DIR="$ROOT/bin"
@@ -382,7 +394,8 @@ cluster_exists() { kind get clusters 2>/dev/null | grep -x "$CLUSTER_NAME" >/dev
 
 # Creates the kind cluster from deploy/kind/cluster.yaml, or checks that the
 # existing one still matches it: three zone-labelled workers on the pinned
-# Kubernetes version. Then preloads KIND_PRELOAD_IMAGES into its workers, and
+# Kubernetes version. Then preloads KIND_PRELOAD_IMAGES into its workers,
+# KIND_CONTROL_PLANE_IMAGES and PROVISIONER_IMAGE into its control plane, and
 # the content tags of KAFKA_IMAGE, AGENT_IMAGE, CONNECT_IMAGE,
 # REGISTRY_GATEWAY_IMAGE, PROVISIONER_IMAGE and CONSOLE_IMAGE once they have
 # been built.
@@ -399,12 +412,19 @@ ensure_kind_cluster() {
     log "Pulling $image"
     retry_registry docker pull --quiet "$image" >/dev/null
   done
-  # Only the workers run these pods; the control plane is tainted, and every
-  # node keeps its own copy of each image.
-  local workers
+  for image in "${KIND_CONTROL_PLANE_IMAGES[@]}"; do
+    docker image inspect "$image" >/dev/null 2>&1 && continue
+    log "Pulling $image"
+    retry_registry docker pull --quiet "$image" >/dev/null
+  done
+  # The workers run these pods, and the control plane, which is tainted, the
+  # few that tolerate it; every node keeps its own copy of each image.
+  local workers control_plane
   workers=$(kind get nodes --name "$CLUSTER_NAME" | grep -v control-plane | paste -sd , -)
-  log "Loading images into the kind workers"
+  control_plane=$(kind get nodes --name "$CLUSTER_NAME" | grep control-plane)
+  log "Loading images into the kind nodes"
   kind_load "$workers" "${KIND_PRELOAD_IMAGES[@]}"
+  kind_load "$control_plane" "${KIND_CONTROL_PLANE_IMAGES[@]}"
   local image
   for image in "$KAFKA_IMAGE" "$AGENT_IMAGE" "$CONNECT_IMAGE" "$REGISTRY_GATEWAY_IMAGE" "$PROVISIONER_IMAGE" "$CONSOLE_IMAGE"; do
     if docker image inspect "$image" >/dev/null 2>&1; then
@@ -412,6 +432,10 @@ ensure_kind_cluster() {
       prune_node_images "$image" "$workers"
     fi
   done
+  if docker image inspect "$PROVISIONER_IMAGE" >/dev/null 2>&1; then
+    kind_load "$control_plane" "$(content_tag "$PROVISIONER_IMAGE")"
+    prune_node_images "$PROVISIONER_IMAGE" "$control_plane"
+  fi
 }
 
 # Loads images from the host's Docker into the kind workers that lack them,
@@ -644,12 +668,14 @@ check_named_queries() {
   log "The console's metrics queries work for tenant $tenant, with series for $expected"
 }
 
-# Evaluates the alerting rules of deploy/base/victoria-metrics/alerts for a
-# Postgres source of tenant against the local VictoriaMetrics, until exactly
-# the alerts in firing (comma-separated names) have a series for it, ignoring
-# how long they must hold; up to about 3 minutes, as the source controller
-# reads a slot every minute and VictoriaMetrics scrapes every 30 seconds.
-check_source_alerts() {
+# Evaluates the alerting rules of deploy/base/alerting/rules for a customer,
+# or one of its Postgres sources, against the local VictoriaMetrics, until
+# exactly the alerts in firing (comma-separated names) have a series for it,
+# ignoring how long they must hold; up to about 3 minutes, as the source
+# controller reads a slot every minute and VictoriaMetrics scrapes every 30
+# seconds.
+# Usage: check_alerts tenant source firing (source empty for the customer)
+check_alerts() {
   local tenant=$1 source=$2 firing=$3 output attempt
   output=$(mktemp)
   metrics_port_forward
@@ -658,13 +684,13 @@ check_source_alerts() {
       CHANGEPORT_ALERTS_FIRING="$firing" go test -count=1 -run TestRulesAgainstVictoriaMetrics ./internal/alerts >"$output" 2>&1 && break
     if [[ $attempt -eq 18 ]]; then
       kill "$METRICS_FORWARD" 2>/dev/null || true
-      die "the alerts of source $source of $tenant are not ${firing:-quiet}:"$'\n'"$(cat "$output")"
+      die "the alerts of ${source:+source $source of }$tenant are not ${firing:-quiet}:"$'\n'"$(cat "$output")"
     fi
     sleep 10
   done
   kill "$METRICS_FORWARD" 2>/dev/null || true
   rm -f "$output"
-  log "The alerts of source $source: ${firing:-none} firing"
+  log "The alerts of ${source:+source $source of }$tenant: ${firing:-none} firing"
 }
 
 # Prints a variable of the git-ignored .env at the repository root, without
