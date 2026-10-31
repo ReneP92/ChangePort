@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -110,10 +111,6 @@ func TestAlertmanagerConfigPassesAmtool(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "alertmanager.yaml"), out, 0o600); err != nil {
-		t.Fatal(err)
-	}
 	manifest, err := os.ReadFile(filepath.Join("..", "..", "deploy", "base", "alerting", "alerting.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -125,8 +122,10 @@ func TestAlertmanagerConfigPassesAmtool(t *testing.T) {
 			break
 		}
 	}
-	output, err := exec.CommandContext(t.Context(), "docker", "run", "--rm", "-v", dir+":/config:ro", "--entrypoint", "amtool", image,
-		"check-config", "/config/alertmanager.yaml").CombinedOutput()
+	// On stdin, which the container's user reads whoever owns the test's files.
+	check := exec.CommandContext(t.Context(), "docker", "run", "--rm", "-i", "--entrypoint", "amtool", image, "check-config", "/dev/stdin")
+	check.Stdin = bytes.NewReader(out)
+	output, err := check.CombinedOutput()
 	if err != nil {
 		t.Fatalf("amtool refuses the configuration: %v\n%s\n%s", err, output, out)
 	}
