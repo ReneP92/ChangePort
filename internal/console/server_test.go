@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"regexp"
 	"slices"
 	"strings"
@@ -225,6 +226,10 @@ type fixture struct {
 	// databases.
 	sources   *fakeSources
 	databases *fakeDatabases
+	// alerts are the customers' active alerts, and alertSettings their
+	// settings.
+	alerts        *fakeAlerts
+	alertSettings *fakeAlertSettings
 	// log is what the server logged, as JSON lines.
 	log     *bytes.Buffer
 	fetches int
@@ -245,6 +250,8 @@ func newFixture(t *testing.T) *fixture {
 		clusters:      newFakeClusters(),
 		sources:       newFakeSources(),
 		databases:     &fakeDatabases{},
+		alerts:        newFakeAlerts(),
+		alertSettings: &fakeAlertSettings{settings: map[string]*v1alpha1.AlertSettings{}},
 		log:           &bytes.Buffer{},
 	}
 	server, err := New(Config{
@@ -259,6 +266,10 @@ func newFixture(t *testing.T) *fixture {
 		Metrics:       fakeMetrics{},
 		Sources:       f.sources,
 		Databases:     f.databases,
+		Alerts:        f.alerts,
+		AlertSettings: f.alertSettings,
+		Receivers:     Receivers{Resolver: resolver{netip.MustParseAddr("93.184.215.14")}},
+		AlertPoll:     20 * time.Millisecond,
 		// The NAT gateways' addresses of the platform.
 		EgressAddresses: []string{"203.0.113.10", "203.0.113.11"},
 		UI:              ui,
@@ -358,6 +369,8 @@ func TestAuthorizationMatrix(t *testing.T) {
 	routes["/api/customer/throughput"] = customerRoute(`"bytesIn":[{`, `"range":"1h"`, `"stepSeconds":60`)
 	routes["/api/customer/consumer-groups"] = customerRoute(`"lagSeconds":82800,"topic":"acme-orders"`, `"lagMessages":42`, `"topic":"globex-orders"`)
 	routes["/api/customer/topic-policy"] = customerRoute(`"max":12`, `"replicationFactor":1`, `"maxNameLength":200`)
+	routes["/api/customer/alerts"] = customerRoute(`"summary":"acme-billing is behind"`, `"consumerGroup":"acme-billing"`, `{"alerts":[]}`)
+	routes["/api/customer/alert-settings"] = customerRoute(`"consumerLag":{"enabled":true,"seconds":600}`, `"receivers":{}`, `"percent":5`)
 	routes["/api/customer/topics/acme-orders/consumer-groups"] = customerRoute(`{"groups":[]}`, `{"groups":[]}`, `{"groups":[]}`)
 	// Only an organization's admins may download its credentials.
 	clientProperties := customerRoute("", "sasl.jaas.config=", "")

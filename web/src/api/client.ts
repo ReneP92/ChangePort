@@ -27,6 +27,11 @@ export type SourceChange = components["schemas"]["SourceChange"];
 export type NewSource = components["schemas"]["NewSource"];
 export type TableRef = components["schemas"]["TableRef"];
 export type Provider = components["schemas"]["Provider"];
+export type Alert = components["schemas"]["Alert"];
+export type AlertList = components["schemas"]["AlertList"];
+export type AlertSettings = components["schemas"]["AlertSettings"];
+export type AlertThresholds = components["schemas"]["AlertThresholds"];
+export type ReceiverKind = components["schemas"]["ReceiverKind"];
 export type ThroughputRange = NonNullable<
   NonNullable<paths["/api/customer/throughput"]["get"]["parameters"]["query"]>["range"]
 >;

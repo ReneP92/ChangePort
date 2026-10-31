@@ -1,19 +1,24 @@
 import { useAuth } from "@clerk/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createContext, use } from "react";
+import { createContext, use, useEffect } from "react";
 import {
   ApiError,
   unwrap,
+  type Alert,
+  type AlertList,
+  type AlertThresholds,
   type ApiClient,
   type NewCustomer,
   type NewSource,
   type NewTopic,
+  type ReceiverKind,
   type SetupSQLRequest,
   type SourceChange,
   type SourceCheckRequest,
   type SourceSQLRequest,
   type ThroughputRange,
 } from "@/api/client";
+import { readEvents } from "@/lib/sse";
 
 /** The API client of the signed-in user, which ApiProvider provides. */
 export const ApiContext = createContext<ApiClient | null>(null);
@@ -466,4 +471,144 @@ export function useSourceCatalog(name: string, enabled: boolean) {
     error: request.error ?? catalog.error,
     retry: () => queries.resetQueries({ queryKey: key }),
   };
+}
+
+/**
+ * The active alerts about the customer's own applications, which
+ * useLiveAlerts keeps current.
+ */
+export function useAlerts() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["customer", "alerts", organization],
+    queryFn: async (): Promise<Alert[]> => unwrap(await api.GET("/api/customer/alerts")).alerts,
+    staleTime: Infinity,
+  });
+}
+
+/** How long to wait before opening the stream again after it failed. */
+function retryDelay(failures: number): number {
+  return Math.min(30_000, 1_000 * 2 ** failures);
+}
+
+/**
+ * Streams the customer's alerts into useAlerts while mounted, as they fire
+ * and clear. The stream ends when the session token expires, and opens
+ * again at once with a new one; after a failure, a little later each time.
+ * Mount it once, where every page of a customer passes.
+ */
+export function useLiveAlerts() {
+  const { getToken } = useAuth();
+  const organization = useOrganizationKey();
+  const queries = useQueryClient();
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        if (signal.aborted) {
+          resolve();
+          return;
+        }
+        const timer = setTimeout(resolve, ms);
+        signal.addEventListener("abort", () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+    void (async () => {
+      let failures = 0;
+      while (!signal.aborted) {
+        try {
+          const token = await getToken();
+          const response = await fetch(`${window.location.origin}/api/customer/alerts/stream`, {
+            headers: { Accept: "text/event-stream", Authorization: `Bearer ${token ?? ""}` },
+            signal,
+          });
+          if (!response.ok || !response.body) {
+            throw new ApiError(response.status);
+          }
+          let received = false;
+          for await (const event of readEvents(response.body)) {
+            if (event.event === "alerts") {
+              const list = JSON.parse(event.data) as AlertList;
+              queries.setQueryData(["customer", "alerts", organization], list.alerts);
+              received = true;
+            }
+          }
+          // A stream that ended without a word did not work either.
+          failures = received ? 0 : failures + 1;
+        } catch {
+          // Aborted too, when the page goes; the loop then ends.
+          failures++;
+        }
+        await sleep(failures > 0 ? retryDelay(failures) : 0);
+      }
+    })();
+    return () => {
+      controller.abort();
+    };
+  }, [getToken, organization, queries]);
+}
+
+/** The thresholds of the customer's alerts, and its receivers. */
+export function useAlertSettings() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["customer", "alert-settings", organization],
+    queryFn: async () => unwrap(await api.GET("/api/customer/alert-settings")),
+  });
+}
+
+/** Changes the thresholds of the customer's alerts; for admins. */
+export function useChangeAlertSettings() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async (thresholds: AlertThresholds) =>
+      unwrap(await api.PUT("/api/customer/alert-settings", { body: thresholds })),
+    onSuccess: (settings) => {
+      queries.setQueryData(["customer", "alert-settings", organization], settings);
+    },
+  });
+}
+
+/** Sends the customer's alerts to a receiver; for admins. */
+export function useSetAlertReceiver(receiver: ReceiverKind) {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async (value: string) =>
+      unwrap(
+        await api.PUT("/api/customer/alert-settings/receivers/{receiver}", {
+          params: { path: { receiver } },
+          body: { value },
+        }),
+      ),
+    onSuccess: (settings) => {
+      queries.setQueryData(["customer", "alert-settings", organization], settings);
+    },
+  });
+}
+
+/** Stops sending the customer's alerts to a receiver; for admins. */
+export function useRemoveAlertReceiver(receiver: ReceiverKind) {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async () =>
+      unwrap(
+        await api.DELETE("/api/customer/alert-settings/receivers/{receiver}", {
+          params: { path: { receiver } },
+        }),
+      ),
+    onSuccess: (settings) => {
+      queries.setQueryData(["customer", "alert-settings", organization], settings);
+    },
+  });
 }

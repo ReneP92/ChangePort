@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -227,6 +228,27 @@ func (e Provider) Valid() bool {
 	}
 }
 
+// Defines values for ReceiverKind.
+const (
+	PagerDuty ReceiverKind = "pagerDuty"
+	Slack     ReceiverKind = "slack"
+	Webhook   ReceiverKind = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the ReceiverKind enum.
+func (e ReceiverKind) Valid() bool {
+	switch e {
+	case PagerDuty:
+		return true
+	case Slack:
+		return true
+	case Webhook:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SetupSQLRequestStep.
 const (
 	Role   SetupSQLRequestStep = "role"
@@ -372,6 +394,52 @@ func (e GetThroughputParamsRange) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Alert defines model for Alert.
+type Alert struct {
+	ClientId      *string `json:"clientId,omitempty"`
+	ConsumerGroup *string `json:"consumerGroup,omitempty"`
+	Description   string  `json:"description"`
+
+	// Name The alert, such as ConsumerGroupLagHigh
+	Name     string `json:"name"`
+	Severity string `json:"severity"`
+
+	// Source The Postgres source, for a source's alerts
+	Source   *string   `json:"source,omitempty"`
+	StartsAt time.Time `json:"startsAt"`
+	Summary  string    `json:"summary"`
+	Topic    *string   `json:"topic,omitempty"`
+}
+
+// AlertList defines model for AlertList.
+type AlertList struct {
+	Alerts []Alert `json:"alerts"`
+}
+
+// AlertReceivers The receivers that are set
+type AlertReceivers struct {
+	PagerDuty *ReceiverStatus `json:"pagerDuty,omitempty"`
+	Slack     *ReceiverStatus `json:"slack,omitempty"`
+	Webhook   *ReceiverStatus `json:"webhook,omitempty"`
+}
+
+// AlertSettings defines model for AlertSettings.
+type AlertSettings struct {
+	Defaults AlertThresholds `json:"defaults"`
+
+	// Receivers The receivers that are set
+	Receivers  AlertReceivers  `json:"receivers"`
+	Thresholds AlertThresholds `json:"thresholds"`
+}
+
+// AlertThresholds defines model for AlertThresholds.
+type AlertThresholds struct {
+	ConsumerLag   SecondsThreshold      `json:"consumerLag"`
+	ConsumerStuck SecondsThreshold      `json:"consumerStuck"`
+	Errors        PercentThreshold      `json:"errors"`
+	Throttling    MillisecondsThreshold `json:"throttling"`
 }
 
 // Broker defines model for Broker.
@@ -541,6 +609,12 @@ type Me struct {
 // organization that is a customer.
 type MeAccess string
 
+// MillisecondsThreshold defines model for MillisecondsThreshold.
+type MillisecondsThreshold struct {
+	Enabled      bool  `json:"enabled"`
+	Milliseconds int64 `json:"milliseconds"`
+}
+
 // NewCustomer defines model for NewCustomer.
 type NewCustomer struct {
 	// DeletionProtection Whether deprovisioning is refused until it is turned off
@@ -587,6 +661,12 @@ type PartitionRange struct {
 	Min     int `json:"min"`
 }
 
+// PercentThreshold defines model for PercentThreshold.
+type PercentThreshold struct {
+	Enabled bool  `json:"enabled"`
+	Percent int64 `json:"percent"`
+}
+
 // Point defines model for Point.
 type Point struct {
 	Time  time.Time `json:"time"`
@@ -616,10 +696,31 @@ type ProviderOption struct {
 	Title                string `json:"title"`
 }
 
+// ReceiverKind defines model for ReceiverKind.
+type ReceiverKind string
+
+// ReceiverSecret defines model for ReceiverSecret.
+type ReceiverSecret struct {
+	// Value The Slack webhook URL, the PagerDuty routing key or the webhook URL
+	Value string `json:"value"`
+}
+
+// ReceiverStatus defines model for ReceiverStatus.
+type ReceiverStatus struct {
+	// Hint Which receiver it is, without its secret, such as the webhook's host
+	Hint string `json:"hint"`
+}
+
 // RetentionPreset defines model for RetentionPreset.
 type RetentionPreset struct {
 	Label string `json:"label"`
 	Ms    int64  `json:"ms"`
+}
+
+// SecondsThreshold defines model for SecondsThreshold.
+type SecondsThreshold struct {
+	Enabled bool  `json:"enabled"`
+	Seconds int64 `json:"seconds"`
 }
 
 // SetupSQLRequest defines model for SetupSQLRequest.
@@ -935,6 +1036,12 @@ type GetThroughputParams struct {
 // GetThroughputParamsRange defines parameters for GetThroughput.
 type GetThroughputParamsRange string
 
+// ChangeAlertSettingsJSONRequestBody defines body for ChangeAlertSettings for application/json ContentType.
+type ChangeAlertSettingsJSONRequestBody = AlertThresholds
+
+// SetAlertReceiverJSONRequestBody defines body for SetAlertReceiver for application/json ContentType.
+type SetAlertReceiverJSONRequestBody = ReceiverSecret
+
 // CreateSourceJSONRequestBody defines body for CreateSource for application/json ContentType.
 type CreateSourceJSONRequestBody = NewSource
 
@@ -970,6 +1077,24 @@ type ServerInterface interface {
 	// GetCustomer The customer of the active organization and its Kafka cluster
 	// (GET /api/customer)
 	GetCustomer(w http.ResponseWriter, r *http.Request)
+	// GetAlertSettings The thresholds of the customer's alerts, and which receivers are set
+	// (GET /api/customer/alert-settings)
+	GetAlertSettings(w http.ResponseWriter, r *http.Request)
+	// ChangeAlertSettings Changes the thresholds of the customer's alerts; for organization admins
+	// (PUT /api/customer/alert-settings)
+	ChangeAlertSettings(w http.ResponseWriter, r *http.Request)
+	// RemoveAlertReceiver Stops sending the customer's alerts to a receiver; for organization admins
+	// (DELETE /api/customer/alert-settings/receivers/{receiver})
+	RemoveAlertReceiver(w http.ResponseWriter, r *http.Request, receiver ReceiverKind)
+	// SetAlertReceiver Sends the customer's alerts to a Slack webhook, a PagerDuty integration or a webhook too; for organization admins
+	// (PUT /api/customer/alert-settings/receivers/{receiver})
+	SetAlertReceiver(w http.ResponseWriter, r *http.Request, receiver ReceiverKind)
+	// ListAlerts The active alerts about the customer's own applications (docs/alerts.md)
+	// (GET /api/customer/alerts)
+	ListAlerts(w http.ResponseWriter, r *http.Request)
+	// StreamAlerts The active alerts about the customer's own applications, as server-sent events: an alerts event with the AlertList at once and whenever it changes. The stream ends when the session token expires; open it again with a new one.
+	// (GET /api/customer/alerts/stream)
+	StreamAlerts(w http.ResponseWriter, r *http.Request)
 	// GetClientProperties A client.properties with the admin user's credentials, for organization admins
 	// (GET /api/customer/client-properties)
 	GetClientProperties(w http.ResponseWriter, r *http.Request)
@@ -1087,6 +1212,114 @@ func (siw *ServerInterfaceWrapper) GetCustomer(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCustomer(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAlertSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetAlertSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAlertSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeAlertSettings operation middleware
+func (siw *ServerInterfaceWrapper) ChangeAlertSettings(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeAlertSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveAlertReceiver operation middleware
+func (siw *ServerInterfaceWrapper) RemoveAlertReceiver(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "receiver" -------------
+	var receiver ReceiverKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "receiver", r.PathValue("receiver"), &receiver, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "receiver", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveAlertReceiver(w, r, receiver)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAlertReceiver operation middleware
+func (siw *ServerInterfaceWrapper) SetAlertReceiver(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "receiver" -------------
+	var receiver ReceiverKind
+
+	err = runtime.BindStyledParameterWithOptions("simple", "receiver", r.PathValue("receiver"), &receiver, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "receiver", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAlertReceiver(w, r, receiver)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAlerts operation middleware
+func (siw *ServerInterfaceWrapper) ListAlerts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAlerts(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StreamAlerts operation middleware
+func (siw *ServerInterfaceWrapper) StreamAlerts(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StreamAlerts(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1826,6 +2059,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/customer/sources/{source}/slot-dropped", wrapper.ConfirmSlotDropped)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/sources/{source}/catalog", wrapper.GetSourceCatalog)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/customer/sources/{source}/catalog", wrapper.RequestSourceCatalog)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/alerts", wrapper.ListAlerts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/alerts/stream", wrapper.StreamAlerts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/alert-settings", wrapper.GetAlertSettings)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/alert-settings", wrapper.ChangeAlertSettings)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.RemoveAlertReceiver)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.SetAlertReceiver)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/throughput", wrapper.GetThroughput)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups", wrapper.ListConsumerGroups)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/customers", wrapper.ListCustomers)
@@ -1951,6 +2190,571 @@ func (response GetCustomer404JSONResponse) VisitGetCustomerResponse(w http.Respo
 type GetCustomer503JSONResponse struct{ NotConfiguredJSONResponse }
 
 func (response GetCustomer503JSONResponse) VisitGetCustomerResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAlertSettingsRequestObject struct {
+}
+
+type GetAlertSettingsResponseObject interface {
+	VisitGetAlertSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetAlertSettings200JSONResponse AlertSettings
+
+func (response GetAlertSettings200JSONResponse) VisitGetAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAlertSettings401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetAlertSettings401JSONResponse) VisitGetAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAlertSettings403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetAlertSettings403JSONResponse) VisitGetAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAlertSettings404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetAlertSettings404JSONResponse) VisitGetAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAlertSettings503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response GetAlertSettings503JSONResponse) VisitGetAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeAlertSettingsRequestObject struct {
+	Body *ChangeAlertSettingsJSONRequestBody
+}
+
+type ChangeAlertSettingsResponseObject interface {
+	VisitChangeAlertSettingsResponse(w http.ResponseWriter) error
+}
+
+type ChangeAlertSettings200JSONResponse AlertSettings
+
+func (response ChangeAlertSettings200JSONResponse) VisitChangeAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeAlertSettings400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ChangeAlertSettings400JSONResponse) VisitChangeAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeAlertSettings401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ChangeAlertSettings401JSONResponse) VisitChangeAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeAlertSettings403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ChangeAlertSettings403JSONResponse) VisitChangeAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeAlertSettings404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ChangeAlertSettings404JSONResponse) VisitChangeAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeAlertSettings409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ChangeAlertSettings409JSONResponse) VisitChangeAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeAlertSettings503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ChangeAlertSettings503JSONResponse) VisitChangeAlertSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveAlertReceiverRequestObject struct {
+	Receiver ReceiverKind `json:"receiver"`
+}
+
+type RemoveAlertReceiverResponseObject interface {
+	VisitRemoveAlertReceiverResponse(w http.ResponseWriter) error
+}
+
+type RemoveAlertReceiver200JSONResponse AlertSettings
+
+func (response RemoveAlertReceiver200JSONResponse) VisitRemoveAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveAlertReceiver401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RemoveAlertReceiver401JSONResponse) VisitRemoveAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveAlertReceiver403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RemoveAlertReceiver403JSONResponse) VisitRemoveAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveAlertReceiver404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RemoveAlertReceiver404JSONResponse) VisitRemoveAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveAlertReceiver409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RemoveAlertReceiver409JSONResponse) VisitRemoveAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveAlertReceiver503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response RemoveAlertReceiver503JSONResponse) VisitRemoveAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAlertReceiverRequestObject struct {
+	Receiver ReceiverKind `json:"receiver"`
+	Body     *SetAlertReceiverJSONRequestBody
+}
+
+type SetAlertReceiverResponseObject interface {
+	VisitSetAlertReceiverResponse(w http.ResponseWriter) error
+}
+
+type SetAlertReceiver200JSONResponse AlertSettings
+
+func (response SetAlertReceiver200JSONResponse) VisitSetAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAlertReceiver400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response SetAlertReceiver400JSONResponse) VisitSetAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAlertReceiver401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response SetAlertReceiver401JSONResponse) VisitSetAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAlertReceiver403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response SetAlertReceiver403JSONResponse) VisitSetAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAlertReceiver404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response SetAlertReceiver404JSONResponse) VisitSetAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAlertReceiver409JSONResponse struct{ ConflictJSONResponse }
+
+func (response SetAlertReceiver409JSONResponse) VisitSetAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAlertReceiver503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response SetAlertReceiver503JSONResponse) VisitSetAlertReceiverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAlertsRequestObject struct {
+}
+
+type ListAlertsResponseObject interface {
+	VisitListAlertsResponse(w http.ResponseWriter) error
+}
+
+type ListAlerts200JSONResponse AlertList
+
+func (response ListAlerts200JSONResponse) VisitListAlertsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAlerts401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListAlerts401JSONResponse) VisitListAlertsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAlerts403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListAlerts403JSONResponse) VisitListAlertsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAlerts404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListAlerts404JSONResponse) VisitListAlertsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAlerts503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ListAlerts503JSONResponse) VisitListAlertsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StreamAlertsRequestObject struct {
+}
+
+type StreamAlertsResponseObject interface {
+	VisitStreamAlertsResponse(w http.ResponseWriter) error
+}
+
+type StreamAlerts200TexteventStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response StreamAlerts200TexteventStreamResponse) VisitStreamAlertsResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		// If w doesn't support flushing, fall back to io.Copy.
+		_, err := io.Copy(w, response.Body)
+		return err
+	}
+	// text/event-stream messages are typically small; use a
+	// modest buffer and flush after each chunk so clients see
+	// events immediately instead of waiting on OS buffering.
+	buf := make([]byte, 4096)
+	for {
+		n, err := response.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+type StreamAlerts401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response StreamAlerts401JSONResponse) VisitStreamAlertsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StreamAlerts403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response StreamAlerts403JSONResponse) VisitStreamAlertsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StreamAlerts404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response StreamAlerts404JSONResponse) VisitStreamAlertsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StreamAlerts503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response StreamAlerts503JSONResponse) VisitStreamAlertsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -4459,6 +5263,24 @@ type StrictServerInterface interface {
 	// GetCustomer The customer of the active organization and its Kafka cluster
 	// (GET /api/customer)
 	GetCustomer(ctx context.Context, request GetCustomerRequestObject) (GetCustomerResponseObject, error)
+	// GetAlertSettings The thresholds of the customer's alerts, and which receivers are set
+	// (GET /api/customer/alert-settings)
+	GetAlertSettings(ctx context.Context, request GetAlertSettingsRequestObject) (GetAlertSettingsResponseObject, error)
+	// ChangeAlertSettings Changes the thresholds of the customer's alerts; for organization admins
+	// (PUT /api/customer/alert-settings)
+	ChangeAlertSettings(ctx context.Context, request ChangeAlertSettingsRequestObject) (ChangeAlertSettingsResponseObject, error)
+	// RemoveAlertReceiver Stops sending the customer's alerts to a receiver; for organization admins
+	// (DELETE /api/customer/alert-settings/receivers/{receiver})
+	RemoveAlertReceiver(ctx context.Context, request RemoveAlertReceiverRequestObject) (RemoveAlertReceiverResponseObject, error)
+	// SetAlertReceiver Sends the customer's alerts to a Slack webhook, a PagerDuty integration or a webhook too; for organization admins
+	// (PUT /api/customer/alert-settings/receivers/{receiver})
+	SetAlertReceiver(ctx context.Context, request SetAlertReceiverRequestObject) (SetAlertReceiverResponseObject, error)
+	// ListAlerts The active alerts about the customer's own applications (docs/alerts.md)
+	// (GET /api/customer/alerts)
+	ListAlerts(ctx context.Context, request ListAlertsRequestObject) (ListAlertsResponseObject, error)
+	// StreamAlerts The active alerts about the customer's own applications, as server-sent events: an alerts event with the AlertList at once and whenever it changes. The stream ends when the session token expires; open it again with a new one.
+	// (GET /api/customer/alerts/stream)
+	StreamAlerts(ctx context.Context, request StreamAlertsRequestObject) (StreamAlertsResponseObject, error)
 	// GetClientProperties A client.properties with the admin user's credentials, for organization admins
 	// (GET /api/customer/client-properties)
 	GetClientProperties(ctx context.Context, request GetClientPropertiesRequestObject) (GetClientPropertiesResponseObject, error)
@@ -4628,6 +5450,168 @@ func (sh *strictHandler) GetCustomer(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetCustomerResponseObject); ok {
 		if err := validResponse.VisitGetCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAlertSettings operation middleware
+func (sh *strictHandler) GetAlertSettings(w http.ResponseWriter, r *http.Request) {
+	var request GetAlertSettingsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAlertSettings(ctx, request.(GetAlertSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAlertSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAlertSettingsResponseObject); ok {
+		if err := validResponse.VisitGetAlertSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeAlertSettings operation middleware
+func (sh *strictHandler) ChangeAlertSettings(w http.ResponseWriter, r *http.Request) {
+	var request ChangeAlertSettingsRequestObject
+
+	var body ChangeAlertSettingsJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeAlertSettings(ctx, request.(ChangeAlertSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeAlertSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeAlertSettingsResponseObject); ok {
+		if err := validResponse.VisitChangeAlertSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveAlertReceiver operation middleware
+func (sh *strictHandler) RemoveAlertReceiver(w http.ResponseWriter, r *http.Request, receiver ReceiverKind) {
+	var request RemoveAlertReceiverRequestObject
+
+	request.Receiver = receiver
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveAlertReceiver(ctx, request.(RemoveAlertReceiverRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveAlertReceiver")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveAlertReceiverResponseObject); ok {
+		if err := validResponse.VisitRemoveAlertReceiverResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetAlertReceiver operation middleware
+func (sh *strictHandler) SetAlertReceiver(w http.ResponseWriter, r *http.Request, receiver ReceiverKind) {
+	var request SetAlertReceiverRequestObject
+
+	request.Receiver = receiver
+
+	var body SetAlertReceiverJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetAlertReceiver(ctx, request.(SetAlertReceiverRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetAlertReceiver")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetAlertReceiverResponseObject); ok {
+		if err := validResponse.VisitSetAlertReceiverResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAlerts operation middleware
+func (sh *strictHandler) ListAlerts(w http.ResponseWriter, r *http.Request) {
+	var request ListAlertsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAlerts(ctx, request.(ListAlertsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAlerts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAlertsResponseObject); ok {
+		if err := validResponse.VisitListAlertsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StreamAlerts operation middleware
+func (sh *strictHandler) StreamAlerts(w http.ResponseWriter, r *http.Request) {
+	var request StreamAlertsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StreamAlerts(ctx, request.(StreamAlertsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StreamAlerts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StreamAlertsResponseObject); ok {
+		if err := validResponse.VisitStreamAlertsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

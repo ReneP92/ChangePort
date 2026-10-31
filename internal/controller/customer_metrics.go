@@ -23,6 +23,10 @@ var (
 		Name: "changeport_customer_brokers",
 		Help: "The brokers a customer's cluster runs, as its profile says.",
 	}, []string{"tenant", "profile"})
+	alertThreshold = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "changeport_alert_threshold",
+		Help: "The threshold of a customer's alert about its own applications, as its alert settings say, by alert; absent while the alert is off.",
+	}, []string{"tenant", "alert"})
 	customerProvisioned = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "changeport_customer_provisioned_timestamp_seconds",
 		Help: "When a customer's cluster first became Ready, in seconds since the epoch; absent before.",
@@ -30,7 +34,7 @@ var (
 )
 
 func init() {
-	metrics.Registry.MustRegister(customerReady, customerBrokers, customerProvisioned)
+	metrics.Registry.MustRegister(customerReady, customerBrokers, customerProvisioned, alertThreshold)
 }
 
 // recordCustomer records a Customer's status.
@@ -58,6 +62,31 @@ func forgetCustomerMetrics(tenant string) {
 	customerReady.DeleteLabelValues(tenant)
 	customerBrokers.DeletePartialMatch(prometheus.Labels{"tenant": tenant})
 	customerProvisioned.DeleteLabelValues(tenant)
+	alertThreshold.DeletePartialMatch(prometheus.Labels{"tenant": tenant})
+}
+
+// recordAlertThresholds records the thresholds of a customer's alerts about
+// its own applications (deploy/base/alerting/rules/customers.yaml), in the
+// units the rules compare them in; an alert that is off has none.
+func recordAlertThresholds(tenant string, settings v1alpha1.AlertSettingsSpec) {
+	thresholds := []struct {
+		alert   string
+		enabled bool
+		value   float64
+	}{
+		{"ConsumerGroupLagHigh", settings.ConsumerLag.Enabled, float64(settings.ConsumerLag.Seconds)},
+		{"ConsumerGroupStuck", settings.ConsumerStuck.Enabled, float64(settings.ConsumerStuck.Seconds)},
+		{"ClientThrottled", settings.Throttling.Enabled, float64(settings.Throttling.Milliseconds)},
+		{"TopicRequestErrors", settings.Errors.Enabled, float64(settings.Errors.Percent) / 100},
+		{"ClientRecordErrors", settings.Errors.Enabled, float64(settings.Errors.Percent) / 100},
+	}
+	for _, t := range thresholds {
+		if t.enabled {
+			alertThreshold.WithLabelValues(tenant, t.alert).Set(t.value)
+		} else {
+			alertThreshold.DeleteLabelValues(tenant, t.alert)
+		}
+	}
 }
 
 // markProvisioned sets when the cluster first became Ready: when its Ready

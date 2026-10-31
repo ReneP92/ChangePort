@@ -20,8 +20,13 @@ rules:
   - apiGroups: [changeport.io]
     resources: [postgressources]
     verbs: [get, list, create, update, patch, delete]
-  # Only the sources' write-once password Secrets, which the admission
-  # policy changeport-console-secrets narrows this to.
+  # Customers' alert settings (docs/alerts.md), in their namespaces.
+  - apiGroups: [changeport.io]
+    resources: [alertsettings]
+    verbs: [get, create, update]
+  # Only the sources' write-once password Secrets and the alert receivers'
+  # write-once Secrets, which the admission policy
+  # changeport-console-secrets narrows this to.
   - apiGroups: [""]
     resources: [secrets]
     verbs: [create]

@@ -49,6 +49,10 @@ func run(ctx context.Context, args []string) error {
 	kubeContext := fs.String("context", "", "kubeconfig context to use (default: the current context, or the pod's service account in a cluster)")
 	allowPrivateDatabases := fs.Bool("allow-private-databases", false,
 		"let Postgres sources' databases be on private networks, as on kind, where a Postgres stands in for customers'")
+	alertmanagerURL := fs.String("alertmanager-url", envOr("CHANGEPORT_ALERTMANAGER_URL", "http://alertmanager.metrics.svc:9093"),
+		"address of Alertmanager, which holds the customers' active alerts")
+	allowPrivateReceivers := fs.Bool("allow-private-receivers", false,
+		"let alert webhooks be on private networks and plain HTTP, as on kind, where a test webhook stands in for customers'")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -91,6 +95,11 @@ func run(ctx context.Context, args []string) error {
 		Metrics:   metricsClient,
 		Sources:   console.KubeSources{Client: kube},
 		Databases: cdc.Checker{Guard: cdc.Guard{AllowPrivate: *allowPrivateDatabases}},
+		Alerts: console.AlertmanagerAlerts{
+			URL: *alertmanagerURL, HTTP: &http.Client{Timeout: 10 * time.Second},
+		},
+		AlertSettings: console.KubeAlertSettings{Client: kube},
+		Receivers:     console.Receivers{AllowPrivate: *allowPrivateReceivers},
 		// The addresses the platform's NAT gateways give its connections
 		// to the internet (Terraform's nat_public_ips).
 		EgressAddresses: splitList(os.Getenv("CHANGEPORT_EGRESS_IPS")),

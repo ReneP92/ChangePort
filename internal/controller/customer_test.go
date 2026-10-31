@@ -375,6 +375,44 @@ func TestReconcileExportsTheClustersMetrics(t *testing.T) {
 	}
 }
 
+// A customer's alert thresholds are its settings', or the defaults; an alert
+// that is off has none.
+func TestReconcileExportsTheAlertThresholds(t *testing.T) {
+	r, c := newReconciler(t, &fakeProvisioner{progress: allReady}, newCustomer())
+	if _, err := reconcile(t, r, "acme"); err != nil {
+		t.Fatal(err)
+	}
+	threshold := func(alert string) float64 {
+		t.Helper()
+		return testutil.ToFloat64(alertThreshold.WithLabelValues("acme", alert))
+	}
+	if got := threshold("ConsumerGroupLagHigh"); got != 600 {
+		t.Errorf("default lag threshold = %v, want 600", got)
+	}
+	if got := threshold("TopicRequestErrors"); got != 0.05 {
+		t.Errorf("default error threshold = %v, want 0.05", got)
+	}
+
+	settings := &v1alpha1.AlertSettings{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "customer-acme", Name: v1alpha1.AlertSettingsName},
+		Spec:       v1alpha1.DefaultAlertSettings,
+	}
+	settings.Spec.ConsumerLag.Seconds = 120
+	settings.Spec.Throttling.Enabled = false
+	if err := c.Create(t.Context(), settings); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reconcile(t, r, "acme"); err != nil {
+		t.Fatal(err)
+	}
+	if got := threshold("ConsumerGroupLagHigh"); got != 120 {
+		t.Errorf("lag threshold = %v, want the settings' 120", got)
+	}
+	if alertThreshold.DeleteLabelValues("acme", "ClientThrottled") {
+		t.Error("the throttling alert is off, but has a threshold")
+	}
+}
+
 func TestReconcileDeprovisionsADeletedCustomer(t *testing.T) {
 	provisioner := &fakeProvisioner{progress: allReady, left: "Namespace customer-acme is being deleted"}
 	r, c := newReconciler(t, provisioner, newCustomer())

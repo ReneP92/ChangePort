@@ -23,6 +23,9 @@ type Principal struct {
 	OrganizationID string
 	// OrganizationRole is the user's role in it, such as org:admin.
 	OrganizationRole string
+	// Expires is when the session token expires; a stream ends then, and
+	// the browser opens it again with a new token.
+	Expires time.Time
 }
 
 // Admin reports whether the user is an admin of the active organization.
@@ -202,11 +205,15 @@ func (a *authenticator) authenticate(r *http.Request) (Principal, error) {
 	if claims.Subject == "" {
 		return Principal{}, fmt.Errorf("%w: the token names no user", errUnauthenticated)
 	}
-	return Principal{
+	principal := Principal{
 		UserID:           claims.Subject,
 		OrganizationID:   claims.ActiveOrganizationID,
 		OrganizationRole: claims.ActiveOrganizationRole,
-	}, nil
+	}
+	if claims.Expiry != nil {
+		principal.Expires = time.Unix(*claims.Expiry, 0)
+	}
+	return principal, nil
 }
 
 type principalKey struct{}

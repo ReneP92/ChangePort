@@ -52,6 +52,7 @@ consumer group's lag with `consumer_group` and `topic` added:
 | `changeport_consumergroup_lag_seconds` | Age of the oldest message the group has not consumed yet, the highest over the topic's partitions |
 | `changeport_consumergroup_lag_messages` | Messages the group has not consumed yet, summed over the topic's partitions |
 | `changeport_consumergroup_lag_capped` | 1 when the lag is older than 23 hours, so `lag_seconds` is a lower bound |
+| `changeport_consumergroup_committed_timestamp_seconds` | When the group's committed offsets on the topic last moved, as far as the agent saw since it started |
 | `changeport_agent_last_success_timestamp_seconds` | When the agent last reconciled the cluster's topic settings |
 
 The agent measures lag every 30 seconds without reading any message. It
@@ -79,6 +80,7 @@ series, so it raises no alerts:
 | `changeport_customer_ready` | 1 while the `Customer` is Ready |
 | `changeport_customer_brokers` | The brokers the cluster runs, as its profile (`profile`) says |
 | `changeport_customer_provisioned_timestamp_seconds` | When the cluster first became Ready; absent before, so that alerts about a cluster that is down wait for it |
+| `changeport_alert_threshold` | The threshold of each of the customer's alerts about its own applications (`alert`), from its alert settings or the defaults ([alerts.md](alerts.md)); absent while the alert is off |
 
 Two jobs read what Kubernetes components know about customers, each series
 with the `tenant` (and `cluster`) of its `namespace`, `customer-<tenant>`:

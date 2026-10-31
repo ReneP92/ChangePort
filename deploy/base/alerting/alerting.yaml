@@ -96,11 +96,32 @@ spec:
     spec:
       securityContext:
         fsGroup: 65534
+      # Alertmanager runs the configuration the provisioner writes, with the
+      # customers' routes (Secret alertmanager-generated), or the base until
+      # it has (ConfigMap alertmanager-config). The init container picks the
+      # first, and the config-reloader keeps it current and reloads
+      # Alertmanager when it changes.
+      initContainers:
+        - name: config
+          image: quay.io/prometheus/alertmanager:v0.34.2
+          command: [sh, -c, '. /scripts/pick.sh && cp "$(pick)" /active/alertmanager.yaml']
+          volumeMounts: &config-mounts
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: config
+              mountPath: /config/base
+              readOnly: true
+            - name: generated
+              mountPath: /config/generated
+              readOnly: true
+            - name: active
+              mountPath: /active
       containers:
         - name: alertmanager
           image: quay.io/prometheus/alertmanager:v0.34.2
           args:
-            - --config.file=/config/alertmanager.yaml
+            - --config.file=/active/alertmanager.yaml
             - --storage.path=/alertmanager
             # A single instance, not a cluster.
             - --cluster.listen-address=
@@ -121,19 +142,38 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /alertmanager
-            - name: config
-              mountPath: /config
+            - name: active
+              mountPath: /active
               readOnly: true
             - name: receivers
               mountPath: /etc/alertmanager/receivers
               readOnly: true
+        - name: config-reloader
+          image: quay.io/prometheus/alertmanager:v0.34.2
+          command: [sh, /scripts/reload.sh]
+          resources:
+            requests:
+              cpu: 5m
+              memory: 8Mi
+            limits:
+              memory: 32Mi
+          volumeMounts: *config-mounts
       volumes:
         - name: data
           persistentVolumeClaim:
             claimName: alertmanager-data
+        - name: scripts
+          configMap:
+            name: alertmanager-scripts
         - name: config
           configMap:
             name: alertmanager-config
+        - name: generated
+          secret:
+            secretName: alertmanager-generated
+            optional: true
+        - name: active
+          emptyDir: {}
         # The receivers' secrets, written by just alerting-config; absent
         # where the overlay routes elsewhere.
         - name: receivers
@@ -152,3 +192,39 @@ spec:
     - name: http
       port: 9093
       targetPort: http
+---
+# Alertmanager sends customers' alerts to the receivers they choose
+# (docs/alerts.md), so it reaches only DNS and the internet: never the
+# cluster's own networks or the cloud's metadata service, whatever a
+# customer's webhook points at. The ranges are those the console refuses for
+# webhooks (cdc.Public), as the Connect worker's are.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: alertmanager-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - {protocol: UDP, port: 53}
+        - {protocol: TCP, port: 53}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 0.0.0.0/8
+              - 10.0.0.0/8
+              - 100.64.0.0/10
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 172.16.0.0/12
+              - 192.0.0.0/24
+              - 192.0.2.0/24
+              - 192.168.0.0/16
+              - 198.18.0.0/15
+              - 198.51.100.0/24
+              - 203.0.113.0/24
+              - 224.0.0.0/3

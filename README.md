@@ -62,6 +62,7 @@ More on the data plane:
 
 - [docs/architecture/data-plane.md](docs/architecture/data-plane.md): how the customers' clusters run, as built.
 - [docs/connecting.md](docs/connecting.md): the customers' guide to connecting, with examples in Java, Python, Go and Node.js.
+- [docs/alerts.md](docs/alerts.md): the customers' guide to the alerts about their applications, and how they work.
 - [docs/runbook.md](docs/runbook.md): the operators' procedures, from provisioning to upgrades.
 
 ## Roadmap

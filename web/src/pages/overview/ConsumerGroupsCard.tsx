@@ -1,15 +1,18 @@
-import type { ConsumerGroupLag } from "@/api/client";
-import { useConsumerGroups } from "@/api/queries";
+import type { Alert, ConsumerGroupLag } from "@/api/client";
+import { useAlerts, useConsumerGroups } from "@/api/queries";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkline } from "@/components/Sparkline";
 import { formatDuration, formatLag } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { alertsAbout } from "@/lib/alerts";
+import { AlertBadge } from "@/pages/alerts/ActiveAlerts";
 
 const hour = 60 * 60 * 1000;
 
 /** How far behind each consumer group is on each topic it reads. */
 export function ConsumerGroupsCard() {
   const groups = useConsumerGroups();
+  const alerts = useAlerts();
   // Every sparkline spans the same hour, up to the newest point, so that
   // they line up. Without any points, no sparkline is drawn.
   const end = Math.max(
@@ -37,8 +40,6 @@ export function ConsumerGroupsCard() {
         {groups.data && groups.data.length > 0 && (
           // Wide tables scroll sideways on phones instead of overflowing; relative
           // keeps what is positioned absolutely, such as screen-reader-only
-          // headers, inside the scroll area too. relative
-          // keeps what is positioned absolutely, such as screen-reader-only
           // headers, inside the scroll area too.
           <div className="relative -mx-1 overflow-x-auto px-1">
             <table className="w-full text-left whitespace-nowrap [&_td]:px-3 [&_td:first-child]:pl-0 [&_td:last-child]:pr-0 [&_th]:px-3 [&_th:first-child]:pl-0 [&_th:last-child]:pr-0">
@@ -56,6 +57,10 @@ export function ConsumerGroupsCard() {
                   <GroupRow
                     key={`${group.group}\u0000${group.topic}`}
                     group={group}
+                    alerts={alertsAbout(alerts.data, {
+                      topic: group.topic,
+                      consumerGroup: group.group,
+                    })}
                     start={end - hour}
                     end={end}
                   />
@@ -69,7 +74,17 @@ export function ConsumerGroupsCard() {
   );
 }
 
-function GroupRow({ group, start, end }: { group: ConsumerGroupLag; start: number; end: number }) {
+function GroupRow({
+  group,
+  alerts,
+  start,
+  end,
+}: {
+  group: ConsumerGroupLag;
+  alerts: Alert[];
+  start: number;
+  end: number;
+}) {
   const caughtUp = group.lagMessages === 0;
   const points = group.history.map((point) => ({
     time: new Date(point.time).getTime(),
@@ -78,7 +93,12 @@ function GroupRow({ group, start, end }: { group: ConsumerGroupLag; start: numbe
   const highest = Math.max(...points.map((point) => point.value), 0);
   return (
     <tr className="border-b last:border-0">
-      <td className="py-2 font-medium">{group.group}</td>
+      <td className="py-2 font-medium">
+        <span className="flex items-center gap-2">
+          {group.group}
+          <AlertBadge alerts={alerts} />
+        </span>
+      </td>
       <td className="py-2">{group.topic}</td>
       <td className={cn("py-2", caughtUp ? "text-muted-foreground" : "font-medium")}>
         {formatLag(group.lagSeconds, group.lagMessages, group.capped)}

@@ -72,6 +72,11 @@ type Server struct {
 	metrics       Metrics
 	sources       Sources
 	databases     Databases
+	alerts        Alerts
+	alertSettings AlertSettingsStore
+	receivers     Receivers
+	// alertPoll is how often alert streams ask for the alerts.
+	alertPoll time.Duration
 	// egress are the addresses Changeport connects to customers' databases
 	// from, which they allowlist.
 	egress []string
@@ -94,6 +99,14 @@ type Options struct {
 	// checks their databases.
 	Sources   Sources
 	Databases Databases
+	// Alerts reads the customers' active alerts, AlertSettings keeps their
+	// settings, and Receivers checks where they send them.
+	Alerts        Alerts
+	AlertSettings AlertSettingsStore
+	Receivers     Receivers
+	// AlertPoll is how often alert streams ask for the alerts; the default
+	// is every 5 seconds.
+	AlertPoll time.Duration
 	// EgressAddresses are the addresses Changeport connects to customers'
 	// databases from.
 	EgressAddresses []string
@@ -118,6 +131,10 @@ func New(config Config, options Options) (*Server, error) {
 		metrics:       options.Metrics,
 		sources:       options.Sources,
 		databases:     options.Databases,
+		alerts:        options.Alerts,
+		alertSettings: options.AlertSettings,
+		receivers:     options.Receivers,
+		alertPoll:     cmp.Or(options.AlertPoll, 5*time.Second),
 		egress:        options.EgressAddresses,
 		ui:            options.UI,
 		logger:        options.Logger,

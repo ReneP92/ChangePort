@@ -13,5 +13,6 @@ labels:
 resources:
   - changeport.io_customers.yaml
   - changeport.io_postgressources.yaml
+  - changeport.io_alertsettings.yaml
   - provisioner.yaml
   - deletion-protection.yaml

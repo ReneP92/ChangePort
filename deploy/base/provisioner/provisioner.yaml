@@ -32,6 +32,11 @@ rules:
   - apiGroups: [changeport.io]
     resources: [postgressources]
     verbs: [get, list, watch, patch, update, delete]
+  # Customers' alert settings, which set their alerts' thresholds and where
+  # the alerts go (docs/alerts.md).
+  - apiGroups: [changeport.io]
+    resources: [alertsettings]
+    verbs: [get, list, watch]
   - apiGroups: [changeport.io]
     resources: [postgressources/status]
     verbs: [get, patch, update]
@@ -45,10 +50,12 @@ rules:
     verbs: [get, create, patch, delete]
   # The source controller moves each Postgres source's password from the
   # console's write-once Secret into the Connect worker's, and deletes the
-  # console's.
+  # console's. The alert routing controller reads customers' receiver
+  # Secrets, deletes those no longer named, and writes Alertmanager's
+  # configuration.
   - apiGroups: [""]
     resources: [secrets]
-    verbs: [get, create, patch, update, delete]
+    verbs: [get, list, create, patch, update, delete]
   # Before deleting a customer's namespace, the controller marks the volumes
   # of its claims with when the customer was deprovisioned, for the purge
   # after 30 days (docs/runbook.md).
@@ -74,10 +81,11 @@ rules:
   - apiGroups: [networking.k8s.io]
     resources: [networkpolicies]
     verbs: [get, create, patch, list, delete]
-  # The Kafka Connect worker's metrics configuration.
+  # The Kafka Connect worker's metrics configuration, and Alertmanager's base
+  # configuration, which the alert routing controller watches.
   - apiGroups: [""]
     resources: [configmaps]
-    verbs: [get, create, patch, list, delete]
+    verbs: [get, create, patch, list, watch, delete]
   # The console's access to the Secrets it needs in each customer namespace.
   # Granting it needs no more than the controller holds itself.
   - apiGroups: [rbac.authorization.k8s.io]

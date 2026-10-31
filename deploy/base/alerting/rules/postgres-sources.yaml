@@ -42,7 +42,7 @@ groups:
           severity: warn
           audience: customer
         annotations:
-          summary: "Postgres source {{ $labels.source }} of {{ $labels.tenant }} holds back {{ $value | humanize1024 }}B of WAL"
+          summary: "Postgres source {{ $labels.source }} holds back {{ $value | humanize1024 }}B of WAL"
           description: "The database keeps the WAL the source has not read, on its disk. A paused, failed or slow source makes it grow."
           runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-postgres-source-fails
       # The source failed, and stays failed: its connector stopped on an
@@ -76,7 +76,7 @@ groups:
           severity: warn
           audience: customer
         annotations:
-          summary: "Postgres source {{ $labels.source }} of {{ $labels.tenant }} is more than 15 minutes behind its database"
+          summary: "Postgres source {{ $labels.source }} is more than 15 minutes behind its database"
           description: "The changes the source writes to Kafka happened more than 15 minutes ago in the database."
           runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-postgres-source-fails
       # The source controller could not read the slot for a while: the
@@ -87,7 +87,7 @@ groups:
           severity: warn
           audience: customer
         annotations:
-          summary: "Changeport cannot reach the database of Postgres source {{ $labels.source }} of {{ $labels.tenant }}"
+          summary: "Changeport cannot reach the database of Postgres source {{ $labels.source }}"
           description: "The source controller has not read the source's slot for more than 15 minutes."
           runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-sources-database-is-unreachable
       # A deleted source waits for its slot to be dropped, which keeps WAL
@@ -110,6 +110,6 @@ groups:
           severity: warn
           audience: customer
         annotations:
-          summary: "Postgres source {{ $labels.source }} of {{ $labels.tenant }} has been paused for a day"
+          summary: "Postgres source {{ $labels.source }} has been paused for a day"
           description: "A paused source keeps its slot, which keeps every change since it paused in the database's WAL."
           runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-postgres-source-fails
