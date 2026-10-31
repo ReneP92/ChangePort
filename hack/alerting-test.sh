@@ -21,6 +21,8 @@ cleanup() {
 trap cleanup EXIT
 
 ensure_kubectl
+kubectl -n metrics rollout status deployment/alert-receiver --timeout=2m >/dev/null ||
+  die "the alert receiver does not run: $(kubectl -n metrics get pods -l app.kubernetes.io/name=alert-receiver --no-headers)"
 if ! kubectl get customer "$customer" >/dev/null 2>&1; then
   log "Provisioning customer $customer with the dev-ha profile"
   provisioner provision -customer "$customer" -profile dev-ha -wait -timeout 15m
@@ -28,8 +30,9 @@ fi
 [[ $(kubectl get customer "$customer" -o jsonpath='{.spec.profile}') == dev-ha ]] || die "customer $customer does not have the dev-ha profile"
 kubectl wait customer "$customer" --for=condition=Ready --timeout=10m >/dev/null
 
-# The alerts of the alert receiver's log, as JSON lines.
-received() { kubectl -n metrics logs deploy/alert-receiver 2>/dev/null; }
+# The alerts of the alert receiver's log, as JSON lines; none while it does
+# not run.
+received() { kubectl -n metrics logs deploy/alert-receiver 2>/dev/null || true; }
 # Waits up to $1 seconds until the receiver got an alert whose line holds
 # every other argument, such as '"status": "firing"'.
 wait_received() {

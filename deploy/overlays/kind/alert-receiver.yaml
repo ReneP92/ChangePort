@@ -44,8 +44,8 @@ spec:
     spec:
       containers:
         - name: receiver
-          # As PYTHON_IMAGE in hack/lib.sh.
-          image: python:3.13-slim@sha256:d98cc29d3266e535dd9da1099688d9cb3ca4753813571e071763d17725460962
+          # As in KIND_CONTROL_PLANE_IMAGES of hack/lib.sh, by tag.
+          image: python:3.13.17-slim
           command: [python3, -u, /app/receiver.py]
           ports:
             - name: http
