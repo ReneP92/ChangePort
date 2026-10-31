@@ -70,6 +70,7 @@ jobs:
           just-version: 1.59.0
       - run: just shellcheck
       - run: just check-text
+      - run: just alerting-check
 
   # The pinned, checksum-verified Bun from hack/lib.sh runs everything, as it
   # does on a laptop, so no Node or setup action is involved.

@@ -104,7 +104,7 @@ if kubectl -n "$namespace" get secret "postgres-password-$source_name-1" >/dev/n
   die "the console's password Secret is left after the handover"
 fi
 [[ $(slot_active) == t ]] || die "the source streams, but its slot $slot is not active"
-check_source_alerts "$customer" "$source_name" ""
+check_alerts "$customer" "$source_name" ""
 # The Kafka Connect worker's and the source controller's metrics reach
 # VictoriaMetrics with the source's tenant and name.
 for _ in $(seq 24); do
@@ -177,6 +177,16 @@ done
 # The local CA, from the truststore lines of client.properties.
 sed -n '/BEGIN CERTIFICATE/,/END CERTIFICATE/p' "$work/client.properties" |
   sed -E 's/^ssl\.truststore\.certificates=//; s/^ +//; s/ \\$//' >"$work/ca.crt"
+# A new load balancer takes a moment to pass connections on; until then they
+# may hang. The gateway answers 401 without credentials once it does.
+gateway_status=""
+for _ in $(seq 30); do
+  gateway_status=$(docker run "${KAFKA_CLIENT[@]}" --add-host "$registry_host:$gateway_address" --entrypoint curl "$KAFKA_IMAGE" \
+    -s -m 5 --cacert /config/ca.crt -o /dev/null -w '%{http_code}' "https://$registry_host/subjects" 2>/dev/null || true)
+  [[ $gateway_status == 401 ]] && break
+  sleep 4
+done
+[[ $gateway_status == 401 ]] || die "the registry gateway at $gateway_address does not answer: $gateway_status"
 cat >"$work/decode.py" <<'PYTHON'
 # Reads a topic as a customer's consumer would, decoding its Avro through the
 # registry gateway, then checks what the gateway refuses.
@@ -187,7 +197,8 @@ from confluent_kafka.schema_registry.avro import AvroDeserializer
 from confluent_kafka.serialization import MessageField, SerializationContext
 
 registry_url, user, password, topic = os.environ["REGISTRY"], os.environ["KAFKA_USERNAME"], os.environ["KAFKA_PASSWORD"], os.environ["TOPIC"]
-registry = SchemaRegistryClient({"url": registry_url, "basic.auth.user.info": f"{user}:{password}", "ssl.ca.location": "/config/ca.crt"})
+# Every call has a timeout, so that a gateway that hangs fails the test.
+registry = SchemaRegistryClient({"url": registry_url, "basic.auth.user.info": f"{user}:{password}", "ssl.ca.location": "/config/ca.crt", "timeout": 30})
 deserialize = AvroDeserializer(registry)
 consumer = Consumer({
     "bootstrap.servers": os.environ["KAFKA_BOOTSTRAP"], "security.protocol": "SASL_SSL", "sasl.mechanisms": "SCRAM-SHA-512",
@@ -213,7 +224,7 @@ def call(method, path, credentials):
     request = urllib.request.Request(registry_url + path, method=method)
     request.add_header("Authorization", "Basic " + base64.b64encode(credentials.encode()).decode())
     try:
-        with urllib.request.urlopen(request, context=ssl.create_default_context(cafile="/config/ca.crt")) as response:
+        with urllib.request.urlopen(request, context=ssl.create_default_context(cafile="/config/ca.crt"), timeout=30) as response:
             return response.status
     except urllib.error.HTTPError as error:
         return error.code

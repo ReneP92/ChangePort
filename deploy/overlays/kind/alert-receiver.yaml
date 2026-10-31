@@ -1,0 +1,79 @@
+# Where Alertmanager sends alerts on kind, instead of PagerDuty and Slack: a
+# webhook that prints each alert of each notification as a line of JSON, with
+# the receiver it came to (page, warn or watchdog). Read it with
+# kubectl -n metrics logs deploy/alert-receiver; hack/alerting-test.sh does.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alert-receiver
+  namespace: metrics
+data:
+  receiver.py: |
+    import http.server
+    import json
+
+
+    class Receiver(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            notification = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            for alert in notification.get("alerts", []):
+                print(json.dumps({"receiver": self.path.strip("/"), "status": alert["status"], "labels": alert["labels"]}), flush=True)
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+
+    http.server.ThreadingHTTPServer(("", 8080), Receiver).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-receiver
+  namespace: metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alert-receiver
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alert-receiver
+    spec:
+      containers:
+        - name: receiver
+          # As PYTHON_IMAGE in hack/lib.sh.
+          image: python:3.13-slim@sha256:d98cc29d3266e535dd9da1099688d9cb3ca4753813571e071763d17725460962
+          command: [python3, -u, /app/receiver.py]
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          volumeMounts:
+            - name: app
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: app
+          configMap:
+            name: alert-receiver
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alert-receiver
+  namespace: metrics
+spec:
+  selector:
+    app.kubernetes.io/name: alert-receiver
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

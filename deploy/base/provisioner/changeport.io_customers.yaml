@@ -171,6 +171,13 @@ spec:
                   describe.
                 format: int64
                 type: integer
+              provisionedAt:
+                description: |-
+                  ProvisionedAt is when the cluster first became Ready. Alerts about a
+                  cluster that is down wait for it, so that a cluster still being created
+                  raises none.
+                format: date-time
+                type: string
             type: object
         required:
         - spec

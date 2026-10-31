@@ -14,7 +14,7 @@ import (
 
 // The metrics of the Postgres CDC sources, by tenant and source, which the
 // source controller exports and the alerts of
-// deploy/base/victoria-metrics/alerts watch (docs/metrics-labels.md).
+// deploy/base/alerting/rules watch (docs/metrics-labels.md).
 var (
 	// retainedWAL is the WAL each source's slot holds back in the
 	// customer's database: a source that stops reading makes it grow until

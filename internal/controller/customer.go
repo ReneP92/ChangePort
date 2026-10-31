@@ -167,6 +167,7 @@ func (r *CustomerReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 		cdcReady.Status, cdcReady.Reason = metav1.ConditionFalse, v1alpha1.ReasonPending
 	}
 	setCondition(status, customer.Generation, cdcReady)
+	markProvisioned(status)
 	if err := r.updateStatus(ctx, &customer, status); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -320,6 +321,11 @@ func (r *CustomerReconciler) notReady(ctx context.Context, customer *v1alpha1.Cu
 // that a cluster that does not change causes no writes.
 func (r *CustomerReconciler) updateStatus(ctx context.Context, customer *v1alpha1.Customer, status *v1alpha1.CustomerStatus) error {
 	status.ObservedGeneration = customer.Generation
+	if customer.DeletionTimestamp.IsZero() {
+		recordCustomer(customer, status)
+	} else {
+		forgetCustomerMetrics(customer.Name)
+	}
 	if equality.Semantic.DeepEqual(customer.Status, *status) {
 		return nil
 	}

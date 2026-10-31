@@ -9,6 +9,15 @@ resources:
   - ../../base/console
   - ../../base/object-store
   - ../../base/victoria-metrics
+  - ../../base/alerting
+  - alert-receiver.yaml
+# Alerts go to the alert receiver rather than PagerDuty and Slack.
+configMapGenerator:
+  - name: alertmanager-config
+    namespace: metrics
+    behavior: replace
+    files:
+      - alertmanager.yaml
 patches:
   # The console at http://localhost:8088: a NodePort that deploy/kind maps to
   # that port on the host, and the origins tokens may come from, including
@@ -43,3 +52,42 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/args/-
         value: -platform=kind
+  # The metrics and alerting pipeline and the provisioner run on the
+  # control-plane node, apart from the workers that customers' brokers run
+  # on, as platform components do apart from customers' dedicated nodes in
+  # production: a test that freezes a worker never freezes alerting. Their
+  # storage is the pod's own, as a volume would tie them to one node.
+  - target:
+      kind: Deployment
+      name: (victoria-metrics|vmalert|alertmanager|alert-receiver|changeport-provisioner)
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value: {node-role.kubernetes.io/control-plane: ""}
+      - op: add
+        path: /spec/template/spec/tolerations
+        value: [{key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}]
+  - target:
+      kind: Deployment
+      name: victoria-metrics
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/0
+        value: {name: storage, emptyDir: {}}
+  - target:
+      kind: Deployment
+      name: alertmanager
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/0
+        value: {name: data, emptyDir: {}}
+  - target:
+      kind: PersistentVolumeClaim
+      name: (victoria-metrics-data|alertmanager-data)
+    patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: ignored
+

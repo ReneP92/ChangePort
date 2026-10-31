@@ -18,7 +18,7 @@ var root = filepath.Join("..", "..")
 
 func load(t *testing.T) []Rule {
 	t.Helper()
-	rules, err := Load(filepath.Join(root, "deploy", "base", "victoria-metrics", "alerts"))
+	rules, err := Load(filepath.Join(root, "deploy", "base", "alerting", "rules"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,8 @@ func TestRules(t *testing.T) {
 		if rule.Expr == "" {
 			t.Errorf("%s has no expression", rule.Alert)
 		}
-		if severity := rule.Labels["severity"]; severity != "page" && severity != "warn" {
+		// Only the Watchdog, which always fires, neither pages nor warns.
+		if severity := rule.Labels["severity"]; severity != "page" && severity != "warn" && (rule.Alert != "Watchdog" || severity != "none") {
 			t.Errorf("%s has severity %q, want page or warn", rule.Alert, severity)
 		}
 		if audience := rule.Labels["audience"]; audience != "operator" && audience != "customer" {
@@ -76,8 +77,14 @@ func TestRules(t *testing.T) {
 				t.Errorf("%s has no %s", rule.Alert, annotation)
 			}
 		}
-		if summary := rule.Annotations["summary"]; !strings.Contains(summary, "$labels.tenant") || !strings.Contains(summary, "$labels.source") {
-			t.Errorf("%s's summary does not name the tenant and the source: %q", rule.Alert, summary)
+		// Alerts about a customer name it, and those about a source, the
+		// source; those about the platform name what they can.
+		summary := rule.Annotations["summary"]
+		if rule.Labels["scope"] != "platform" && !strings.Contains(summary, "$labels.tenant") {
+			t.Errorf("%s's summary does not name the tenant: %q", rule.Alert, summary)
+		}
+		if rule.Group == "postgres-sources" && !strings.Contains(summary, "$labels.source") {
+			t.Errorf("%s's summary does not name the source: %q", rule.Alert, summary)
 		}
 		anchor, ok := strings.CutPrefix(rule.Annotations["runbook"], runbookURL)
 		if !ok || !slices.Contains(anchors, anchor) {
@@ -104,13 +111,14 @@ func TestAnchor(t *testing.T) {
 }
 
 // TestRulesAgainstVictoriaMetrics evaluates every rule's expression for one
-// Postgres source, as the end-to-end tests run it (hack/lib.sh): each
-// expression must work, and exactly the alerts of CHANGEPORT_ALERTS_FIRING
-// must have a series for the source, ignoring how long they must hold.
+// customer, or one of its Postgres sources, as the end-to-end tests run it
+// (hack/lib.sh): each expression must work, and exactly the alerts of
+// CHANGEPORT_ALERTS_FIRING must have a series for it, ignoring how long they
+// must hold.
 func TestRulesAgainstVictoriaMetrics(t *testing.T) {
 	address, tenant, source := os.Getenv("CHANGEPORT_METRICS_URL"), os.Getenv("CHANGEPORT_ALERTS_TENANT"), os.Getenv("CHANGEPORT_ALERTS_SOURCE")
-	if address == "" || tenant == "" || source == "" {
-		t.Skip("CHANGEPORT_METRICS_URL, CHANGEPORT_ALERTS_TENANT and CHANGEPORT_ALERTS_SOURCE are not set; the end-to-end test sets them")
+	if address == "" || tenant == "" {
+		t.Skip("CHANGEPORT_METRICS_URL and CHANGEPORT_ALERTS_TENANT are not set; the end-to-end test sets them")
 	}
 	var firing []string
 	for alert := range strings.SplitSeq(os.Getenv("CHANGEPORT_ALERTS_FIRING"), ",") {
@@ -126,15 +134,19 @@ func TestRulesAgainstVictoriaMetrics(t *testing.T) {
 				mine = append(mine, s)
 			}
 		}
+		labels := []string{"tenant", "cluster", "env"}
+		if source != "" {
+			labels = append(labels, "source")
+		}
 		for _, s := range mine {
-			for _, label := range []string{"tenant", "cluster", "env", "source"} {
+			for _, label := range labels {
 				if s[label] == "" {
 					t.Errorf("%s has a series without %s: %v", rule.Alert, label, s)
 				}
 			}
 		}
 		if want := slices.Contains(firing, rule.Alert); want != (len(mine) > 0) {
-			t.Errorf("%s fires for source %s of %s: %t, want %t", rule.Alert, source, tenant, len(mine) > 0, want)
+			t.Errorf("%s fires for %s%s: %t, want %t", rule.Alert, tenant, source, len(mine) > 0, want)
 		}
 	}
 }

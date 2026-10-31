@@ -1,0 +1,22 @@
+# Alerting, next to the metrics store in the metrics namespace: vmalert
+# evaluates the rules in rules/ against VictoriaMetrics, and Alertmanager
+# routes what fires (docs/runbook.md, Alerts). The receivers' secrets are in
+# the Secret alertmanager-receivers, which just alerting-config writes from
+# .env; overlays without them, such as kind's, route to receivers of their own.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: metrics
+labels:
+  - pairs:
+      changeport.io/platform: alerting
+resources:
+  - alerting.yaml
+configMapGenerator:
+  - name: vmalert-rules
+    files:
+      - rules/kafka.yaml
+      - rules/platform.yaml
+      - rules/postgres-sources.yaml
+  - name: alertmanager-config
+    files:
+      - alertmanager.yaml

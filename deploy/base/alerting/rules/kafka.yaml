@@ -1,0 +1,136 @@
+# Alerting rules for customers' Kafka clusters. Pages are for what hurts
+# customers now; warnings, to act on within hours. Each alert carries tenant,
+# cluster and env, and links its section of docs/runbook.md. Alerts about a
+# cluster that is down wait until it has first been ready, so that a cluster
+# still being created raises none, and a cluster being deleted has no series.
+groups:
+  - name: kafka
+    rules:
+      # Partitions without a leader: their data cannot be read or written.
+      - alert: KafkaOfflinePartitions
+        expr: sum by (tenant, cluster, env) (kafka_controller_kafkacontroller_offlinepartitionscount) > 0
+        for: 1m
+        labels:
+          severity: page
+          audience: operator
+        annotations:
+          summary: "{{ $value }} partitions of {{ $labels.tenant }} are offline"
+          description: "Partitions without a leader can be neither written nor read."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#partitions-are-not-in-sync
+      # Partitions with fewer in-sync replicas than min.insync.replicas
+      # refuse writes with acks=all.
+      - alert: KafkaUnderMinISRPartitions
+        expr: sum by (tenant, cluster, env) (kafka_server_replicamanager_underminisrpartitioncount) > 0
+        for: 2m
+        labels:
+          severity: page
+          audience: operator
+        annotations:
+          summary: "{{ $value }} partitions of {{ $labels.tenant }} are under min.insync.replicas"
+          description: "Producers with acks=all cannot write to them."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#partitions-are-not-in-sync
+      # No KRaft controller leads the cluster: no topic, leadership or
+      # membership changes, and brokers that restart cannot rejoin.
+      - alert: KafkaNoActiveController
+        expr: >-
+          changeport_customer_brokers
+          unless on (tenant) (sum by (tenant) (kafka_controller_kafkacontroller_activecontrollercount) == 1)
+          and on (tenant) changeport_customer_provisioned_timestamp_seconds
+        for: 2m
+        labels:
+          severity: page
+          audience: operator
+        annotations:
+          summary: "The cluster of {{ $labels.tenant }} has no active controller"
+          description: "No KRaft controller leads the cluster, or the brokers report no metrics."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#no-active-controller
+      # A three-broker cluster with a broker down survives, but one more and
+      # partitions go under min.insync.replicas.
+      - alert: KafkaBrokersDown
+        expr: >-
+          changeport_customer_brokers{profile=~"dev-ha|production"}
+          > on (tenant) group_left ()
+          (max by (tenant) (kafka_controller_kafkacontroller_activebrokercount) or on (tenant) (0 * changeport_customer_brokers))
+          and on (tenant) changeport_customer_provisioned_timestamp_seconds
+        for: 5m
+        labels:
+          severity: page
+          audience: operator
+        annotations:
+          summary: "The cluster of {{ $labels.tenant }} has fewer ready brokers than its {{ $value }}"
+          description: "The active controller counts fewer active brokers than the cluster's {{ $labels.profile }} profile runs."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-broker-is-down
+      # The provisioning controller has not seen the cluster ready for a
+      # quarter of an hour: it is stuck being created, or broken.
+      - alert: CustomerNotReady
+        expr: changeport_customer_ready == 0
+        for: 15m
+        labels:
+          severity: page
+          audience: operator
+        annotations:
+          summary: "The cluster of {{ $labels.tenant }} has not been ready for 15 minutes"
+          description: "Its Customer's Ready condition says what it waits for."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-customer-is-not-ready
+      - alert: KafkaUnderReplicatedPartitions
+        expr: sum by (tenant, cluster, env) (kafka_server_replicamanager_underreplicatedpartitions) > 0
+        for: 10m
+        labels:
+          severity: warn
+          audience: operator
+        annotations:
+          summary: "{{ $value }} partitions of {{ $labels.tenant }} have been under-replicated for 10 minutes"
+          description: "A follower is not keeping up with its leader, or a broker is down."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#partitions-are-not-in-sync
+      - alert: KafkaVolumeNearlyFull
+        expr: >-
+          max by (tenant, cluster, env, persistentvolumeclaim) (kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes) > 0.8
+        for: 10m
+        labels:
+          severity: warn
+          audience: operator
+        annotations:
+          summary: "Volume {{ $labels.persistentvolumeclaim }} of {{ $labels.tenant }} is {{ $value | humanizePercentage }} full"
+          description: "A broker whose volume fills up stops; tiered topics keep only recent data on it."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-brokers-volume-fills-up
+      - alert: TieredStorageCopyErrors
+        expr: sum by (tenant, cluster, env) (rate(kafka_server_brokertopicmetrics_remotecopyerrorspersec_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: warn
+          audience: operator
+        annotations:
+          summary: "The brokers of {{ $labels.tenant }} fail to copy segments to tiered storage"
+          description: "Segments that are not copied stay on the brokers' volumes, which fill up."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#tiered-storage-falls-behind
+      - alert: TieredStorageCopyLagGrowing
+        expr: >-
+          sum by (tenant, cluster, env) (kafka_server_brokertopicmetrics_remotecopylagbytes) > 0
+          and deriv(sum by (tenant, cluster, env) (kafka_server_brokertopicmetrics_remotecopylagbytes)[1h:5m]) > 0
+        for: 15m
+        labels:
+          severity: warn
+          audience: operator
+        annotations:
+          summary: "What the brokers of {{ $labels.tenant }} have yet to copy to tiered storage has grown for an hour"
+          description: "Tiered storage does not keep up; the brokers' volumes keep what it has not copied."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#tiered-storage-falls-behind
+      - alert: ListenerCertificateExpiring
+        expr: certmanager_certificate_expiration_timestamp_seconds{tenant!=""} - time() < 14 * 24 * 3600
+        labels:
+          severity: warn
+          audience: operator
+        annotations:
+          summary: "Certificate {{ $labels.name }} of {{ $labels.tenant }} expires within 14 days"
+          description: "cert-manager renews a certificate when a third of its lifetime is left; one this close to expiring is not being renewed."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#certificates
+      - alert: KafkaAgentNotReconciling
+        expr: time() - changeport_agent_last_success_timestamp_seconds > 10 * 60
+        for: 5m
+        labels:
+          severity: warn
+          audience: operator
+        annotations:
+          summary: "The Kafka agent of {{ $labels.tenant }} has not reconciled for 10 minutes"
+          description: "New topics are not tiered and consumer lag is not measured while it does not."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#the-kafka-agent-is-not-reconciling

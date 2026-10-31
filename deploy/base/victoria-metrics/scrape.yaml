@@ -119,3 +119,55 @@ scrape_configs:
       # The controllers' own health besides; not Go's or the workqueues'.
       - if: '{__name__!~"changeport_.*|controller_runtime_reconcile_(errors_)?total"}'
         action: drop
+  # cert-manager: when each certificate expires. Those of customers'
+  # namespaces carry their tenant, from the certificate's namespace.
+  - job_name: cert-manager
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [cert-manager]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name, __meta_kubernetes_pod_label_app_kubernetes_io_component, __meta_kubernetes_pod_container_port_number]
+        regex: cert-manager;controller;9402
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+    metric_relabel_configs:
+      - if: '{__name__!~"certmanager_certificate_(expiration_timestamp_seconds|ready_status)"}'
+        action: drop
+      - source_labels: [namespace]
+        regex: customer-(.+)
+        target_label: tenant
+      - source_labels: [namespace]
+        regex: customer-(.+)
+        target_label: cluster
+  # The kubelets, through the API server: how full each volume of customers'
+  # namespaces is. Volumes that report no usage, such as kind's host paths,
+  # have none.
+  - job_name: kubelet
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/$1/proxy/metrics
+      - source_labels: [__meta_kubernetes_node_name]
+        target_label: instance
+    metric_relabel_configs:
+      - if: '{__name__!~"kubelet_volume_stats_(used|capacity|available)_bytes"}'
+        action: drop
+      - source_labels: [namespace]
+        regex: customer-(.+)
+        action: keep
+      - source_labels: [namespace]
+        regex: customer-(.+)
+        target_label: tenant
+      - source_labels: [namespace]
+        regex: customer-(.+)
+        target_label: cluster

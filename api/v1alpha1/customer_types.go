@@ -106,6 +106,12 @@ type CustomerStatus struct {
 	// +optional
 	BootstrapAddress string `json:"bootstrapAddress,omitempty"`
 
+	// ProvisionedAt is when the cluster first became Ready. Alerts about a
+	// cluster that is down wait for it, so that a cluster still being created
+	// raises none.
+	// +optional
+	ProvisionedAt *metav1.Time `json:"provisionedAt,omitempty"`
+
 	// Conditions are CertificateIssued, KafkaReady, UsersReady,
 	// AgentAvailable and Ready, and CDCReady.
 	// +listType=map

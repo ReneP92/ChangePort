@@ -9,6 +9,7 @@ resources:
   - ../../base/console
   - ../../base/eks-storage
   - ../../base/victoria-metrics
+  - ../../base/alerting
 # The platform's own images in ECR.
 components:
   - ../../components/eks-images
@@ -39,6 +40,13 @@ patches:
   - target:
       kind: Deployment
       name: victoria-metrics
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: prod
+  - target:
+      kind: Deployment
+      name: vmalert
     patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/env/0/value

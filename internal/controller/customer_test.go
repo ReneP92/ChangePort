@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/yaml"
@@ -316,6 +318,60 @@ func deleting(t *testing.T, c client.Client, name string) {
 	t.Helper()
 	if err := c.Delete(t.Context(), get(t, c, name)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The cluster's readiness, brokers and when it was first ready reach the
+// metrics, which a deleted customer's leave.
+func TestReconcileExportsTheClustersMetrics(t *testing.T) {
+	provisioner := &fakeProvisioner{progress: provisioning.Progress{}}
+	r, c := newReconciler(t, provisioner, newCustomer())
+	if _, err := reconcile(t, r, "acme"); err != nil {
+		t.Fatal(err)
+	}
+	if got := testutil.ToFloat64(customerReady.WithLabelValues("acme")); got != 0 {
+		t.Errorf("ready = %v while the cluster is created", got)
+	}
+	if got := testutil.ToFloat64(customerBrokers.WithLabelValues("acme", "dev")); got != 1 {
+		t.Errorf("brokers = %v, want the dev profile's 1", got)
+	}
+	if customerProvisioned.DeleteLabelValues("acme") {
+		t.Error("a cluster not ready yet has a provisioning time")
+	}
+
+	provisioner.progress = allReady
+	if _, err := reconcile(t, r, "acme"); err != nil {
+		t.Fatal(err)
+	}
+	provisioned := get(t, c, "acme").Status.ProvisionedAt
+	becameReady := condition(t, get(t, c, "acme"), v1alpha1.ConditionReady).LastTransitionTime
+	if provisioned == nil || !provisioned.Equal(&becameReady) {
+		t.Fatalf("provisioned at %v, want when it became Ready", provisioned)
+	}
+	if got := testutil.ToFloat64(customerReady.WithLabelValues("acme")); got != 1 {
+		t.Errorf("ready = %v, want 1", got)
+	}
+	if got := testutil.ToFloat64(customerProvisioned.WithLabelValues("acme")); got != float64(provisioned.Unix()) {
+		t.Errorf("provisioned metric = %v", got)
+	}
+
+	// Not ready again, it stays provisioned.
+	provisioner.progress = provisioning.Progress{}
+	if _, err := reconcile(t, r, "acme"); err != nil {
+		t.Fatal(err)
+	}
+	if again := get(t, c, "acme").Status.ProvisionedAt; again == nil || !again.Equal(provisioned) {
+		t.Errorf("provisioned at %v after the cluster went down, want %v", again, provisioned)
+	}
+
+	deleting(t, c, "acme")
+	provisioner.left = "Namespace customer-acme is being deleted"
+	if _, err := reconcile(t, r, "acme"); err != nil {
+		t.Fatal(err)
+	}
+	if customerReady.DeleteLabelValues("acme") || customerProvisioned.DeleteLabelValues("acme") ||
+		customerBrokers.DeletePartialMatch(prometheus.Labels{"tenant": "acme"}) != 0 {
+		t.Error("a customer being deleted keeps its series")
 	}
 }
 

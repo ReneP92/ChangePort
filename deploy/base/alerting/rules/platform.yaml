@@ -1,0 +1,40 @@
+# Alerting rules for the platform itself.
+groups:
+  - name: platform
+    rules:
+      # Always fires, so that the dead man's switch it goes to raises an
+      # alarm once it stops: alerting itself is broken.
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+          audience: operator
+          scope: platform
+        annotations:
+          summary: "Alerting works"
+          description: "This alert always fires. If its receiver stops hearing from it, vmalert, Alertmanager or VictoriaMetrics is down."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#alerting
+      - alert: ScrapeTargetDown
+        expr: up == 0
+        for: 10m
+        labels:
+          severity: warn
+          audience: operator
+          scope: platform
+        annotations:
+          summary: "{{ $labels.job }} target {{ $labels.instance }}{{ with $labels.tenant }} of {{ . }}{{ end }} has been down for 10 minutes"
+          description: "VictoriaMetrics cannot scrape it, so its metrics and the alerts on them are missing."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-scrape-target-is-down
+      # Customers decide how many clients they run, so the clients' metrics
+      # have a limit of their own per broker; past it, new clients' series
+      # are dropped.
+      - alert: ClientTelemetryNearLimit
+        expr: scrape_series_current{job="kafka-clients"} / scrape_series_limit{job="kafka-clients"} > 0.9
+        for: 10m
+        labels:
+          severity: warn
+          audience: operator
+        annotations:
+          summary: "The client metrics of {{ $labels.tenant }} on {{ $labels.instance }} are near their series limit"
+          description: "Past the limit, the metrics of new clients are dropped."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#client-telemetry-reaches-its-limit

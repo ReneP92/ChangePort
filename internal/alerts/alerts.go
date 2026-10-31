@@ -1,5 +1,5 @@
-// Package alerts reads the alerting rules of deploy/base/victoria-metrics/alerts,
-// which vmalert evaluates once it runs (#96). Its tests check the rules
+// Package alerts reads the alerting rules of deploy/base/alerting/rules,
+// which vmalert evaluates. Its tests check the rules
 // against the runbook and the documented metrics, and evaluate them against
 // VictoriaMetrics in the end-to-end tests.
 package alerts
@@ -16,6 +16,8 @@ import (
 
 // Rule is an alerting rule.
 type Rule struct {
+	// Group is the name of the rule's group.
+	Group       string            `json:"-"`
 	Alert       string            `json:"alert"`
 	Expr        string            `json:"expr"`
 	For         string            `json:"for,omitempty"`
@@ -48,7 +50,10 @@ func Load(dir string) ([]Rule, error) {
 			return nil, fmt.Errorf("%s: %w", filepath.Base(path), err)
 		}
 		for _, group := range file.Groups {
-			rules = append(rules, group.Rules...)
+			for _, rule := range group.Rules {
+				rule.Group = group.Name
+				rules = append(rules, rule)
+			}
 		}
 	}
 	return rules, nil
