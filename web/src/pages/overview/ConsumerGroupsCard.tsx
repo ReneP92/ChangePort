@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import type { Alert, ConsumerGroupLag } from "@/api/client";
 import { useAlerts, useConsumerGroups } from "@/api/queries";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,11 +96,23 @@ function GroupRow({
     <tr className="border-b last:border-0">
       <td className="py-2 font-medium">
         <span className="flex items-center gap-2">
-          {group.group}
+          <Link
+            to={`/consumer-groups/${encodeURIComponent(group.group)}`}
+            className="underline-offset-4 hover:underline"
+          >
+            {group.group}
+          </Link>
           <AlertBadge alerts={alerts} />
         </span>
       </td>
-      <td className="py-2">{group.topic}</td>
+      <td className="py-2">
+        <Link
+          to={`/topics/${encodeURIComponent(group.topic)}`}
+          className="underline-offset-4 hover:underline"
+        >
+          {group.topic}
+        </Link>
+      </td>
       <td className={cn("py-2", caughtUp ? "text-muted-foreground" : "font-medium")}>
         {formatLag(group.lagSeconds, group.lagMessages, group.capped)}
       </td>

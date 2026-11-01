@@ -158,14 +158,66 @@ export function useTopics() {
   });
 }
 
-/** The cluster's bytes in and out per second over range. */
-export function useThroughput(range: ThroughputRange) {
+/** The bytes in and out per second over range, of the cluster or a topic. */
+export function useThroughput(range: ThroughputRange, topic?: string) {
   const api = useApi();
   const organization = useOrganizationKey();
   return useQuery({
-    queryKey: ["customer", "throughput", range, organization],
+    queryKey: ["customer", "throughput", range, topic ?? "", organization],
     queryFn: async () =>
-      unwrap(await api.GET("/api/customer/throughput", { params: { query: { range } } })),
+      unwrap(
+        await api.GET("/api/customer/throughput", {
+          params: { query: { range, ...(topic === undefined ? {} : { topic }) } },
+        }),
+      ),
+    refetchInterval: 60_000,
+  });
+}
+
+/** What a timeline is about: a topic, a consumer group, or everything. */
+export interface EventsAbout {
+  topic?: string;
+  consumerGroup?: string;
+}
+
+/**
+ * The changes in the cluster over range, newest first: all of them, or
+ * those about a topic or a consumer group (docs/timeline.md).
+ */
+export function useEvents(range: ThroughputRange, about: EventsAbout = {}) {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: [
+      "customer",
+      "events",
+      range,
+      about.topic ?? "",
+      about.consumerGroup ?? "",
+      organization,
+    ],
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/api/customer/events", {
+          params: { query: { range, ...about } },
+        }),
+      ),
+    refetchInterval: 15_000,
+  });
+}
+
+/** How far behind a consumer group was on each topic it reads, over range. */
+export function useConsumerGroupLag(group: string, range: ThroughputRange) {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["customer", "consumer-group-lag", group, range, organization],
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/api/customer/consumer-groups/{group}/lag", {
+          params: { path: { group }, query: { range } },
+        }),
+      ),
     refetchInterval: 60_000,
   });
 }

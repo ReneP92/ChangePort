@@ -449,8 +449,42 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Bytes in and out per second over the whole cluster */
+        /** Bytes in and out per second over the whole cluster, or one topic */
         get: operations["getThroughput"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The changes in the cluster over a range, for the timeline over the graphs (docs/timeline.md): all of them, or those about a topic, or about a consumer group and the topics it reads. Broker restarts show in each. */
+        get: operations["listEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/consumer-groups/{group}/lag": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How far behind a consumer group was on each topic it reads, over a range */
+        get: operations["getConsumerGroupLag"];
         put?: never;
         post?: never;
         delete?: never;
@@ -916,6 +950,40 @@ export interface components {
             bytesIn: components["schemas"]["Point"][];
             bytesOut: components["schemas"]["Point"][];
         };
+        /**
+         * @default 1h
+         * @enum {string}
+         */
+        TimeRange: "1h" | "6h" | "24h" | "7d";
+        TimelineEvent: {
+            id: string;
+            /** Format: date-time */
+            time: string;
+            /** @enum {string} */
+            kind: "topic.created" | "topic.deleted" | "topic.config" | "topic.partitions" | "acl.added" | "acl.removed" | "group.rebalanced" | "broker.restarted" | "client.throttled" | "client.unthrottled";
+            /** @description What happened, in plain language */
+            message: string;
+            topic?: string;
+            consumerGroup?: string;
+            broker?: string;
+            clientId?: string;
+            /** @description Who made the change, where Changeport knows it */
+            actor?: string;
+        };
+        EventList: {
+            events: components["schemas"]["TimelineEvent"][];
+            /** @description Whether there were more events than the list holds; the oldest are left out */
+            truncated: boolean;
+        };
+        ConsumerGroupLagHistory: {
+            range: string;
+            stepSeconds: number;
+            topics: components["schemas"]["TopicLagHistory"][];
+        };
+        TopicLagHistory: {
+            topic: string;
+            lagSeconds: components["schemas"]["Point"][];
+        };
         Point: {
             /** Format: date-time */
             time: string;
@@ -1034,6 +1102,8 @@ export interface components {
         };
     };
     parameters: {
+        /** @description How far back to look, up to now */
+        Range: components["schemas"]["TimeRange"];
         /** @description The topic's name */
         TopicName: string;
         /** @description The source's name, which prefixes its topics */
@@ -1885,8 +1955,10 @@ export interface operations {
     getThroughput: {
         parameters: {
             query?: {
-                /** @description How far back to look */
-                range?: "1h" | "6h" | "24h" | "7d";
+                /** @description How far back to look, up to now */
+                range?: components["parameters"]["Range"];
+                /** @description Only this topic's bytes */
+                topic?: string;
             };
             header?: never;
             path?: never;
@@ -1901,6 +1973,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Throughput"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    listEvents: {
+        parameters: {
+            query?: {
+                /** @description How far back to look, up to now */
+                range?: components["parameters"]["Range"];
+                topic?: string;
+                consumerGroup?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The changes, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    getConsumerGroupLag: {
+        parameters: {
+            query?: {
+                /** @description How far back to look, up to now */
+                range?: components["parameters"]["Range"];
+            };
+            header?: never;
+            path: {
+                group: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The lag over the range */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsumerGroupLagHistory"];
                 };
             };
             400: components["responses"]["BadRequest"];

@@ -85,3 +85,36 @@ export function formatAgo(at: string, now: number = Date.now()): string {
   }
   return `${formatDuration(seconds)} ago`;
 }
+
+/** Steps of a duration axis, in seconds, from which one is chosen. */
+const durationSteps = [
+  15,
+  30,
+  60,
+  2 * 60,
+  5 * 60,
+  10 * 60,
+  15 * 60,
+  30 * 60,
+  3600,
+  2 * 3600,
+  3 * 3600,
+  6 * 3600,
+  12 * 3600,
+  86400,
+];
+
+/**
+ * Ticks for an axis of durations up to max seconds: multiples of a whole
+ * step, such as every 30 seconds or every 5 minutes, so that each reads
+ * exactly; at most five above zero.
+ */
+export function durationTicks(max: number): number[] {
+  const step = durationSteps.find((s) => max / s <= 5) ?? Math.ceil(max / 5 / 86400) * 86400;
+  // Up to the first tick at or above max, and one step at least.
+  const ticks = [0, step];
+  while ((ticks.at(-1) ?? 0) < max) {
+    ticks.push((ticks.at(-1) ?? 0) + step);
+  }
+  return ticks;
+}

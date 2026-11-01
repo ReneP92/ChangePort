@@ -76,12 +76,18 @@ log "Producing with client telemetry"
 docker exec "$name" /opt/kafka/bin/kafka-client-metrics.sh --bootstrap-server localhost:9092 --alter --name image-test \
   --metrics org.apache.kafka.producer.record.send.total --interval 1000 >/dev/null
 # Java producers skip the push KIP-714 asks for when a client closes, so the
-# producer stays open for a few push intervals after sending.
-docker exec "$name" bash -c '{ seq 1 100; sleep 4; } | /opt/kafka/bin/kafka-console-producer.sh \
-  --bootstrap-server localhost:9092 --topic tiered --command-property client.id=image-test' 
-sent=$(docker exec "$name" curl -sf localhost:9404/metrics |
-  sed -nE 's/^clients_org_apache_kafka_producer_record_send_total\{.*client_id="image-test".*principal="User:ANONYMOUS".*\} ([0-9.E]+)$/\1/p')
-[[ $sent == 100.0 ]] || die "the metrics reporter exposes ${sent:-no} records sent by the producer, want 100.0"
+# producer stays open, in the background, until its pushes show all it sent;
+# on a slow runner its JVM alone takes seconds to start.
+docker exec -d "$name" bash -c '{ seq 1 100; sleep 120; } | /opt/kafka/bin/kafka-console-producer.sh \
+  --bootstrap-server localhost:9092 --topic tiered --command-property client.id=image-test'
+sent=""
+for _ in $(seq 60); do
+  sent=$(docker exec "$name" curl -sf localhost:9404/metrics |
+    sed -nE 's/^clients_org_apache_kafka_producer_record_send_total\{.*client_id="image-test".*principal="User:ANONYMOUS".*\} ([0-9.E]+)$/\1/p' || true)
+  [[ $sent == 100.0 ]] && break
+  sleep 1
+done
+[[ $sent == 100.0 ]] || die "the metrics reporter exposes ${sent:-no} records sent by the producer within a minute, want 100.0"
 
 errors=$(docker logs "$name" 2>&1 | grep -E "ERROR|Exception" || true)
 [[ -z "$errors" ]] || die "the broker logged errors:"$'\n'"$errors"

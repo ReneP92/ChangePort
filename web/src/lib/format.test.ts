@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  durationTicks,
   formatAgo,
   formatBytes,
   formatDuration,
@@ -68,5 +69,15 @@ describe("formatAgo", () => {
     expect(formatAgo("2026-10-30T11:59:30Z", now)).toBe("just now");
     expect(formatAgo("2026-10-30T11:57:00Z", now)).toBe("3 minutes ago");
     expect(formatAgo("2026-10-30T12:00:05Z", now)).toBe("just now");
+  });
+});
+
+describe("durationTicks", () => {
+  test("picks whole steps, so that every tick reads exactly", () => {
+    expect(durationTicks(0)).toEqual([0, 15]);
+    expect(durationTicks(180)).toEqual([0, 60, 120, 180]);
+    expect(durationTicks(185)).toEqual([0, 60, 120, 180, 240]);
+    expect(durationTicks(50 * 60)).toEqual([0, 600, 1200, 1800, 2400, 3000]);
+    expect(durationTicks(23 * 3600)).toEqual([0, 6 * 3600, 12 * 3600, 18 * 3600, 24 * 3600]);
   });
 });

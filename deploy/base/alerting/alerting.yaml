@@ -194,9 +194,9 @@ spec:
       targetPort: http
 ---
 # Alertmanager sends customers' alerts to the receivers they choose
-# (docs/alerts.md), so it reaches only DNS and the internet: never the
-# cluster's own networks or the cloud's metadata service, whatever a
-# customer's webhook points at. The ranges are those the console refuses for
+# (docs/alerts.md), so it reaches only DNS, the provisioner, which records
+# the timeline's alerts, and the internet: never the cluster's own networks
+# or the cloud's metadata service, whatever a customer's webhook points at. The ranges are those the console refuses for
 # webhooks (cdc.Public), as the Connect worker's are.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -211,6 +211,16 @@ spec:
     - ports:
         - {protocol: UDP, port: 53}
         - {protocol: TCP, port: 53}
+    # The provisioner, which records the timeline's alerts.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: changeport
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: changeport-provisioner
+      ports:
+        - {protocol: TCP, port: 8082}
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0

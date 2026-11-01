@@ -722,16 +722,15 @@ paths:
   /api/customer/throughput:
     get:
       operationId: getThroughput
-      summary: Bytes in and out per second over the whole cluster
+      summary: Bytes in and out per second over the whole cluster, or one topic
       parameters:
-        - name: range
+        - $ref: "#/components/parameters/Range"
+        - name: topic
           in: query
           required: false
-          description: How far back to look
+          description: Only this topic's bytes
           schema:
             type: string
-            enum: [1h, 6h, 24h, 7d]
-            default: 1h
       responses:
         "200":
           description: The throughput
@@ -739,6 +738,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Throughput"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/events:
+    get:
+      operationId: listEvents
+      summary: >-
+        The changes in the cluster over a range, for the timeline over the graphs (docs/timeline.md): all of
+        them, or those about a topic, or about a consumer group and the topics it reads. Broker restarts show
+        in each.
+      parameters:
+        - $ref: "#/components/parameters/Range"
+        - name: topic
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: consumerGroup
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The changes, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventList"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/consumer-groups/{group}/lag:
+    get:
+      operationId: getConsumerGroupLag
+      summary: How far behind a consumer group was on each topic it reads, over a range
+      parameters:
+        - name: group
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Range"
+      responses:
+        "200":
+          description: The lag over the range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConsumerGroupLagHistory"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -865,6 +928,13 @@ components:
       bearerFormat: JWT
       description: A Clerk session token for the console's origin.
   parameters:
+    Range:
+      name: range
+      in: query
+      required: false
+      description: How far back to look, up to now
+      schema:
+        $ref: "#/components/schemas/TimeRange"
     TopicName:
       name: topic
       in: path
@@ -1673,6 +1743,79 @@ components:
           items:
             $ref: "#/components/schemas/Point"
         bytesOut:
+          type: array
+          items:
+            $ref: "#/components/schemas/Point"
+    TimeRange:
+      type: string
+      enum: [1h, 6h, 24h, 7d]
+      default: 1h
+    TimelineEvent:
+      type: object
+      required: [id, time, kind, message]
+      properties:
+        id:
+          type: string
+        time:
+          type: string
+          format: date-time
+        kind:
+          type: string
+          enum:
+            - topic.created
+            - topic.deleted
+            - topic.config
+            - topic.partitions
+            - acl.added
+            - acl.removed
+            - group.rebalanced
+            - broker.restarted
+            - client.throttled
+            - client.unthrottled
+        message:
+          type: string
+          description: What happened, in plain language
+        topic:
+          type: string
+        consumerGroup:
+          type: string
+        broker:
+          type: string
+        clientId:
+          type: string
+        actor:
+          type: string
+          description: Who made the change, where Changeport knows it
+    EventList:
+      type: object
+      required: [events, truncated]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineEvent"
+        truncated:
+          type: boolean
+          description: Whether there were more events than the list holds; the oldest are left out
+    ConsumerGroupLagHistory:
+      type: object
+      required: [range, stepSeconds, topics]
+      properties:
+        range:
+          type: string
+        stepSeconds:
+          type: integer
+        topics:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopicLagHistory"
+    TopicLagHistory:
+      type: object
+      required: [topic, lagSeconds]
+      properties:
+        topic:
+          type: string
+        lagSeconds:
           type: array
           items:
             $ref: "#/components/schemas/Point"

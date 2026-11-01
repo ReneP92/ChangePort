@@ -9,6 +9,7 @@ resources:
   - ../../base/console
   - ../../base/object-store
   - ../../base/victoria-metrics
+  - ../../base/victoria-logs
   - ../../base/alerting
   - alert-receiver.yaml
 # Alerts go to the alert receiver rather than PagerDuty and Slack.
@@ -65,7 +66,7 @@ patches:
   # storage is the pod's own, as a volume would tie them to one node.
   - target:
       kind: Deployment
-      name: (victoria-metrics|vmalert|alertmanager|alert-receiver|changeport-provisioner)
+      name: (victoria-metrics|victoria-logs|vmalert|alertmanager|alert-receiver|changeport-provisioner)
     patch: |-
       - op: add
         path: /spec/template/spec/nodeSelector
@@ -100,8 +101,15 @@ patches:
         path: /spec/template/spec/volumes/0
         value: {name: data, emptyDir: {}}
   - target:
+      kind: Deployment
+      name: victoria-logs
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/volumes/0
+        value: {name: storage, emptyDir: {}}
+  - target:
       kind: PersistentVolumeClaim
-      name: (victoria-metrics-data|alertmanager-data)
+      name: (victoria-metrics-data|victoria-logs-data|alertmanager-data)
     patch: |-
       $patch: delete
       apiVersion: v1

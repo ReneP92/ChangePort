@@ -52,6 +52,7 @@ type templateValues struct {
 	ExternalListenerSecret string
 	AdminUser              string
 	AgentUser              string
+	EventsURL              string
 	ConsoleUser            string
 	InternalPort           int
 	// ConsoleNamespace, ConsoleServiceAccount and ConsoleSecrets let the
@@ -204,6 +205,7 @@ func RenderYAML(spec Spec) ([]byte, error) {
 		ExternalListenerSecret: ExternalListenerSecret,
 		AdminUser:              AdminUser,
 		AgentUser:              AgentUser,
+		EventsURL:              EventsURL,
 		ConsoleUser:            ConsoleUser,
 		InternalPort:           InternalPort,
 

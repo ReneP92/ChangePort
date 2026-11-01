@@ -356,6 +356,25 @@ test("every screen of the console", async ({ browser }) => {
     main.getByRole("region", { name: /^\d+ alerts?$/ }).getByText(/search-indexer is .* behind/),
   ).toBeVisible({ timeout: 4 * 60_000 });
   await shot(admin, "03-overview");
+
+  // A topic's page and a consumer group's, with the changes over their
+  // graphs: orders as Ada created it, and search-indexer, which started.
+  await main.getByRole("link", { name: "orders", exact: true }).first().click();
+  await expect(admin.getByRole("heading", { level: 1, name: "orders" })).toBeVisible();
+  await expect(
+    admin.getByRole("region", { name: "Changes" }).getByText(/created topic orders/),
+  ).toBeVisible({ timeout: 60_000 });
+  await shot(admin, "17-topic");
+  await admin.goto("/consumer-groups/search-indexer");
+  await expect(admin.getByRole("heading", { level: 1, name: "search-indexer" })).toBeVisible({
+    timeout: 30_000,
+  });
+  // The group reads orders, so the topic's changes show here too.
+  await expect(
+    admin.getByRole("region", { name: "Changes" }).getByText(/created topic orders/),
+  ).toBeVisible({ timeout: 60_000 });
+  await shot(admin, "18-consumer-group");
+  await nav.getByRole("link", { name: "Cluster" }).click();
   await nav.getByRole("link", { name: /^Alerts/ }).click();
   await expect(main.getByText(/search-indexer is .* behind/)).toBeVisible();
   await shot(admin, "30-alerts");

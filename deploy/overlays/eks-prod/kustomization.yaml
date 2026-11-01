@@ -9,6 +9,7 @@ resources:
   - ../../base/console
   - ../../base/eks-storage
   - ../../base/victoria-metrics
+  - ../../base/victoria-logs
   - ../../base/alerting
 # The platform's own images in ECR.
 components:

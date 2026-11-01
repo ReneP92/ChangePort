@@ -89,6 +89,19 @@ falls behind, go to the customers instead, never to operators
   has no under-replicated or offline partitions, one active controller and
   three active brokers.
 - **The provisioner's logs:** `kubectl -n changeport logs deploy/changeport-provisioner`.
+- **The change timeline** ([timeline.md](timeline.md)): what changed in the
+  customer's cluster and when, as the console shows it over its graphs:
+  topics created and reconfigured, rebalances, broker restarts with why,
+  and throttling. Read it from VictoriaLogs directly:
+
+  ```bash
+  kubectl -n metrics port-forward svc/victoria-logs 9428
+  curl -s localhost:9428/select/logsql/query -d 'query={tenant="c-7f3k2q"} _time:6h | sort by (_time) desc'
+  ```
+
+  A timeline that stays empty while the cluster changes points at the
+  Kafka agent (`changeport_events_write_failures_total`, and its logs) or at
+  VictoriaLogs (`kubectl -n metrics logs deploy/victoria-logs`).
 - **A customer's Postgres sources** ([cdc.md](cdc.md)): each `PostgresSource`
   says in its status what it does or waits for, how far each table's copy
   is, and its slot's health, as the console's source page shows them:

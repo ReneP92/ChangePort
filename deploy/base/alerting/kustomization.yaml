@@ -18,6 +18,7 @@ configMapGenerator:
       - rules/kafka.yaml
       - rules/platform.yaml
       - rules/postgres-sources.yaml
+      - rules/timeline.yaml
   # Read by name by the provisioner, which adds the customers' routes to it.
   - name: alertmanager-config
     files:
