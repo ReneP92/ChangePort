@@ -79,6 +79,10 @@ type lagValue struct {
 	seconds  float64
 	messages int64
 	capped   bool
+	// committed is the sum of the group's committed offsets on the topic,
+	// and movedAt when the agent first saw it, or saw it change.
+	committed int64
+	movedAt   time.Time
 }
 
 // LagCollector measures each consumer group's lag per topic, in messages and
@@ -107,6 +111,9 @@ var (
 		[]string{"consumer_group", "topic"}, nil)
 	lagCappedDesc = prometheus.NewDesc("changeport_consumergroup_lag_capped",
 		"1 when the lag is older than the oldest time the agent looks up (23 hours), so lag_seconds is a lower bound.",
+		[]string{"consumer_group", "topic"}, nil)
+	committedDesc = prometheus.NewDesc("changeport_consumergroup_committed_timestamp_seconds",
+		"When the consumer group's committed offsets on the topic last moved, as far as the agent saw since it started.",
 		[]string{"consumer_group", "topic"}, nil)
 )
 
@@ -137,6 +144,7 @@ func (c *LagCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- lagSecondsDesc
 	ch <- lagMessagesDesc
 	ch <- lagCappedDesc
+	ch <- committedDesc
 }
 
 // Collect implements prometheus.Collector with the last measurement.
@@ -151,6 +159,7 @@ func (c *LagCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(lagSecondsDesc, prometheus.GaugeValue, value.seconds, key.group, key.topic)
 		ch <- prometheus.MustNewConstMetric(lagMessagesDesc, prometheus.GaugeValue, float64(value.messages), key.group, key.topic)
 		ch <- prometheus.MustNewConstMetric(lagCappedDesc, prometheus.GaugeValue, capped, key.group, key.topic)
+		ch <- prometheus.MustNewConstMetric(committedDesc, prometheus.GaugeValue, float64(value.movedAt.Unix()), key.group, key.topic)
 	}
 }
 
@@ -257,6 +266,12 @@ func (c *LagCollector) measure(ctx context.Context, previous map[lagKey]lagValue
 			continue
 		}
 		if ok {
+			// A group's offsets that did not move since the last measurement
+			// keep when they last did.
+			value.committed, value.movedAt = sum(committed[key]), now
+			if last, found := previous[key]; found && last.committed == value.committed {
+				value.movedAt = last.movedAt
+			}
 			snapshot[key] = value
 		}
 	}
@@ -300,6 +315,14 @@ func lagOf(topic string, committed map[int32]int64, ends kadm.ListedOffsets, anc
 		value.capped = value.capped || capped
 	}
 	return value, known, nil
+}
+
+func sum(offsets map[int32]int64) int64 {
+	var total int64
+	for _, offset := range offsets {
+		total += offset
+	}
+	return total
 }
 
 func sortedKeys(set map[string]bool) []string {

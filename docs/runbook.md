@@ -65,6 +65,10 @@ customer (`tenant`), its cluster and the environment, and links its section:
 | `PostgresSourceSlotNotDropped` | warn | [A replication slot left behind](#a-replication-slot-left-behind) |
 | `Watchdog` | none | [Alerting](#alerting) |
 
+Alerts about customers' own applications, such as a consumer group that
+falls behind, go to the customers instead, never to operators
+([alerts.md](alerts.md)).
+
 - **The operator console** (`/operator`) lists every customer with a dot per
   condition of its `Customer`: `CertificateIssued`, `KafkaReady`,
   `UsersReady`, `AgentAvailable` and `Ready`. A customer's page shows why a
@@ -358,11 +362,16 @@ come with the domain and the EKS environments (#8, #28).
 vmalert (`deploy/base/alerting`) evaluates the rules of
 `deploy/base/alerting/rules` every 30 seconds against VictoriaMetrics, and
 writes their state back to it, so that a restart resumes the alerts that
-were pending. Alertmanager routes what fires:
+were pending. Every alert says whom it is for: `audience: operator`, or
+`audience: customer` for the alerts about customers' own applications
+([alerts.md](alerts.md)). Alertmanager routes what fires:
 
-- **Pages** (`severity: page`), for what hurts customers now, go to
-  PagerDuty and to Slack.
-- **Warnings** (`severity: warn`), to act on within hours, go to Slack.
+- **Pages** (`audience: operator`, `severity: page`), for what hurts
+  customers now, go to PagerDuty and to Slack.
+- **Warnings** (`audience: operator`, `severity: warn`), to act on within
+  hours, go to Slack.
+- **Customers' alerts** go to the receivers each customer chose, if any,
+  and show in the console; nothing else of theirs goes anywhere.
 - **The Watchdog** always fires, every minute, to a dead man's switch,
   which raises its own alarm once it stops hearing from it: vmalert,
   Alertmanager or VictoriaMetrics is down, or the network to the receivers.
@@ -381,6 +390,25 @@ CONFIRM=prod just alerting-config prod
 ```
 
 Alertmanager reads them each time it sends, so nothing restarts.
+
+Alertmanager runs the configuration the provisioner writes, the Secret
+`alertmanager-generated` in `metrics`: the ConfigMap `alertmanager-config`
+(`deploy/base/alerting/alertmanager.yaml`, the operators' routes) with a
+route per customer that has receivers. Its `config-reloader` sidecar reloads
+Alertmanager within about a minute of a change, once Kubernetes has updated
+the mounted files. Should the provisioner be down, Alertmanager keeps the
+configuration it has; until the provisioner has written one, it runs the
+ConfigMap. To see what it runs:
+
+```bash
+kubectl -n metrics get secret alertmanager-generated -o jsonpath='{.data.alertmanager\.yaml}' | base64 -d
+kubectl -n metrics logs deploy/alertmanager -c config-reloader
+```
+
+The configuration holds the customers' receivers' secrets, which is why it
+is a Secret: only the provisioner and Alertmanager read it. Alertmanager's
+NetworkPolicy lets it reach only DNS and the internet, whatever a customer's
+webhook points at.
 
 On kind, everything goes to the alert receiver of
 `deploy/overlays/kind/alert-receiver.yaml`, which prints each alert:

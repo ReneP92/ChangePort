@@ -1,14 +1,17 @@
 import { Link } from "react-router";
-import { useTopics } from "@/api/queries";
+import { useAlerts, useTopics } from "@/api/queries";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes, formatRate, formatRetention } from "@/lib/format";
+import { alertsAbout } from "@/lib/alerts";
+import { AlertBadge } from "@/pages/alerts/ActiveAlerts";
 import { CreateTopicDialog } from "@/pages/overview/CreateTopicDialog";
 import { DeleteTopicDialog } from "@/pages/overview/DeleteTopicDialog";
 
 /** The topics with their settings, size and throughput. */
 export function TopicsCard({ admin }: { admin: boolean }) {
   const topics = useTopics();
+  const alerts = useAlerts();
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4">
@@ -56,6 +59,7 @@ export function TopicsCard({ admin }: { admin: boolean }) {
                     <td className="py-2 font-medium">
                       <span className="flex items-center gap-2">
                         {topic.name}
+                        <AlertBadge alerts={alertsAbout(alerts.data, { topic: topic.name })} />
                         {topic.source && (
                           <Badge variant="outline" asChild>
                             <Link

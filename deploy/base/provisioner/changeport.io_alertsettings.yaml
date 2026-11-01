@@ -1,0 +1,197 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.23.0
+  name: alertsettings.changeport.io
+spec:
+  group: changeport.io
+  names:
+    kind: AlertSettings
+    listKind: AlertSettingsList
+    plural: alertsettings
+    singular: alertsettings
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          AlertSettings are a customer's settings of the alerts about their own
+          applications: consumer lag, stuck consumers, throttling and errors, and
+          where the alerts go besides the console. A customer has at most one, named
+          alerts, in its namespace; without it the defaults apply.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              AlertSettingsSpec is how a customer's alerts about their own applications
+              fire, and where they go (docs/alerts.md).
+            properties:
+              consumerLag:
+                default: {}
+                description: ConsumerLag is the alert on a consumer group that falls
+                  behind.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled turns the alert on.
+                    type: boolean
+                  seconds:
+                    default: 600
+                    description: |-
+                      Seconds is how far behind a group may fall, as the age of the oldest
+                      message it has not consumed.
+                    format: int64
+                    maximum: 86400
+                    minimum: 60
+                    type: integer
+                type: object
+              consumerStuck:
+                default: {}
+                description: |-
+                  ConsumerStuck is the alert on a consumer group that stopped committing
+                  while its topic grows.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled turns the alert on.
+                    type: boolean
+                  seconds:
+                    default: 900
+                    description: |-
+                      Seconds is how long a group may go without committing while messages
+                      wait for it.
+                    format: int64
+                    maximum: 86400
+                    minimum: 300
+                    type: integer
+                type: object
+              errors:
+                default: {}
+                description: Errors is the alert on failing requests.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled turns the alert on.
+                    type: boolean
+                  percent:
+                    default: 5
+                    description: Percent is the share of requests or records that
+                      may fail.
+                    format: int64
+                    maximum: 100
+                    minimum: 1
+                    type: integer
+                type: object
+              receivers:
+                default: {}
+                description: Receivers are where the alerts go besides the console.
+                properties:
+                  pagerDuty:
+                    description: |-
+                      PagerDuty raises incidents through a PagerDuty Events API v2
+                      integration's routing key.
+                    properties:
+                      hint:
+                        description: |-
+                          Hint shows customers which receiver it is without the secret, such as
+                          the webhook's host.
+                        maxLength: 200
+                        type: string
+                      secret:
+                        description: |-
+                          Secret names the Secret, which holds the receiver's secret under
+                          AlertReceiverKey.
+                        maxLength: 253
+                        minLength: 1
+                        pattern: ^alert-receiver-[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                        type: string
+                    required:
+                    - secret
+                    type: object
+                  slack:
+                    description: Slack posts to a Slack incoming webhook.
+                    properties:
+                      hint:
+                        description: |-
+                          Hint shows customers which receiver it is without the secret, such as
+                          the webhook's host.
+                        maxLength: 200
+                        type: string
+                      secret:
+                        description: |-
+                          Secret names the Secret, which holds the receiver's secret under
+                          AlertReceiverKey.
+                        maxLength: 253
+                        minLength: 1
+                        pattern: ^alert-receiver-[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                        type: string
+                    required:
+                    - secret
+                    type: object
+                  webhook:
+                    description: Webhook posts Alertmanager's webhook payload to an
+                      HTTPS URL.
+                    properties:
+                      hint:
+                        description: |-
+                          Hint shows customers which receiver it is without the secret, such as
+                          the webhook's host.
+                        maxLength: 200
+                        type: string
+                      secret:
+                        description: |-
+                          Secret names the Secret, which holds the receiver's secret under
+                          AlertReceiverKey.
+                        maxLength: 253
+                        minLength: 1
+                        pattern: ^alert-receiver-[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                        type: string
+                    required:
+                    - secret
+                    type: object
+                type: object
+              throttling:
+                default: {}
+                description: Throttling is the alert on clients the brokers throttle.
+                properties:
+                  enabled:
+                    default: true
+                    description: Enabled turns the alert on.
+                    type: boolean
+                  milliseconds:
+                    default: 100
+                    description: Milliseconds is the longest a client may be throttled
+                      for at a time.
+                    format: int64
+                    maximum: 60000
+                    minimum: 10
+                    type: integer
+                type: object
+            type: object
+        required:
+        - spec
+        type: object
+        x-kubernetes-validations:
+        - message: a customer's alert settings are named alerts
+          rule: self.metadata.name == 'alerts'
+    served: true
+    storage: true

@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router";
 import { ApiError, type Customer } from "@/api/client";
-import { useCustomer, useMe } from "@/api/queries";
+import { useCustomer, useLiveAlerts, useMe } from "@/api/queries";
 import { CustomerSummary } from "@/components/CustomerSummary";
 import { Notice } from "@/components/Notice";
 
 /**
  * Shows a page of the active organization's ready cluster, with whether the
  * user is its admin; until the cluster is ready, how far it is. Everyone
- * else goes home, which says what they can do.
+ * else goes home, which says what they can do. Its alerts stay live
+ * meanwhile.
  */
 export function CustomerArea({
   children,
@@ -36,6 +37,7 @@ function ReadyCustomer({
   children: (customer: Customer, admin: boolean) => ReactNode;
 }) {
   const customer = useCustomer();
+  useLiveAlerts();
   if (customer.isPending) {
     return <Notice title="Loading" busy />;
   }

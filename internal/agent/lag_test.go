@@ -10,6 +10,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kerr"
 )
@@ -203,7 +204,8 @@ changeport_consumergroup_lag_messages{consumer_group="shipping",topic="payments"
 changeport_consumergroup_lag_seconds{consumer_group="billing",topic="orders"} 180
 changeport_consumergroup_lag_seconds{consumer_group="shipping",topic="payments"} 0
 `
-	if err := testutil.CollectAndCompare(c, strings.NewReader(want)); err != nil {
+	if err := testutil.CollectAndCompare(c, strings.NewReader(want), "changeport_consumergroup_lag_capped",
+		"changeport_consumergroup_lag_messages", "changeport_consumergroup_lag_seconds"); err != nil {
 		t.Error(err)
 	}
 	// Anchors are only looked up for the lagging topic.
@@ -214,6 +216,49 @@ changeport_consumergroup_lag_seconds{consumer_group="shipping",topic="payments"}
 	}
 	if len(admin.listed) != len(Anchors) {
 		t.Errorf("looked up %d anchors, want %d", len(admin.listed), len(Anchors))
+	}
+}
+
+// When a group last committed: since the agent started at the earliest, and
+// kept while its offsets do not move.
+func TestLagCollectorTellsWhenGroupsLastCommitted(t *testing.T) {
+	admin := newFakeLagAdmin()
+	c := newTestLagCollector(admin)
+	committedAt := func() map[string]float64 {
+		t.Helper()
+		at := map[string]float64{}
+		metrics := make(chan prometheus.Metric, 100)
+		c.Collect(metrics)
+		close(metrics)
+		for metric := range metrics {
+			if !strings.Contains(metric.Desc().String(), "changeport_consumergroup_committed_timestamp_seconds") {
+				continue
+			}
+			var m dto.Metric
+			if err := metric.Write(&m); err != nil {
+				t.Fatal(err)
+			}
+			at[m.GetLabel()[0].GetValue()] = m.GetGauge().GetValue()
+		}
+		return at
+	}
+	if err := c.Measure(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := committedAt(); got["billing"] != float64(testNow.Unix()) || got["shipping"] != float64(testNow.Unix()) {
+		t.Fatalf("committed at %v, want the first measurement's time", got)
+	}
+
+	// A minute later, billing commits and shipping does not.
+	start := testNow
+	c.Now = func() time.Time { return start.Add(time.Minute) }
+	admin.committed["billing"]["orders"][0] += 50
+	if err := c.Measure(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	got := committedAt()
+	if got["billing"] != float64(start.Add(time.Minute).Unix()) || got["shipping"] != float64(start.Unix()) {
+		t.Errorf("committed at %v, want billing now and shipping a minute ago", got)
 	}
 }
 

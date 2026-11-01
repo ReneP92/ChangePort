@@ -8,9 +8,10 @@ import {
 } from "@clerk/react";
 import { Link, NavLink, Route, Routes } from "react-router";
 import { ApiProvider } from "@/api/ApiProvider";
-import { useMe } from "@/api/queries";
+import { useAlerts, useMe } from "@/api/queries";
 import { Notice } from "@/components/Notice";
 import { Home } from "@/pages/Home";
+import { AlertsPage } from "@/pages/alerts/AlertsPage";
 import { OperatorCustomer } from "@/pages/operator/OperatorCustomer";
 import { OperatorCustomers } from "@/pages/operator/OperatorCustomers";
 import { NewSource } from "@/pages/sources/NewSource";
@@ -70,6 +71,7 @@ function SignedIn() {
       </header>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/sources" element={<Sources />} />
         <Route path="/sources/new" element={<NewSource />} />
         <Route path="/sources/:name" element={<SourcePage />} />
@@ -104,6 +106,30 @@ function CustomerNav() {
       <NavLink to="/sources" className={link}>
         Sources
       </NavLink>
+      <NavLink to="/alerts" className={link}>
+        Alerts
+        <AlertCount />
+      </NavLink>
     </nav>
+  );
+}
+
+/** How many alerts are active, next to the Alerts link; nothing without. */
+function AlertCount() {
+  const alerts = useAlerts();
+  const count = alerts.data?.length ?? 0;
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <>
+      <span
+        aria-hidden
+        className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.65rem] font-medium text-white tabular-nums"
+      >
+        {count}
+      </span>
+      <span className="sr-only">, {count} active</span>
+    </>
   );
 }

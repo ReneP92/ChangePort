@@ -101,6 +101,7 @@ export function ThroughputCard() {
                 }
               />
               <ChartLegend content={<ChartLegendContent />} />
+              {/* Without animation: each refresh would draw the chart again from nothing. */}
               <Area
                 dataKey="bytesIn"
                 type="monotone"
@@ -108,6 +109,7 @@ export function ThroughputCard() {
                 strokeWidth={2}
                 fill="var(--color-bytesIn)"
                 fillOpacity={0.2}
+                isAnimationActive={false}
               />
               <Area
                 dataKey="bytesOut"
@@ -116,6 +118,7 @@ export function ThroughputCard() {
                 strokeWidth={2}
                 fill="var(--color-bytesOut)"
                 fillOpacity={0.2}
+                isAnimationActive={false}
               />
             </AreaChart>
           </ChartContainer>

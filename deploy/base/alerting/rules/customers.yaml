@@ -1,0 +1,103 @@
+# Alerting rules about customers' own applications, for the customers
+# (docs/alerts.md): the console shows them, and Alertmanager sends them to the
+# customer's own receivers. Each compares with the customer's threshold,
+# changeport_alert_threshold, which the provisioner exports from the
+# customer's AlertSettings, or the defaults; an alert the customer turned off
+# has no threshold, and never fires. The platform's own consumer groups,
+# topics and clients are not the customer's, as the console hides them too:
+# groups and topics with the reserved prefixes of internal/topics, and
+# clients that connect with certificates (User:CN=...), as only the
+# platform's do; customers' connect with passwords.
+groups:
+  - name: customers
+    rules:
+      # A consumer group falls behind: its oldest unconsumed message is
+      # older than the customer allows.
+      - alert: ConsumerGroupLagHigh
+        expr: >-
+          changeport_consumergroup_lag_seconds{consumer_group!~"changeport.*", topic!~"(?i)(_|changeport|strimzi|connect-).*"}
+          > on (tenant) group_left ()
+          max by (tenant) (changeport_alert_threshold{alert="ConsumerGroupLagHigh"})
+        for: 1m
+        labels:
+          severity: warn
+          audience: customer
+        annotations:
+          summary: "Consumer group {{ $labels.consumer_group }} is {{ $value | humanizeDuration }} behind on {{ $labels.topic }}"
+          description: "Its oldest message on {{ $labels.topic }} that it has not consumed is older than your threshold."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/alerts.md#a-consumer-group-falls-behind
+      # A consumer group stopped committing while messages wait for it on a
+      # topic that still grows: its consumers are stuck or gone.
+      - alert: ConsumerGroupStuck
+        expr: >-
+          (time() - changeport_consumergroup_committed_timestamp_seconds{consumer_group!~"changeport.*", topic!~"(?i)(_|changeport|strimzi|connect-).*"})
+          > on (tenant) group_left ()
+          max by (tenant) (changeport_alert_threshold{alert="ConsumerGroupStuck"})
+          and changeport_consumergroup_lag_messages > 0
+          and on (tenant, topic) (sum by (tenant, topic) (rate(kafka_server_brokertopicmetrics_messagesinpersec_total[10m])) > 0)
+        for: 1m
+        labels:
+          severity: warn
+          audience: customer
+        annotations:
+          summary: "Consumer group {{ $labels.consumer_group }} stopped committing on {{ $labels.topic }}"
+          description: "It has not committed for {{ $value | humanizeDuration }}, while messages keep arriving on {{ $labels.topic }}."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/alerts.md#a-consumer-group-is-stuck
+      # Clients the brokers throttle, as they report it themselves (KIP-714).
+      - alert: ClientThrottled
+        expr: >-
+          max by (tenant, cluster, env, client_id, principal) (
+            clients_org_apache_kafka_producer_produce_throttle_time_max{principal!~"User:CN=.*"}
+            or clients_org_apache_kafka_consumer_fetch_manager_fetch_throttle_time_max{principal!~"User:CN=.*"}
+          )
+          > on (tenant) group_left ()
+          max by (tenant) (changeport_alert_threshold{alert="ClientThrottled"})
+        for: 5m
+        labels:
+          severity: warn
+          audience: customer
+        annotations:
+          summary: "Client {{ $labels.client_id }} is throttled for up to {{ $value | humanize }} ms"
+          description: "The brokers delay its requests, as it exceeds a quota."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/alerts.md#a-client-is-throttled
+      # The brokers fail a share of a topic's produce and fetch requests.
+      - alert: TopicRequestErrors
+        expr: >-
+          (
+            sum by (tenant, cluster, env, topic) (
+              rate(kafka_server_brokertopicmetrics_failedproducerequestspersec_total{topic!~"(?i)(_|changeport|strimzi|connect-).*"}[5m])
+              + rate(kafka_server_brokertopicmetrics_failedfetchrequestspersec_total{topic!~"(?i)(_|changeport|strimzi|connect-).*"}[5m])
+            )
+            / (sum by (tenant, cluster, env, topic) (
+              rate(kafka_server_brokertopicmetrics_totalproducerequestspersec_total{topic!~"(?i)(_|changeport|strimzi|connect-).*"}[5m])
+              + rate(kafka_server_brokertopicmetrics_totalfetchrequestspersec_total{topic!~"(?i)(_|changeport|strimzi|connect-).*"}[5m])
+            ) > 0)
+          )
+          > on (tenant) group_left ()
+          max by (tenant) (changeport_alert_threshold{alert="TopicRequestErrors"})
+        for: 5m
+        labels:
+          severity: warn
+          audience: customer
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of the requests to {{ $labels.topic }} fail"
+          description: "The brokers refuse produce or fetch requests to the topic, such as messages that are too large or requests without permission."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/alerts.md#requests-fail
+      # A producer fails to send a share of its records, as it reports it
+      # itself (KIP-714).
+      - alert: ClientRecordErrors
+        expr: >-
+          (
+            sum by (tenant, cluster, env, client_id) (rate(clients_org_apache_kafka_producer_record_error_total{principal!~"User:CN=.*"}[5m]))
+            / (sum by (tenant, cluster, env, client_id) (rate(clients_org_apache_kafka_producer_record_send_total{principal!~"User:CN=.*"}[5m])) > 0)
+          )
+          > on (tenant) group_left ()
+          max by (tenant) (changeport_alert_threshold{alert="ClientRecordErrors"})
+        for: 5m
+        labels:
+          severity: warn
+          audience: customer
+        annotations:
+          summary: "Producer {{ $labels.client_id }} fails to send {{ $value | humanizePercentage }} of its records"
+          description: "Its records are lost unless it retries them."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/alerts.md#requests-fail

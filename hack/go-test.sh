@@ -13,4 +13,6 @@ KUBEBUILDER_ASSETS=$(envtest_assets)
 export KUBEBUILDER_ASSETS
 docker info >/dev/null 2>&1 || die "Docker is not running; the Postgres CDC source's tests run Postgres in it"
 export CHANGEPORT_POSTGRES_TESTS=1
+# amtool checks the Alertmanager configuration the provisioner writes.
+export CHANGEPORT_DOCKER_TESTS=1
 go test -race "$@" ./...

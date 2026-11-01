@@ -369,6 +369,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/customer/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The active alerts about the customer's own applications (docs/alerts.md) */
+        get: operations["listAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/alerts/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The active alerts about the customer's own applications, as server-sent events: an alerts event with the AlertList at once and whenever it changes. The stream ends when the session token expires; open it again with a new one. */
+        get: operations["streamAlerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/alert-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The thresholds of the customer's alerts, and which receivers are set */
+        get: operations["getAlertSettings"];
+        /** Changes the thresholds of the customer's alerts; for organization admins */
+        put: operations["changeAlertSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/alert-settings/receivers/{receiver}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description slack, pagerDuty or webhook */
+                receiver: components["schemas"]["ReceiverKind"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Sends the customer's alerts to a Slack webhook, a PagerDuty integration or a webhook too; for organization admins */
+        put: operations["setAlertReceiver"];
+        post?: never;
+        /** Stops sending the customer's alerts to a receiver; for organization admins */
+        delete: operations["removeAlertReceiver"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/customer/throughput": {
         parameters: {
             query?: never;
@@ -733,6 +806,65 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             deleting?: boolean;
+        };
+        Alert: {
+            /** @description The alert, such as ConsumerGroupLagHigh */
+            name: string;
+            severity: string;
+            summary: string;
+            description: string;
+            /** Format: date-time */
+            startsAt: string;
+            topic?: string;
+            consumerGroup?: string;
+            clientId?: string;
+            /** @description The Postgres source, for a source's alerts */
+            source?: string;
+        };
+        AlertList: {
+            alerts: components["schemas"]["Alert"][];
+        };
+        AlertThresholds: {
+            consumerLag: components["schemas"]["SecondsThreshold"];
+            consumerStuck: components["schemas"]["SecondsThreshold"];
+            throttling: components["schemas"]["MillisecondsThreshold"];
+            errors: components["schemas"]["PercentThreshold"];
+        };
+        MillisecondsThreshold: {
+            enabled: boolean;
+            /** Format: int64 */
+            milliseconds: number;
+        };
+        PercentThreshold: {
+            enabled: boolean;
+            /** Format: int64 */
+            percent: number;
+        };
+        SecondsThreshold: {
+            enabled: boolean;
+            /** Format: int64 */
+            seconds: number;
+        };
+        /** @enum {string} */
+        ReceiverKind: "slack" | "pagerDuty" | "webhook";
+        ReceiverSecret: {
+            /** @description The Slack webhook URL, the PagerDuty routing key or the webhook URL */
+            value: string;
+        };
+        ReceiverStatus: {
+            /** @description Which receiver it is, without its secret, such as the webhook's host */
+            hint: string;
+        };
+        AlertSettings: {
+            thresholds: components["schemas"]["AlertThresholds"];
+            defaults: components["schemas"]["AlertThresholds"];
+            receivers: components["schemas"]["AlertReceivers"];
+        };
+        /** @description The receivers that are set */
+        AlertReceivers: {
+            slack?: components["schemas"]["ReceiverStatus"];
+            pagerDuty?: components["schemas"]["ReceiverStatus"];
+            webhook?: components["schemas"]["ReceiverStatus"];
         };
         SourceList: {
             sources: components["schemas"]["Source"][];
@@ -1578,6 +1710,169 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourceCatalog"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    listAlerts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The active alerts, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    streamAlerts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    getAlertSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    changeAlertSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertThresholds"];
+            };
+        };
+        responses: {
+            /** @description The settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    setAlertReceiver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description slack, pagerDuty or webhook */
+                receiver: components["schemas"]["ReceiverKind"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReceiverSecret"];
+            };
+        };
+        responses: {
+            /** @description The settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    removeAlertReceiver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description slack, pagerDuty or webhook */
+                receiver: components["schemas"]["ReceiverKind"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertSettings"];
                 };
             };
             401: components["responses"]["Unauthorized"];

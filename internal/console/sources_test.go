@@ -58,7 +58,7 @@ func startAPIServer(t *testing.T) (admin, console client.Client) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range []string{"console.yaml", "password-secrets.yaml"} {
+	for _, file := range []string{"console.yaml", "write-once-secrets.yaml"} {
 		for _, object := range manifests(t, filepath.Join(root, "deploy", "base", "console", file)) {
 			switch object.GetKind() {
 			case "ClusterRole", "ClusterRoleBinding", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding":
@@ -75,6 +75,27 @@ func startAPIServer(t *testing.T) (admin, console client.Client) {
 		t.Fatal(err)
 	}
 	return admin, console
+}
+
+// refusedByPolicy creates a Secret as the console, in a dry run, and
+// returns nil once the admission policy refuses it: the API server loads a
+// new policy within a few seconds. Otherwise it returns the last outcome.
+func refusedByPolicy(t *testing.T, console client.Client, secret *corev1.Secret) error {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		err := console.Create(t.Context(), secret.DeepCopy(), client.DryRunAll)
+		if err != nil && strings.Contains(err.Error(), "changeport-console-secrets") {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			if err == nil {
+				return errors.New("created")
+			}
+			return err
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 func manifests(t *testing.T, path string) []*unstructured.Unstructured {
@@ -192,18 +213,8 @@ func TestKubeSourcesAsTheConsole(t *testing.T) {
 			Type:       v1alpha1.PostgresPasswordSecretType, Immutable: ptr.To(true), Data: map[string][]byte{"password": []byte("x")},
 		},
 	} {
-		// The API server loads a new policy within a few seconds.
-		deadline := time.Now().Add(15 * time.Second)
-		for {
-			err := console.Create(ctx, secret.DeepCopy(), client.DryRunAll)
-			if err != nil && strings.Contains(err.Error(), "changeport-console-secrets") {
-				break
-			}
-			if time.Now().After(deadline) {
-				t.Errorf("the console creating %s = %v, want the admission policy's refusal", name, err)
-				break
-			}
-			time.Sleep(200 * time.Millisecond)
+		if err := refusedByPolicy(t, console, secret); err != nil {
+			t.Errorf("the console creating %s = %v, want the admission policy's refusal", name, err)
 		}
 	}
 

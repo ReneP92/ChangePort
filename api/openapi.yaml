@@ -575,6 +575,150 @@ paths:
           $ref: "#/components/responses/Conflict"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/customer/alerts:
+    get:
+      operationId: listAlerts
+      summary: The active alerts about the customer's own applications (docs/alerts.md)
+      responses:
+        "200":
+          description: The active alerts, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/alerts/stream:
+    get:
+      operationId: streamAlerts
+      summary: >-
+        The active alerts about the customer's own applications, as server-sent events: an alerts event
+        with the AlertList at once and whenever it changes. The stream ends when the session token expires;
+        open it again with a new one.
+      responses:
+        "200":
+          description: The stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/alert-settings:
+    get:
+      operationId: getAlertSettings
+      summary: The thresholds of the customer's alerts, and which receivers are set
+      responses:
+        "200":
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+    put:
+      operationId: changeAlertSettings
+      summary: Changes the thresholds of the customer's alerts; for organization admins
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertThresholds"
+      responses:
+        "200":
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/alert-settings/receivers/{receiver}:
+    parameters:
+      - name: receiver
+        in: path
+        required: true
+        description: slack, pagerDuty or webhook
+        schema:
+          $ref: "#/components/schemas/ReceiverKind"
+    put:
+      operationId: setAlertReceiver
+      summary: Sends the customer's alerts to a Slack webhook, a PagerDuty integration or a webhook too; for organization admins
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReceiverSecret"
+      responses:
+        "200":
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertSettings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+    delete:
+      operationId: removeAlertReceiver
+      summary: Stops sending the customer's alerts to a receiver; for organization admins
+      responses:
+        "200":
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/customer/throughput:
     get:
       operationId: getThroughput
@@ -1318,6 +1462,116 @@ components:
           format: date-time
         deleting:
           type: boolean
+    Alert:
+      type: object
+      required: [name, severity, summary, description, startsAt]
+      properties:
+        name:
+          type: string
+          description: The alert, such as ConsumerGroupLagHigh
+        severity:
+          type: string
+        summary:
+          type: string
+        description:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        topic:
+          type: string
+        consumerGroup:
+          type: string
+        clientId:
+          type: string
+        source:
+          type: string
+          description: The Postgres source, for a source's alerts
+    AlertList:
+      type: object
+      required: [alerts]
+      properties:
+        alerts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Alert"
+    AlertThresholds:
+      type: object
+      required: [consumerLag, consumerStuck, throttling, errors]
+      properties:
+        consumerLag:
+          $ref: "#/components/schemas/SecondsThreshold"
+        consumerStuck:
+          $ref: "#/components/schemas/SecondsThreshold"
+        throttling:
+          $ref: "#/components/schemas/MillisecondsThreshold"
+        errors:
+          $ref: "#/components/schemas/PercentThreshold"
+    MillisecondsThreshold:
+      type: object
+      required: [enabled, milliseconds]
+      properties:
+        enabled:
+          type: boolean
+        milliseconds:
+          type: integer
+          format: int64
+    PercentThreshold:
+      type: object
+      required: [enabled, percent]
+      properties:
+        enabled:
+          type: boolean
+        percent:
+          type: integer
+          format: int64
+    SecondsThreshold:
+      type: object
+      required: [enabled, seconds]
+      properties:
+        enabled:
+          type: boolean
+        seconds:
+          type: integer
+          format: int64
+    ReceiverKind:
+      type: string
+      enum: [slack, pagerDuty, webhook]
+    ReceiverSecret:
+      type: object
+      required: [value]
+      properties:
+        value:
+          type: string
+          maxLength: 2048
+          description: The Slack webhook URL, the PagerDuty routing key or the webhook URL
+    ReceiverStatus:
+      type: object
+      required: [hint]
+      properties:
+        hint:
+          type: string
+          description: Which receiver it is, without its secret, such as the webhook's host
+    AlertSettings:
+      type: object
+      required: [thresholds, defaults, receivers]
+      properties:
+        thresholds:
+          $ref: "#/components/schemas/AlertThresholds"
+        defaults:
+          $ref: "#/components/schemas/AlertThresholds"
+        receivers:
+          $ref: "#/components/schemas/AlertReceivers"
+    AlertReceivers:
+      type: object
+      description: The receivers that are set
+      properties:
+        slack:
+          $ref: "#/components/schemas/ReceiverStatus"
+        pagerDuty:
+          $ref: "#/components/schemas/ReceiverStatus"
+        webhook:
+          $ref: "#/components/schemas/ReceiverStatus"
     SourceList:
       type: object
       required: [sources]

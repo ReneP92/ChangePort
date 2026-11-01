@@ -64,6 +64,8 @@ func (r *CustomerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.Customer{}).
 		Watches(&v1alpha1.PostgresSource{}, handler.EnqueueRequestsFromMapFunc(customerOfSource), builder.WithPredicates(sourceChanged)).
+		// A customer's alert settings set its alerts' thresholds.
+		Watches(&v1alpha1.AlertSettings{}, handler.EnqueueRequestsFromMapFunc(customerOfSource)).
 		Named("customer").
 		WithOptions(controller.Options{MaxConcurrentReconciles: 4}).
 		Complete(r)
@@ -171,10 +173,28 @@ func (r *CustomerReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 	if err := r.updateStatus(ctx, &customer, status); err != nil {
 		return ctrl.Result{}, err
 	}
+	settings, err := r.alertSettings(ctx, spec.Namespace())
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	recordAlertThresholds(customer.Name, settings)
 	if !progress.Ready() || !progress.CDC.Ready {
 		return ctrl.Result{RequeueAfter: r.PollInterval}, nil
 	}
 	return ctrl.Result{RequeueAfter: r.ResyncInterval}, nil
+}
+
+// alertSettings returns the customer's alert settings, or the defaults.
+func (r *CustomerReconciler) alertSettings(ctx context.Context, namespace string) (v1alpha1.AlertSettingsSpec, error) {
+	var settings v1alpha1.AlertSettings
+	err := r.Client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: v1alpha1.AlertSettingsName}, &settings)
+	switch {
+	case apierrors.IsNotFound(err):
+		return v1alpha1.DefaultAlertSettings, nil
+	case err != nil:
+		return v1alpha1.AlertSettingsSpec{}, fmt.Errorf("get the alert settings: %w", err)
+	}
+	return settings.Spec, nil
 }
 
 // deprovision deletes a deleted Customer's cluster, unless it is protected,

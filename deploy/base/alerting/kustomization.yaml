@@ -14,9 +14,17 @@ resources:
 configMapGenerator:
   - name: vmalert-rules
     files:
+      - rules/customers.yaml
       - rules/kafka.yaml
       - rules/platform.yaml
       - rules/postgres-sources.yaml
+  # Read by name by the provisioner, which adds the customers' routes to it.
   - name: alertmanager-config
     files:
       - alertmanager.yaml
+    options:
+      disableNameSuffixHash: true
+  - name: alertmanager-scripts
+    files:
+      - pick.sh
+      - reload.sh

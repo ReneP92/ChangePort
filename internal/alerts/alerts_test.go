@@ -28,10 +28,10 @@ func load(t *testing.T) []Rule {
 	return rules
 }
 
-// runbookAnchors are the anchors of docs/runbook.md's sections.
-func runbookAnchors(t *testing.T) []string {
+// anchors are the anchors of a document's sections.
+func anchors(t *testing.T, document string) []string {
 	t.Helper()
-	file, err := os.Open(filepath.Join(root, "docs", "runbook.md"))
+	file, err := os.Open(filepath.Join(root, "docs", document))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,19 +39,21 @@ func runbookAnchors(t *testing.T) []string {
 	var anchors []string
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		if heading, ok := strings.CutPrefix(scanner.Text(), "## "); ok {
+		if heading, ok := strings.CutPrefix(strings.TrimLeft(scanner.Text(), "#"), " "); ok && strings.HasPrefix(scanner.Text(), "##") {
 			anchors = append(anchors, Anchor(heading))
 		}
 	}
 	return anchors
 }
 
-const runbookURL = "https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#"
+const docsURL = "https://github.com/ReneP92/changeport/blob/main/docs/"
 
 var metricName = regexp.MustCompile(`\b(changeport|debezium|kafka_connect)_[a-z_]+\b`)
 
 func TestRules(t *testing.T) {
-	anchors := runbookAnchors(t)
+	// Operators' alerts link the runbook; customers' may link the guide to
+	// their alerts instead.
+	documents := map[string][]string{"runbook.md": anchors(t, "runbook.md"), "alerts.md": anchors(t, "alerts.md")}
 	documented, err := os.ReadFile(filepath.Join(root, "docs", "metrics-labels.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -77,18 +79,29 @@ func TestRules(t *testing.T) {
 				t.Errorf("%s has no %s", rule.Alert, annotation)
 			}
 		}
-		// Alerts about a customer name it, and those about a source, the
-		// source; those about the platform name what they can.
+		// Operators' alerts about a customer name it, and those about a
+		// source, the source; those about the platform name what they can.
+		// Customers' alerts go to the customer they are about.
 		summary := rule.Annotations["summary"]
-		if rule.Labels["scope"] != "platform" && !strings.Contains(summary, "$labels.tenant") {
+		if rule.Labels["audience"] == "operator" && rule.Labels["scope"] != "platform" && !strings.Contains(summary, "$labels.tenant") {
 			t.Errorf("%s's summary does not name the tenant: %q", rule.Alert, summary)
+		}
+		// Customers' alerts about their applications leave out the
+		// platform's own consumer groups, topics and clients, as the console
+		// does.
+		if rule.Group == "customers" && !strings.Contains(rule.Expr, `consumer_group!~"changeport.*"`) &&
+			!strings.Contains(rule.Expr, `topic!~"(?i)(_|changeport|strimzi|connect-).*"`) && !strings.Contains(rule.Expr, `principal!~"User:CN=.*"`) {
+			t.Errorf("%s does not leave out the platform's own consumer groups, topics or clients", rule.Alert)
 		}
 		if rule.Group == "postgres-sources" && !strings.Contains(summary, "$labels.source") {
 			t.Errorf("%s's summary does not name the source: %q", rule.Alert, summary)
 		}
-		anchor, ok := strings.CutPrefix(rule.Annotations["runbook"], runbookURL)
-		if !ok || !slices.Contains(anchors, anchor) {
-			t.Errorf("%s's runbook %q is no section of docs/runbook.md", rule.Alert, rule.Annotations["runbook"])
+		document, anchor, _ := strings.Cut(strings.TrimPrefix(rule.Annotations["runbook"], docsURL), "#")
+		if document == "alerts.md" && rule.Labels["audience"] != "customer" {
+			t.Errorf("%s is for operators, but links the customers' guide", rule.Alert)
+		}
+		if !strings.HasPrefix(rule.Annotations["runbook"], docsURL) || !slices.Contains(documents[document], anchor) {
+			t.Errorf("%s's runbook %q is no section of docs/runbook.md or docs/alerts.md", rule.Alert, rule.Annotations["runbook"])
 		}
 		for _, name := range metricName.FindAllString(rule.Expr, -1) {
 			if !strings.Contains(string(documented), "`"+name+"`") {

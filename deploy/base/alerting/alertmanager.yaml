@@ -1,12 +1,15 @@
-# Where alerts go, in the EKS environments. Pages, for what hurts customers
-# now, go to PagerDuty and to Slack; warnings, to act on within hours, go to
-# Slack; the Watchdog, which always fires, goes to a dead man's switch, which
-# raises its own alarm once it stops hearing from it. The secrets are files
-# of the Secret alertmanager-receivers (just alerting-config).
+# Where the operators' alerts go, in the EKS environments. Pages, for what
+# hurts customers now, go to PagerDuty and to Slack; warnings, to act on
+# within hours, go to Slack; the Watchdog, which always fires, goes to a dead
+# man's switch, which raises its own alarm once it stops hearing from it. The
+# secrets are files of the Secret alertmanager-receivers (just
+# alerting-config). The provisioner adds a route before these for each
+# customer that has receivers, for the alerts meant for customers
+# (docs/alerts.md); the others' go nowhere but the console.
 global:
   resolve_timeout: 5m
 route:
-  receiver: slack
+  receiver: none
   group_by: [alertname, tenant, cluster, source]
   group_wait: 30s
   group_interval: 5m
@@ -17,10 +20,10 @@ route:
       group_wait: 0s
       group_interval: 1m
       repeat_interval: 1m
-    - matchers: ['severity="page"']
+    - matchers: ['audience="operator"', 'severity="page"']
       receiver: pagerduty
       continue: true
-    - matchers: ['severity=~"page|warn"']
+    - matchers: ['audience="operator"', 'severity=~"page|warn"']
       receiver: slack
 # A page about a cluster silences the warnings it explains: partitions out of
 # sync and a scrape target down while a broker is.
@@ -29,6 +32,7 @@ inhibit_rules:
     target_matchers: ['alertname=~"KafkaUnderReplicatedPartitions|ScrapeTargetDown"']
     equal: [tenant, cluster]
 receivers:
+  - name: none
   - name: pagerduty
     pagerduty_configs:
       - routing_key_file: /etc/alertmanager/receivers/pagerduty-routing-key

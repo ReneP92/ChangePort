@@ -23,10 +23,10 @@ A new customer's cluster getting ready, part by part.
 
 ![A customer's cluster getting ready](screenshots/02-customer-starting-desktop.png)
 
-The overview of a ready cluster: how to connect, with `client.properties`
-for admins; the brokers' health; throughput; the topics with their
-retention, tiering, size and traffic; and how far behind each consumer group
-is, in plain language, with its lag over the last hour.
+The overview of a ready cluster: its active alerts; how to connect, with
+`client.properties` for admins; the brokers' health; throughput; the topics
+with their retention, tiering, size and traffic; and how far behind each
+consumer group is, in plain language, with its lag over the last hour.
 
 ![The overview](screenshots/03-overview-desktop.png)
 
@@ -50,6 +50,24 @@ to them, an unknown page, and an organization without a cluster.
 ![No such page](screenshots/08-not-found-desktop.png)
 
 ![No cluster](screenshots/09-no-cluster-desktop.png)
+
+## Alerts
+
+Alerts about Acme's own applications (see [alerts.md](alerts.md)), under
+Alerts in the header, which counts the active ones. Ada wants to know
+within a minute when a consumer group falls behind, and sends alerts to a
+webhook of hers too: on kind, the alert receiver. The secret she enters is
+never shown again, only a hint.
+
+![A webhook for alerts](screenshots/31-alert-webhook-desktop.png)
+
+Once `search-indexer` has been more than a minute behind on `orders`, the
+alert shows at the top of the overview and as a badge on the group, as it
+fires and without a reload, and goes once it clears. The Alerts page lists
+the active alerts, the thresholds, and where alerts go; members see them,
+and only admins change them.
+
+![The alerts](screenshots/30-alerts-desktop.png)
 
 ## Postgres sources
 

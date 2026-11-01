@@ -228,9 +228,30 @@ test("every screen of the console", async ({ browser }) => {
   await shot(admin, "05-create-topic-guardrails");
   await admin.keyboard.press("Escape");
 
+  // Ada wants to know within a minute when a consumer group falls behind,
+  // in the console and at her webhook: on kind, the alert receiver.
+  const nav = admin.getByRole("navigation", { name: "Console" });
+  await nav.getByRole("link", { name: /^Alerts/ }).click();
+  await main
+    .getByRole("spinbutton", { name: "A consumer group falls behind, in minutes" })
+    .fill("1");
+  await main.getByRole("button", { name: "Save" }).click();
+  await expect(main.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+  await main
+    .getByRole("listitem")
+    .filter({ has: admin.getByRole("heading", { name: "Webhook" }) })
+    .getByRole("button", { name: "Set up" })
+    .click();
+  const webhook = admin.getByRole("dialog", { name: "Send alerts to Webhook" });
+  await webhook
+    .getByLabel("Webhook URL")
+    .fill(`http://alert-receiver.metrics.svc:8080/customer-${acme.id}`);
+  await shot(admin, "31-alert-webhook");
+  await webhook.getByRole("button", { name: "Save" }).click();
+  await expect(webhook).toBeHidden();
+
   // Ada adds a Postgres source through the wizard, running its SQL as the
   // database's owner would.
-  const nav = admin.getByRole("navigation", { name: "Console" });
   await nav.getByRole("link", { name: "Sources" }).click();
   await expect(main.getByText("There are no sources yet.", { exact: false })).toBeVisible();
   await shot(admin, "20-sources-empty");
@@ -330,7 +351,15 @@ test("every screen of the console", async ({ browser }) => {
     timeout: 60_000,
   });
   await expect(main.getByText(/minutes? behind/).first()).toBeVisible({ timeout: 60_000 });
+  // search-indexer is more than a minute behind: an alert.
+  await expect(
+    main.getByRole("region", { name: /^\d+ alerts?$/ }).getByText(/search-indexer is .* behind/),
+  ).toBeVisible({ timeout: 4 * 60_000 });
   await shot(admin, "03-overview");
+  await nav.getByRole("link", { name: /^Alerts/ }).click();
+  await expect(main.getByText(/search-indexer is .* behind/)).toBeVisible();
+  await shot(admin, "30-alerts");
+  await nav.getByRole("link", { name: "Cluster" }).click();
 
   // Deleting a topic names the groups still reading it.
   await main

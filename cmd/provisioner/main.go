@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -367,9 +368,13 @@ func runController(ctx context.Context, args []string, logger *slog.Logger, stde
 	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme:  scheme,
 		Metrics: metricsserver.Options{BindAddress: *metricsAddress},
-		// Secrets are read one at a time by name, never listed or watched
-		// across customers' namespaces.
-		Client:                  client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}}},
+		// Secrets are read one at a time by name, never watched across
+		// customers' namespaces.
+		Client: client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}}},
+		// The only ConfigMaps watched are Alertmanager's.
+		Cache: cache.Options{ByObject: map[client.Object]cache.ByObject{
+			&corev1.ConfigMap{}: {Namespaces: map[string]cache.Config{controller.AlertmanagerNamespace: {}}},
+		}},
 		HealthProbeBindAddress:  *probeAddress,
 		LeaderElection:          *leaderElection,
 		LeaderElectionID:        "changeport-provisioner",
@@ -399,6 +404,10 @@ func runController(ctx context.Context, args []string, logger *slog.Logger, stde
 		SlotInterval: time.Minute,
 	}
 	if err := sources.SetupWithManager(mgr); err != nil {
+		return err
+	}
+	routing := &controller.AlertRoutingReconciler{Client: mgr.GetClient(), ResyncInterval: 10 * time.Minute}
+	if err := routing.SetupWithManager(mgr); err != nil {
 		return err
 	}
 	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {

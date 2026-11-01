@@ -11,4 +11,4 @@ labels:
       changeport.io/platform: console
 resources:
   - console.yaml
-  - password-secrets.yaml
+  - write-once-secrets.yaml

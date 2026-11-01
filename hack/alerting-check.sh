@@ -7,7 +7,7 @@
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-image() { sed -n "s|^ *image: \\(.*$1.*\\)|\\1|p" "$ROOT/deploy/base/alerting/alerting.yaml"; }
+image() { sed -n "s|^ *image: \(.*$1.*\)|\1|p" "$ROOT/deploy/base/alerting/alerting.yaml" | head -1; }
 vmalert=$(image vmalert)
 alertmanager=$(image alertmanager)
 [[ -n $vmalert && -n $alertmanager ]] || die "cannot find the images in deploy/base/alerting/alerting.yaml"

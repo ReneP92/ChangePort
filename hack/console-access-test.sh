@@ -4,9 +4,10 @@
 # service account and Kafka user. The service account may read exactly the
 # Secrets the console needs in the customer's namespace, and its pods for the
 # brokers' health, and nothing else. It manages Postgres sources, and may
-# create their write-once password Secrets, which the admission policy
-# changeport-console-secrets holds to their form, but no other Secret, and
-# never read, change or delete one. Over the internal
+# create their write-once password Secrets; it manages alert settings, and
+# may create their receivers' write-once Secrets. The admission policy
+# changeport-console-secrets holds both to their form; the console may create
+# no other Secret, and never read, change or delete one. Over the internal
 # mTLS listener, the console user may create, describe and delete topics and
 # list consumer groups, but neither produce nor consume, with or without a
 # consumer group.
@@ -92,7 +93,34 @@ for refusal in "${refusals[@]}"; do
   [[ $answer == *"changeport-console-secrets"*"denied request"* ]] ||
     die "the admission policy let the console create $secret_namespace/$secret_name ($type, immutable $immutable, data $data): $answer"
 done
-log "The console may create only its password Secrets: ${#refusals[@]} other Secrets refused"
+
+log "Console service account's access to alert settings and their receivers' Secrets"
+for verb in get create update; do
+  [[ $(can_i -n "$namespace" "$verb" alertsettings) == yes ]] || die "the console may not $verb alertsettings"
+done
+for denied in "delete alertsettings" "get secret/alert-receiver-webhook-a1b2c3d4" "-n metrics get secret/alertmanager-generated" \
+  "-n metrics get configmaps"; do
+  # shellcheck disable=SC2086 # the words are separate arguments
+  [[ $(can_i -n "$namespace" $denied) == no ]] || die "the console may $denied"
+done
+receiver="{value: $(printf 'https://alerts.example.com/' | base64)}"
+answer=$(create_secret_as_console "$namespace" "alert-receiver-webhook-$run_id" changeport.io/alert-receiver true "$receiver")
+[[ $answer == "secret/alert-receiver-webhook-$run_id" ]] || die "the console cannot create a receiver's Secret: $answer"
+refusals+=(
+  "$namespace|alert-receiver-webhook-$run_id|Opaque|true|$receiver"
+  "$namespace|alert-receiver-webhook-$run_id|changeport.io/alert-receiver|false|$receiver"
+  "$namespace|alertmanager-receivers|changeport.io/alert-receiver|true|$receiver"
+  "$namespace|alert-receiver-webhook-$run_id|changeport.io/alert-receiver|true|$password"
+  "$namespace|alert-receiver-webhook-$run_id|changeport.io/postgres-password|true|$receiver"
+  "metrics|alert-receiver-webhook-$run_id|changeport.io/alert-receiver|true|$receiver"
+)
+for refusal in "${refusals[@]:6}"; do
+  IFS='|' read -r secret_namespace secret_name type immutable data <<<"$refusal"
+  answer=$(create_secret_as_console "$secret_namespace" "$secret_name" "$type" "$immutable" "$data")
+  [[ $answer == *"changeport-console-secrets"*"denied request"* ]] ||
+    die "the admission policy let the console create $secret_namespace/$secret_name ($type, immutable $immutable, data $data): $answer"
+done
+log "The console may create only its password and receiver Secrets: ${#refusals[@]} other Secrets refused"
 
 log "Console Kafka user on the internal listener, from the changeport namespace"
 # The pod runs where the console will, so it gets the certificates through a
