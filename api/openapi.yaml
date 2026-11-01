@@ -795,6 +795,29 @@ paths:
           $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/customer/topology:
+    get:
+      operationId: getTopology
+      summary: >-
+        How data flows through the cluster now, for the topology map: the producers, topics and consumer
+        groups, and the bytes per second between them over the last 5 minutes, with each group's lag
+      responses:
+        "200":
+          description: The topology
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topology"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/NotReady"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/customer/events:
     get:
       operationId: listEvents
@@ -1799,6 +1822,106 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Point"
+    Topology:
+      type: object
+      required: [producers, topics, groups, writes, reads]
+      properties:
+        producers:
+          type: array
+          description: The producers that report their own metrics (KIP-714), by Kafka user and client ID
+          items:
+            $ref: "#/components/schemas/TopologyProducer"
+        topics:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopologyTopic"
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopologyGroup"
+        writes:
+          type: array
+          description: Producers writing to topics
+          items:
+            $ref: "#/components/schemas/TopologyWrite"
+        reads:
+          type: array
+          description: Consumer groups reading topics
+          items:
+            $ref: "#/components/schemas/TopologyRead"
+    TopologyProducer:
+      type: object
+      required: [id, clientId, principal, bytesPerSecond]
+      properties:
+        id:
+          type: string
+          description: The Kafka user and client ID, which writes name
+        clientId:
+          type: string
+        principal:
+          type: string
+        bytesPerSecond:
+          type: number
+    TopologyTopic:
+      type: object
+      required: [name, bytesInPerSecond, bytesOutPerSecond, unreportedBytesInPerSecond]
+      properties:
+        name:
+          type: string
+        bytesInPerSecond:
+          type: number
+        bytesOutPerSecond:
+          type: number
+        unreportedBytesInPerSecond:
+          type: number
+          description: >-
+            The bytes in per second that no producer reports, from clients that do not report their own
+            metrics, such as older ones
+        source:
+          type: string
+          description: The Postgres source that writes the topic, if any
+    TopologyGroup:
+      type: object
+      required: [name, members]
+      properties:
+        name:
+          type: string
+        members:
+          type: integer
+        lagSeconds:
+          type: number
+          description: How far behind the group is on the topic it is most behind on
+        lagMessages:
+          type: integer
+          format: int64
+    TopologyWrite:
+      type: object
+      required: [producer, topic, bytesPerSecond]
+      properties:
+        producer:
+          type: string
+        topic:
+          type: string
+        bytesPerSecond:
+          type: number
+    TopologyRead:
+      type: object
+      required: [group, topic, lagSeconds, lagMessages, capped]
+      properties:
+        group:
+          type: string
+        topic:
+          type: string
+        bytesPerSecond:
+          type: number
+          description: As the group's members report it, if they do
+        lagSeconds:
+          type: number
+        lagMessages:
+          type: integer
+          format: int64
+        capped:
+          type: boolean
     TailMessage:
       type: object
       description: A message of a topic's tail

@@ -62,6 +62,15 @@ const (
 	ActiveBrokers Query = "active_brokers"
 	// FencedBrokers is the brokers the active controller has fenced.
 	FencedBrokers Query = "fenced_brokers"
+
+	// ProducerBytes is the bytes per second each producer writes to each
+	// topic, as producers report it themselves (KIP-714), per Kafka user,
+	// client ID and topic.
+	ProducerBytes Query = "producer_bytes"
+	// ConsumerBytes is the bytes per second each consumer reads from each
+	// topic, as consumers report it themselves, per Kafka user, client ID
+	// and topic.
+	ConsumerBytes Query = "consumer_bytes"
 )
 
 // scope is what a query's series are about, which decides its filters.
@@ -74,6 +83,10 @@ const (
 	perGroup
 	// perCluster queries have one series for the whole cluster.
 	perCluster
+	// perClient queries have a series per client and topic, of the
+	// customer's own clients: the platform's, which connect with
+	// certificates, are left out.
+	perClient
 )
 
 // definition is a query's PromQL, where %s is the series selector, and its
@@ -100,6 +113,10 @@ var definitions = map[Query]definition{
 	ActiveControllers: {`sum(kafka_controller_kafkacontroller_activecontrollercount{%s})`, perCluster},
 	ActiveBrokers:     {`max(kafka_controller_kafkacontroller_activebrokercount{%s})`, perCluster},
 	FencedBrokers:     {`max(kafka_controller_kafkacontroller_fencedbrokercount{%s})`, perCluster},
+	// A client pushes to one broker at a time, and both expose its series
+	// for a while when it moves, so each client instance counts once.
+	ProducerBytes: {`sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (rate(clients_org_apache_kafka_producer_topic_byte_total{%s}[5m])))`, perClient},
+	ConsumerBytes: {`sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (rate(clients_org_apache_kafka_consumer_fetch_manager_bytes_consumed_total{%s}[5m])))`, perClient},
 }
 
 // Queries lists every named query.
@@ -107,6 +124,7 @@ func Queries() []Query {
 	return []Query{
 		BytesIn, BytesOut, MessagesIn, LocalSize, RemoteSize, LagSeconds, LagMessages, LagCapped,
 		UnderReplicated, UnderMinISR, OfflinePartitions, ActiveControllers, ActiveBrokers, FencedBrokers,
+		ProducerBytes, ConsumerBytes,
 	}
 }
 
@@ -145,9 +163,16 @@ func Expr(q Query, tenant string, filter Filter) (string, error) {
 		return "", fmt.Errorf("query %s has no consumer groups", q)
 	case filter.Topic != "":
 		selector = append(selector, `topic=`+quote(filter.Topic))
-	case d.scope == perTopic:
-		// Broker metrics without a topic label are totals over all topics.
+	case d.scope == perTopic || d.scope == perClient:
+		// Broker metrics without a topic label are totals over all topics,
+		// as are clients' own.
 		selector = append(selector, `topic!=""`)
+	}
+	if d.scope == perClient {
+		if filter.ConsumerGroup != "" {
+			return "", fmt.Errorf("query %s has no consumer groups", q)
+		}
+		selector = append(selector, `principal!~"User:CN=.*"`)
 	}
 	if filter.ConsumerGroup != "" {
 		selector = append(selector, `consumer_group=`+quote(filter.ConsumerGroup))

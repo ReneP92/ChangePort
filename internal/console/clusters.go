@@ -46,6 +46,9 @@ type Clusters interface {
 	// TopicConsumerGroups returns the consumer groups with committed offsets
 	// on a topic, by name.
 	TopicConsumerGroups(ctx context.Context, customerID, topic string) ([]string, error)
+	// GroupMembers returns the client IDs of each consumer group's members,
+	// by group, for the topology map.
+	GroupMembers(ctx context.Context, customerID string) (map[string][]string, error)
 }
 
 // ErrTopicExists means a topic of that name exists already.
@@ -319,4 +322,50 @@ func (k KubeClusters) TopicConsumerGroups(ctx context.Context, customerID, topic
 	}
 	slices.Sort(groups)
 	return groups, nil
+}
+
+// GroupMembers implements Clusters: classic groups through DescribeGroups,
+// KIP-848 ones through ConsumerGroupDescribe.
+func (k KubeClusters) GroupMembers(ctx context.Context, customerID string) (map[string][]string, error) {
+	admin, err := k.Kafka.Admin(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+	members := map[string][]string{}
+	add := func(group, clientID string) {
+		if !slices.Contains(members[group], clientID) {
+			members[group] = append(members[group], clientID)
+		}
+	}
+	for _, kind := range consumerGroupTypes {
+		listed, err := admin.ListGroupsByType(ctx, []string{kind})
+		if err != nil {
+			return nil, fmt.Errorf("list the %s groups of customer %s: %w", kind, customerID, err)
+		}
+		if len(listed) == 0 {
+			continue
+		}
+		if kind == "classic" {
+			described, err := admin.DescribeGroups(ctx, listed.Groups()...)
+			if err != nil {
+				return nil, fmt.Errorf("describe the groups of customer %s: %w", customerID, err)
+			}
+			for _, group := range described {
+				for _, member := range group.Members {
+					add(group.Group, member.ClientID)
+				}
+			}
+			continue
+		}
+		described, err := admin.DescribeConsumerGroups(ctx, listed.Groups()...)
+		if err != nil {
+			return nil, fmt.Errorf("describe the consumer groups of customer %s: %w", customerID, err)
+		}
+		for _, group := range described {
+			for _, member := range group.Members {
+				add(group.Group, member.ClientID)
+			}
+		}
+	}
+	return members, nil
 }
