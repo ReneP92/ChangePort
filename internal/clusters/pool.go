@@ -1,7 +1,8 @@
 // Package clusters gives the console a Kafka admin client for each customer's
 // cluster, connected on demand over the internal mTLS listener as the
 // changeport-console Kafka user, which may manage topics but never read or
-// write messages.
+// write messages; and, for the tail of a topic only, a reader as the
+// changeport-tail user, which may read topics and nothing else.
 package clusters
 
 import (
@@ -127,7 +128,7 @@ func (p *Pool) entry(ctx context.Context, customerID string) (*pooled, error) {
 		entry.used = now
 		return entry, nil
 	}
-	config, versions, err := p.loadTLS(ctx, spec)
+	config, versions, err := p.loadTLS(ctx, spec, provisioning.ConsoleUser)
 	if err != nil {
 		return nil, err
 	}
@@ -168,10 +169,43 @@ func (e *pooled) dial(ctx context.Context, network, address string) (net.Conn, e
 	return dialer.DialContext(ctx, network, address)
 }
 
-// loadTLS reads the console user's certificate and the cluster CA, and
-// returns a TLS configuration for them with the Secrets' versions.
-func (p *Pool) loadTLS(ctx context.Context, spec provisioning.Spec) (*tls.Config, string, error) {
-	user, userVersion, err := p.secret(ctx, spec, provisioning.ConsoleUser)
+// Reader returns a new client of the customer's cluster as the tail user,
+// with opts, such as the partitions to consume. The caller closes it; it is
+// not pooled, as each reader consumes on its own.
+func (p *Pool) Reader(ctx context.Context, customerID string, opts ...kgo.Opt) (*kgo.Client, error) {
+	if err := provisioning.ValidateCustomerID(customerID); err != nil {
+		return nil, err
+	}
+	spec := provisioning.Spec{CustomerID: customerID}
+	config, _, err := p.loadTLS(ctx, spec, provisioning.TailUser)
+	if err != nil {
+		return nil, err
+	}
+	dialer := &tls.Dialer{NetDialer: &net.Dialer{Timeout: 10 * time.Second}, Config: config}
+	client, err := kgo.NewClient(append([]kgo.Opt{
+		kgo.SeedBrokers(p.Bootstrap(spec)),
+		kgo.Dialer(func(ctx context.Context, network, address string) (net.Conn, error) {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return nil, err
+			}
+			d := *dialer
+			d.Config = config.Clone()
+			d.Config.ServerName = host
+			return d.DialContext(ctx, network, address)
+		}),
+		kgo.ClientID("changeport-tail"),
+	}, opts...)...)
+	if err != nil {
+		return nil, fmt.Errorf("create the tail's Kafka client of customer %s: %w", customerID, err)
+	}
+	return client, nil
+}
+
+// loadTLS reads a Kafka user's certificate and the cluster CA, and returns a
+// TLS configuration for them with the Secrets' versions.
+func (p *Pool) loadTLS(ctx context.Context, spec provisioning.Spec, userName string) (*tls.Config, string, error) {
+	user, userVersion, err := p.secret(ctx, spec, userName)
 	if err != nil {
 		return nil, "", err
 	}
@@ -181,7 +215,7 @@ func (p *Pool) loadTLS(ctx context.Context, spec provisioning.Spec) (*tls.Config
 	}
 	certificate, err := tls.X509KeyPair(user["user.crt"], user["user.key"])
 	if err != nil {
-		return nil, "", fmt.Errorf("the console's certificate for customer %s: %w", spec.CustomerID, err)
+		return nil, "", fmt.Errorf("the certificate of %s for customer %s: %w", userName, spec.CustomerID, err)
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(ca["ca.crt"]) {

@@ -113,6 +113,7 @@ func run(ctx context.Context, args []string) error {
 		},
 		AlertSettings: console.KubeAlertSettings{Client: kube},
 		Events:        timeline,
+		Messages:      console.KubeMessages{Kafka: kafka},
 		Recorder:      recorder,
 		Receivers:     console.Receivers{AllowPrivate: *allowPrivateReceivers},
 		// The addresses the platform's NAT gateways give its connections

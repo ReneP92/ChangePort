@@ -16,6 +16,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/clerk/clerk-sdk-go/v2"
@@ -29,6 +30,7 @@ import (
 	"github.com/ReneP92/changeport/internal/events"
 	"github.com/ReneP92/changeport/internal/metrics"
 	"github.com/ReneP92/changeport/internal/provisioning"
+	"github.com/ReneP92/changeport/internal/tail"
 	"github.com/ReneP92/changeport/internal/topics"
 )
 
@@ -83,6 +85,14 @@ type Server struct {
 	events    Events
 	recorder  EventRecorder
 	userNames *userNames
+	// messages reads topics for their tails, tails counts the tails each
+	// customer runs, and registries are the customers' schema registries,
+	// which registryURL addresses in tests.
+	messages     Messages
+	tails        *tails
+	registriesMu sync.Mutex
+	registries   map[string]*tail.Registry
+	registryURL  func(customerID string) string
 	// egress are the addresses Changeport connects to customers' databases
 	// from, which they allowlist.
 	egress []string
@@ -120,6 +130,11 @@ type Options struct {
 	// Users names users on the timeline; the default asks Clerk's Backend
 	// API with the secret key.
 	Users Users
+	// Messages reads topics' messages for their tails (docs/console.md).
+	Messages Messages
+	// RegistryURL addresses a customer's schema registry, for the tail's
+	// decoding; the default is its Service in the customer's namespace.
+	RegistryURL func(customerID string) string
 	// EgressAddresses are the addresses Changeport connects to customers'
 	// databases from.
 	EgressAddresses []string
@@ -151,6 +166,10 @@ func New(config Config, options Options) (*Server, error) {
 		events:        options.Events,
 		recorder:      options.Recorder,
 		userNames:     &userNames{users: options.Users, names: map[string]cachedName{}},
+		messages:      options.Messages,
+		tails:         &tails{running: map[string]int{}},
+		registries:    map[string]*tail.Registry{},
+		registryURL:   options.RegistryURL,
 		egress:        options.EgressAddresses,
 		ui:            options.UI,
 		logger:        options.Logger,

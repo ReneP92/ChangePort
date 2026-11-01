@@ -144,6 +144,21 @@ test("an admin adds a Postgres source, changes it and deletes it", async ({ page
   await expect(topic).toBeVisible({ timeout: 60_000 });
   await expect(topic.getByRole("link", { name: `Source ${name}` })).toBeVisible();
   await expect(topic.getByRole("button", { name: /^Delete / })).toHaveCount(0);
+
+  // An admin reads the topic's messages, Avro decoded with the schemas of
+  // the source's registry: Debezium's records of the table's rows.
+  await topic.getByRole("link", { name: `${name}.public.orders`, exact: true }).click();
+  const messages = main
+    .locator('[data-slot="card"]')
+    .filter({ has: page.getByRole("heading", { name: "Messages" }) });
+  await messages.getByRole("button", { name: "Show messages" }).click();
+  const record = messages.getByRole("list", { name: "Messages" }).getByRole("listitem").first();
+  await expect(record).toContainText("Avro", { timeout: 30_000 });
+  await record.getByRole("button").click();
+  await expect(record).toContainText(/Avro, schema \d+/);
+  await expect(record.locator("pre").nth(1)).toContainText('"after"');
+  await messages.getByRole("button", { name: "Stop" }).click();
+  await page.goBack();
   await topic.getByRole("link", { name: `Source ${name}` }).click();
   await expect(main.getByRole("heading", { name })).toBeVisible();
 

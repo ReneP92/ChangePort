@@ -230,6 +230,8 @@ type fixture struct {
 	// console recorded on them.
 	events   *fakeEvents
 	recorded *fakeRecorder
+	// messages are the topics' messages, for their tails.
+	messages *fakeMessages
 	// alerts are the customers' active alerts, and alertSettings their
 	// settings.
 	alerts        *fakeAlerts
@@ -257,6 +259,7 @@ func newFixture(t *testing.T) *fixture {
 		alerts:        newFakeAlerts(),
 		events:        newFakeEvents(),
 		recorded:      &fakeRecorder{},
+		messages:      &fakeMessages{},
 		alertSettings: &fakeAlertSettings{settings: map[string]*v1alpha1.AlertSettings{}},
 		log:           &bytes.Buffer{},
 	}
@@ -275,6 +278,7 @@ func newFixture(t *testing.T) *fixture {
 		Alerts:        f.alerts,
 		Events:        f.events,
 		Recorder:      f.recorded,
+		Messages:      f.messages,
 		Users:         fakeUsers{"user_3": "Ada Lovelace"},
 		AlertSettings: f.alertSettings,
 		Receivers:     Receivers{Resolver: resolver{netip.MustParseAddr("93.184.215.14")}},

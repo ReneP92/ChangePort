@@ -10,7 +10,9 @@
 # no other Secret, and never read, change or delete one. Over the internal
 # mTLS listener, the console user may create, describe and delete topics and
 # list consumer groups, but neither produce nor consume, with or without a
-# consumer group.
+# consumer group. The tail user, which the console reads messages as for
+# admins, reads a topic without a consumer group, and may neither produce nor
+# use a group.
 # Usage: hack/console-access-test.sh [customer-id] (default demo)
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -32,7 +34,7 @@ ensure_kubectl
 
 log "Console service account's access to the Secrets of customer $customer"
 can_i() { kubectl auth can-i --as "$console" "$@" 2>/dev/null || true; }
-for secret in changeport-console "$customer-cluster-ca-cert" admin external-listener-tls; do
+for secret in changeport-console changeport-tail "$customer-cluster-ca-cert" admin external-listener-tls; do
   [[ $(can_i -n "$namespace" get "secret/$secret") == yes ]] || die "the console cannot read secret $namespace/$secret"
 done
 # The brokers' pods, for their health.
@@ -128,6 +130,8 @@ log "Console Kafka user on the internal listener, from the changeport namespace"
 kubectl -n "$namespace" get secret changeport-console -o jsonpath='{.data.user\.crt}' | base64 -d >"$work/user.crt"
 kubectl -n "$namespace" get secret changeport-console -o jsonpath='{.data.user\.key}' | base64 -d >"$work/user.key"
 kubectl -n "$namespace" get secret "$customer-cluster-ca-cert" -o jsonpath='{.data.ca\.crt}' | base64 -d >"$work/ca.crt"
+kubectl -n "$namespace" get secret changeport-tail -o jsonpath='{.data.user\.crt}' | base64 -d >"$work/tail.crt"
+kubectl -n "$namespace" get secret changeport-tail -o jsonpath='{.data.user\.key}' | base64 -d >"$work/tail.key"
 bootstrap="$customer-kafka-bootstrap.$namespace.svc:9093"
 # The pod's script: each step prints its output, then "step <name> <exit code>".
 cat >"$work/run.sh" <<SCRIPT
@@ -153,10 +157,18 @@ echo message | step produce \$bin/kafka-console-producer.sh --bootstrap-server $
 step consume \$bin/kafka-console-consumer.sh --bootstrap-server $bootstrap --command-config /tmp/console.properties --topic $topic --group $topic --from-beginning --max-messages 1 --timeout-ms 15000
 # Without a group, reading meets the topic's Read ACL alone.
 step read \$bin/kafka-console-consumer.sh --bootstrap-server $bootstrap --command-config /tmp/console.properties --topic $topic --partition 0 --offset earliest --max-messages 1 --timeout-ms 15000
+# The tail user may read the topic, which holds nothing, as the console
+# user's produce is refused; Kafka authorizes the read all the same.
+cat /certs/tail.key /certs/tail.crt >/tmp/tail-keystore.pem
+sed 's|/tmp/keystore.pem|/tmp/tail-keystore.pem|' /tmp/console.properties >/tmp/tail.properties
+step tail-read \$bin/kafka-console-consumer.sh --bootstrap-server $bootstrap --command-config /tmp/tail.properties --topic $topic --partition 0 --offset earliest --max-messages 1 --timeout-ms 10000
+echo message | step tail-produce \$bin/kafka-console-producer.sh --bootstrap-server $bootstrap --command-config /tmp/tail.properties --topic $topic \\
+  --producer-property enable.idempotence=false --producer-property acks=1
+step tail-group \$bin/kafka-console-consumer.sh --bootstrap-server $bootstrap --command-config /tmp/tail.properties --topic $topic --group $topic-tail --from-beginning --max-messages 1 --timeout-ms 15000
 step delete \$bin/kafka-topics.sh --bootstrap-server $bootstrap --command-config /tmp/console.properties --delete --topic $topic
 SCRIPT
 kubectl -n changeport create secret generic "$name" --from-file="$work/user.crt" --from-file="$work/user.key" \
-  --from-file="$work/ca.crt" --from-file="$work/run.sh" --dry-run=client -o yaml |
+  --from-file="$work/ca.crt" --from-file="$work/tail.crt" --from-file="$work/tail.key" --from-file="$work/run.sh" --dry-run=client -o yaml |
   kubectl label --local -f - "changeport.io/console-access-test=$run_id" -o yaml |
   kubectl apply -f - >/dev/null
 
@@ -192,8 +204,9 @@ done
 [[ $phase == Succeeded ]] || die "pod changeport/$name did not finish (phase '${phase:-unknown}')"
 kubectl -n changeport logs "$name" >"$work/output"
 
-# Fails unless the pod's step exited with code 0 (want "ok"), or reported
-# an error matching pattern (want "refused").
+# Fails unless the pod's step exited with code 0 (want "ok"), reported no
+# authorization error (want "authorized"), or reported an error matching
+# pattern (want "refused").
 expect() {
   local step=$1 want=$2 pattern=${3:-} output code
   # The step's output: the lines since the previous step's marker.
@@ -202,6 +215,9 @@ expect() {
   [[ -n $code ]] || die "step $step did not run:"$'\n'"$(cat "$work/output")"
   if [[ $want == ok && $code != 0 ]]; then
     die "the console user's $step failed with exit code $code:"$'\n'"$output"
+  fi
+  if [[ $want == authorized ]] && grep -Eq "AuthorizationException" <<<"$output"; then
+    die "the console user's $step was not authorized:"$'\n'"$output"
   fi
   if [[ $want == refused ]]; then
     grep -Eq "$pattern" <<<"$output" || die "the console user's $step was not refused:"$'\n'"$output"
@@ -217,6 +233,10 @@ expect groups ok
 expect produce refused "$denied"
 expect consume refused "$denied"
 expect read refused "TopicAuthorizationException"
+expect tail-read authorized
+expect tail-produce refused "TopicAuthorizationException"
+expect tail-group refused "GroupAuthorizationException"
 expect delete ok
 log "The console user created, described and deleted $topic and listed groups; producing and consuming were refused"
+log "The tail user may read $topic without a group; producing and using a group were refused"
 log "Console access test passed for customer $customer"

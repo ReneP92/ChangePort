@@ -157,6 +157,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/customer/topics/{topic}/tail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The topic's recent messages and then new ones as they arrive, as server-sent events, for organization admins: a message event with a TailMessage per message, and a skipped event with a TailSkipped when more arrive than the stream shows. Each tail is audited; no message is kept. The stream ends when the session token expires; open it again with resume, to go on where it ended. */
+        get: operations["tailTopic"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/customer/topics": {
         parameters: {
             query?: never;
@@ -950,6 +967,41 @@ export interface components {
             bytesIn: components["schemas"]["Point"][];
             bytesOut: components["schemas"]["Point"][];
         };
+        /** @description A message of a topic's tail */
+        TailMessage: {
+            /** Format: int32 */
+            partition: number;
+            /** Format: int64 */
+            offset: number;
+            /** Format: date-time */
+            timestamp: string;
+            key?: components["schemas"]["TailPayload"];
+            value?: components["schemas"]["TailPayload"];
+            headers: components["schemas"]["TailHeader"][];
+        };
+        TailHeader: {
+            key: string;
+            value?: components["schemas"]["TailPayload"];
+        };
+        /** @description A key, value or header value as shown, cut at a limit */
+        TailPayload: {
+            /**
+             * @description How text shows it; binary is hex, and avro is JSON decoded with the registry's schema
+             * @enum {string}
+             */
+            format: "json" | "text" | "binary" | "avro";
+            text: string;
+            /** @description Its size in bytes */
+            size: number;
+            truncated: boolean;
+            /** Format: int64 */
+            schemaId?: number;
+        };
+        /** @description How many messages the tail has skipped so far, to stay within its rate */
+        TailSkipped: {
+            /** Format: int64 */
+            skipped: number;
+        };
         /**
          * @default 1h
          * @enum {string}
@@ -1066,6 +1118,15 @@ export interface components {
         };
         /** @description The request conflicts with what exists, or the cluster is not ready for it */
         Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Too many of these at once; try again in a moment */
+        TooManyRequests: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1332,6 +1393,41 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["NotReady"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    tailTopic: {
+        parameters: {
+            query?: {
+                /** @description Start with the topic's last messages, or only with new ones */
+                from?: "recent" | "latest";
+                /** @description Where to go on in each partition, as partition:offset pairs, such as 0:120,1:98 */
+                resume?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The topic's name */
+                topic: components["parameters"]["TopicName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["NotReady"];
+            429: components["responses"]["TooManyRequests"];
             503: components["responses"]["NotConfigured"];
         };
     };

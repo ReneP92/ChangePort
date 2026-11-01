@@ -89,6 +89,15 @@ falls behind, go to the customers instead, never to operators
   has no under-replicated or offline partitions, one active controller and
   three active brokers.
 - **The provisioner's logs:** `kubectl -n changeport logs deploy/changeport-provisioner`.
+- **The console's audit log:** every change a user makes through the
+  console, and every topic tail, is a log line with `audit=true`, the
+  customer's `tenant`, the Clerk `user` and `organization`:
+
+  ```bash
+  kubectl -n changeport logs deploy/changeport-console | grep 'audit=true' | grep 'tenant=c-7f3k2q'
+  kubectl -n changeport logs deploy/changeport-console | grep 'msg="topic tail'
+  ```
+
 - **The change timeline** ([timeline.md](timeline.md)): what changed in the
   customer's cluster and when, as the console shows it over its graphs:
   topics created and reconfigured, rebalances, broker restarts with why,
