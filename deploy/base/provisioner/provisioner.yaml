@@ -65,10 +65,16 @@ rules:
   - apiGroups: [""]
     resources: [persistentvolumes]
     verbs: [get, patch]
-  # Only to grant the console's Role, which reads the brokers' pods.
+  # The console's Role reads the brokers' pods, which the provisioner must
+  # hold to grant; it watches them itself for the timeline's broker
+  # restarts (docs/timeline.md), with the Events Strimzi records when it
+  # restarts one.
   - apiGroups: [""]
     resources: [pods]
-    verbs: [get, list]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [get, list, watch]
   # The CDC runtime (Deployments, Services, NetworkPolicies, KafkaUsers
   # and the KafkaConnect labelled changeport.io/part) is deleted again once
   # the template no longer renders it.
@@ -210,6 +216,9 @@ spec:
               containerPort: 8080
             - name: probes
               containerPort: 8081
+            # Where Alertmanager sends the timeline's alerts.
+            - name: events
+              containerPort: 8082
           livenessProbe:
             httpGet:
               path: /healthz
@@ -230,3 +239,44 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
+---
+# Alertmanager sends the timeline's alerts, such as a client the brokers
+# throttle, to the provisioner, which records them (docs/timeline.md).
+apiVersion: v1
+kind: Service
+metadata:
+  name: changeport-provisioner
+  namespace: changeport
+spec:
+  selector:
+    app.kubernetes.io/name: changeport-provisioner
+  ports:
+    - name: events
+      port: 8082
+      targetPort: events
+---
+# Only Alertmanager may send the provisioner alerts; its metrics and probes
+# stay open, as before.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: changeport-provisioner
+  namespace: changeport
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: changeport-provisioner
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: 8081}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: metrics
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: alertmanager
+      ports:
+        - {protocol: TCP, port: 8082}

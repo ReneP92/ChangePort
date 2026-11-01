@@ -24,11 +24,23 @@ A new customer's cluster getting ready, part by part.
 ![A customer's cluster getting ready](screenshots/02-customer-starting-desktop.png)
 
 The overview of a ready cluster: its active alerts; how to connect, with
-`client.properties` for admins; the brokers' health; throughput; the topics
-with their retention, tiering, size and traffic; and how far behind each
-consumer group is, in plain language, with its lag over the last hour.
+`client.properties` for admins; the brokers' health; throughput, with what
+changed meanwhile; the topics with their retention, tiering, size and
+traffic; and how far behind each consumer group is, in plain language, with
+its lag over the last hour.
 
 ![The overview](screenshots/03-overview-desktop.png)
+
+A topic's page and a consumer group's, from the overview's names: the
+topic's settings, its traffic and the groups that read it; the group's lag
+on each topic it reads. Every graph marks what changed meanwhile, numbered,
+with the changes listed under it in plain words: topics created or
+reconfigured, rebalances, broker restarts, throttling (see
+[timeline.md](timeline.md)).
+
+![A topic](screenshots/17-topic-desktop.png)
+
+![A consumer group](screenshots/18-consumer-group-desktop.png)
 
 Creating a topic within the guardrails, which the dialog applies as Ada
 types.

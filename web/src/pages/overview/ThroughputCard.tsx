@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import type { ThroughputRange } from "@/api/client";
-import { useThroughput } from "@/api/queries";
+import { useEvents, useThroughput } from "@/api/queries";
+import { ChangeList } from "@/components/Timeline";
+import { rangeMilliseconds, ranges } from "@/lib/ranges";
+import { eventMarkers, numberEvents } from "@/lib/timeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -14,23 +17,32 @@ import {
 } from "@/components/ui/chart";
 import { formatRate } from "@/lib/format";
 
-const ranges: ThroughputRange[] = ["1h", "6h", "24h", "7d"];
-
 const chartConfig = {
   bytesIn: { label: "In", color: "var(--chart-1)" },
   bytesOut: { label: "Out", color: "var(--chart-2)" },
 } satisfies ChartConfig;
 
-/** Bytes in and out per second over the whole cluster. */
-export function ThroughputCard() {
+/**
+ * Bytes in and out per second over the whole cluster, or one topic, with the
+ * changes over the same range marked on it (docs/timeline.md).
+ */
+export function ThroughputCard({ topic }: { topic?: string }) {
   const [range, setRange] = useState<ThroughputRange>("1h");
-  const throughput = useThroughput(range);
+  const [highlighted, setHighlighted] = useState<number | null>(null);
+  const throughput = useThroughput(range, topic);
+  const changes = useEvents(range, topic === undefined ? {} : { topic });
   const points =
     throughput.data?.bytesIn.map((point, i) => ({
       time: new Date(point.time).getTime(),
       bytesIn: point.value,
       bytesOut: throughput.data.bytesOut[i]?.value ?? 0,
     })) ?? [];
+  // The chart runs up to when the changes were last read, so that what just
+  // changed shows.
+  const end = Math.max(points.at(-1)?.time ?? 0, changes.dataUpdatedAt);
+  // The whole range, so that changes before the first point show too.
+  const start = end - rangeMilliseconds[range];
+  const numbered = numberEvents(changes.data?.events ?? [], start, end);
   const long = range === "24h" || range === "7d";
   const formatTime = (time: number) =>
     new Date(time).toLocaleString(
@@ -44,7 +56,10 @@ export function ThroughputCard() {
           <CardTitle>
             <h2>Throughput</h2>
           </CardTitle>
-          <CardDescription>Bytes per second, over all topics</CardDescription>
+          <CardDescription>
+            {topic === undefined ? "Bytes per second, over all topics" : "Bytes per second"}, and
+            what changed meanwhile
+          </CardDescription>
         </div>
         <div role="group" aria-label="Range" className="flex gap-1">
           {ranges.map((r) => (
@@ -62,7 +77,7 @@ export function ThroughputCard() {
           ))}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-6">
         {throughput.isError && (
           <p className="text-sm text-destructive">{throughput.error.message}</p>
         )}
@@ -77,7 +92,7 @@ export function ThroughputCard() {
                 dataKey="time"
                 type="number"
                 scale="time"
-                domain={["dataMin", "dataMax"]}
+                domain={[start, end]}
                 tickFormatter={formatTime}
                 tickLine={false}
                 axisLine={false}
@@ -101,6 +116,7 @@ export function ThroughputCard() {
                 }
               />
               <ChartLegend content={<ChartLegendContent />} />
+              {eventMarkers(numbered, highlighted, start, end)}
               {/* Without animation: each refresh would draw the chart again from nothing. */}
               <Area
                 dataKey="bytesIn"
@@ -123,6 +139,14 @@ export function ThroughputCard() {
             </AreaChart>
           </ChartContainer>
         )}
+        <ChangeList
+          numbered={numbered}
+          truncated={changes.data?.truncated ?? false}
+          highlighted={highlighted}
+          onHighlight={setHighlighted}
+          isPending={changes.isPending}
+          error={changes.error}
+        />
       </CardContent>
     </Card>
   );

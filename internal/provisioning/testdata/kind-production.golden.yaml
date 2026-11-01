@@ -392,6 +392,9 @@ spec:
           image: changeport/agent:local
           args:
             - "-bootstrap=acme-kafka-bootstrap.customer-acme.svc:9093"
+            # The cluster's changes go to the timeline (docs/timeline.md).
+            - "-tenant=acme"
+            - "-events-url=http://victoria-logs.metrics.svc:9428"
             - "-client-metrics-interval=5s"
           ports:
             - name: metrics

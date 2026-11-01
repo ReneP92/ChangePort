@@ -26,6 +26,7 @@ import (
 	"github.com/ReneP92/changeport/api/v1alpha1"
 	"github.com/ReneP92/changeport/internal/clusters"
 	"github.com/ReneP92/changeport/internal/console/api"
+	"github.com/ReneP92/changeport/internal/events"
 	"github.com/ReneP92/changeport/internal/metrics"
 	"github.com/ReneP92/changeport/internal/provisioning"
 	"github.com/ReneP92/changeport/internal/topics"
@@ -77,6 +78,11 @@ type Server struct {
 	receivers     Receivers
 	// alertPoll is how often alert streams ask for the alerts.
 	alertPoll time.Duration
+	// events reads the timeline, recorder keeps the changes users make
+	// through the console for it, and userNames names them.
+	events    Events
+	recorder  EventRecorder
+	userNames *userNames
 	// egress are the addresses Changeport connects to customers' databases
 	// from, which they allowlist.
 	egress []string
@@ -107,6 +113,13 @@ type Options struct {
 	// AlertPoll is how often alert streams ask for the alerts; the default
 	// is every 5 seconds.
 	AlertPoll time.Duration
+	// Events reads the change timeline, and Recorder keeps the changes users
+	// make through the console for it (docs/timeline.md).
+	Events   Events
+	Recorder EventRecorder
+	// Users names users on the timeline; the default asks Clerk's Backend
+	// API with the secret key.
+	Users Users
 	// EgressAddresses are the addresses Changeport connects to customers'
 	// databases from.
 	EgressAddresses []string
@@ -135,6 +148,9 @@ func New(config Config, options Options) (*Server, error) {
 		alertSettings: options.AlertSettings,
 		receivers:     options.Receivers,
 		alertPoll:     cmp.Or(options.AlertPoll, 5*time.Second),
+		events:        options.Events,
+		recorder:      options.Recorder,
+		userNames:     &userNames{users: options.Users, names: map[string]cachedName{}},
 		egress:        options.EgressAddresses,
 		ui:            options.UI,
 		logger:        options.Logger,
@@ -151,6 +167,9 @@ func New(config Config, options Options) (*Server, error) {
 	keys := options.Keys
 	if keys == nil {
 		keys = clerkKeys(config.SecretKey)
+	}
+	if s.userNames.users == nil {
+		s.userNames.users = NewClerkUsers(config.SecretKey)
 	}
 	if s.organizations == nil {
 		// Invitations lead to the console's first origin.
@@ -881,14 +900,14 @@ func (s *Server) ListTopics(ctx context.Context, _ api.ListTopicsRequestObject) 
 
 // throughputRanges are the ranges the throughput chart offers, each with a
 // step that keeps it to a few hundred points.
-var throughputRanges = map[api.GetThroughputParamsRange]time.Duration{
+var throughputRanges = map[api.TimeRange]time.Duration{
 	api.N1h:  time.Minute,
 	api.N6h:  5 * time.Minute,
 	api.N24h: 15 * time.Minute,
 	api.N7d:  time.Hour,
 }
 
-var rangeDurations = map[api.GetThroughputParamsRange]time.Duration{
+var rangeDurations = map[api.TimeRange]time.Duration{
 	api.N1h:  time.Hour,
 	api.N6h:  6 * time.Hour,
 	api.N24h: 24 * time.Hour,
@@ -896,16 +915,11 @@ var rangeDurations = map[api.GetThroughputParamsRange]time.Duration{
 }
 
 // GetThroughput implements api.StrictServerInterface: the bytes in and out
-// per second over all topics.
+// per second over all topics, or one.
 func (s *Server) GetThroughput(ctx context.Context, request api.GetThroughputRequestObject) (api.GetThroughputResponseObject, error) {
-	window := api.N1h
-	if request.Params.Range != nil {
-		window = *request.Params.Range
-	}
-	step, ok := throughputRanges[window]
+	window, step, start, end, ok := timeRange(request.Params.Range)
 	if !ok {
-		return api.GetThroughput400JSONResponse{BadRequestJSONResponse: api.BadRequestJSONResponse(problem(http.StatusBadRequest,
-			"Unknown range", "Choose 1h, 6h, 24h or 7d."))}, nil
+		return api.GetThroughput400JSONResponse{BadRequestJSONResponse: api.BadRequestJSONResponse(unknownRange)}, nil
 	}
 	customer, _, refused, err := s.customerOf(ctx)
 	switch {
@@ -916,11 +930,10 @@ func (s *Server) GetThroughput(ctx context.Context, request api.GetThroughputReq
 	case refused != nil:
 		return api.GetThroughput403JSONResponse{ForbiddenJSONResponse: api.ForbiddenJSONResponse(*refused)}, nil
 	}
-	end := time.Now().Truncate(step)
-	start := end.Add(-rangeDurations[window])
 	throughput := api.GetThroughput200JSONResponse{Range: string(window), StepSeconds: int(step.Seconds())}
+	filter := metrics.Filter{Topic: ptr.Deref(request.Params.Topic, "")}
 	for q, field := range map[metrics.Query]*[]api.Point{metrics.BytesIn: &throughput.BytesIn, metrics.BytesOut: &throughput.BytesOut} {
-		series, err := s.metrics.Range(ctx, customer.Name, q, metrics.Filter{}, start, end, step)
+		series, err := s.metrics.Range(ctx, customer.Name, q, filter, start, end, step)
 		if err != nil {
 			return nil, err
 		}
@@ -1142,6 +1155,7 @@ func (s *Server) CreateTopic(ctx context.Context, request api.CreateTopicRequest
 	}
 	s.audit(ctx, principal, customer.Name, "topic created", "topic", topic.Name,
 		"partitions", topic.Partitions, "retention_ms", body.RetentionMs, "cleanup_policy", body.CleanupPolicy)
+	s.recordTopicChange(ctx, principal, customer.Name, events.TopicCreated, topic.Name, int(topic.Partitions))
 	created := api.CreateTopic201JSONResponse{
 		Name:              topic.Name,
 		Partitions:        int(topic.Partitions),
@@ -1188,6 +1202,7 @@ func (s *Server) DeleteTopic(ctx context.Context, request api.DeleteTopicRequest
 		return nil, err
 	}
 	s.audit(ctx, principal, customer.Name, "topic deleted", "topic", request.Topic)
+	s.recordTopicChange(ctx, principal, customer.Name, events.TopicDeleted, request.Topic, 0)
 	return api.DeleteTopic204Response{}, nil
 }
 

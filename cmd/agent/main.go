@@ -1,7 +1,8 @@
 // Command agent keeps the settings the platform owns in place on one
 // customer's Kafka cluster, turning on tiered storage for every topic that
 // can use it and setting up client telemetry (KIP-714), and measures each
-// consumer group's lag in seconds. It runs next to the cluster, connects to
+// consumer group's lag in seconds, and records the cluster's changes for the
+// console's timeline (docs/timeline.md). It runs next to the cluster, connects to
 // the internal mTLS listener as the changeport-agent KafkaUser, and serves its
 // metrics and health on -listen.
 package main
@@ -29,6 +30,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/ReneP92/changeport/internal/agent"
+	"github.com/ReneP92/changeport/internal/events"
 )
 
 func main() {
@@ -50,6 +52,9 @@ type options struct {
 	ca        string
 	interval  time.Duration
 	listen    string
+	// tenant is the customer the cluster is, and eventsURL where its
+	// changes are recorded.
+	tenant, eventsURL string
 	// clientMetricsInterval is how often clients push their metrics.
 	clientMetricsInterval time.Duration
 }
@@ -65,11 +70,16 @@ func run(ctx context.Context, args []string, stderr io.Writer) error {
 	fs.DurationVar(&o.interval, "interval", 30*time.Second, "how often to reconcile")
 	fs.DurationVar(&o.clientMetricsInterval, "client-metrics-interval", time.Minute, "how often clients push their metrics to the brokers")
 	fs.StringVar(&o.listen, "listen", ":8080", "address to serve /metrics, /healthz and /readyz on")
+	fs.StringVar(&o.tenant, "tenant", "", "the customer whose cluster this is, which its events carry")
+	fs.StringVar(&o.eventsURL, "events-url", "", "VictoriaLogs to record the cluster's changes in for the timeline; none without")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if o.bootstrap == "" {
 		return errors.New("-bootstrap is required")
+	}
+	if o.eventsURL != "" && o.tenant == "" {
+		return errors.New("-events-url needs -tenant")
 	}
 	logger := slog.New(slog.NewJSONHandler(stderr, nil))
 
@@ -97,6 +107,34 @@ func run(ctx context.Context, args []string, stderr io.Writer) error {
 	}()
 
 	logger.Info("agent started", "bootstrap", o.bootstrap, "interval", o.interval.String())
+	if o.eventsURL != "" {
+		store, err := events.NewClient(o.eventsURL)
+		if err != nil {
+			return err
+		}
+		recorder := events.NewRecorder(store, logger, events.RecorderOptions{Registry: registry})
+		recorded := make(chan struct{})
+		go func() { recorder.Run(ctx); close(recorded) }()
+		// The last events get written before the agent exits.
+		defer func() { <-recorded }()
+		changes := &agent.Changes{Admin: admin, Recorder: recorder, Tenant: o.tenant}
+		// Changes are watched in their own loop too, and their failures do
+		// not affect health either.
+		go func() {
+			ticker := time.NewTicker(o.interval)
+			defer ticker.Stop()
+			for {
+				if err := changes.Watch(ctx); err != nil && ctx.Err() == nil {
+					logger.Error("watching the cluster for changes failed", "error", err)
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+	}
 	// Lag is measured in its own loop, so that a slow measurement never delays
 	// the tiering reconciliation; its failures do not affect health.
 	go func() {

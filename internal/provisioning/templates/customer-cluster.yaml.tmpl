@@ -548,6 +548,9 @@ spec:
           image: {{ . }}
           args:
             - "-bootstrap={{ $.ClusterName }}-kafka-bootstrap.{{ $.Namespace }}.svc:{{ $.InternalPort }}"
+            # The cluster's changes go to the timeline (docs/timeline.md).
+            - "-tenant={{ $.Tenant }}"
+            - "-events-url={{ $.EventsURL }}"
 {{- with $.Platform.ClientMetricsInterval }}
             - "-client-metrics-interval={{ . }}"
 {{- end }}

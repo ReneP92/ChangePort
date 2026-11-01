@@ -54,6 +54,9 @@ consumer group's lag with `consumer_group` and `topic` added:
 | `changeport_consumergroup_lag_capped` | 1 when the lag is older than 23 hours, so `lag_seconds` is a lower bound |
 | `changeport_consumergroup_committed_timestamp_seconds` | When the group's committed offsets on the topic last moved, as far as the agent saw since it started |
 | `changeport_agent_last_success_timestamp_seconds` | When the agent last reconciled the cluster's topic settings |
+| `changeport_events_written_total` | Changes the agent recorded for the timeline ([timeline.md](timeline.md)); the provisioner exports its own |
+| `changeport_events_write_failures_total` | Failed writes to the timeline's store, which are retried |
+| `changeport_events_dropped_total` | Changes dropped because too many waited for the store |
 
 The agent measures lag every 30 seconds without reading any message. It
 reads each group's committed offsets and the partitions' end offsets, looks

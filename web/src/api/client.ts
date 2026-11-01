@@ -32,9 +32,8 @@ export type AlertList = components["schemas"]["AlertList"];
 export type AlertSettings = components["schemas"]["AlertSettings"];
 export type AlertThresholds = components["schemas"]["AlertThresholds"];
 export type ReceiverKind = components["schemas"]["ReceiverKind"];
-export type ThroughputRange = NonNullable<
-  NonNullable<paths["/api/customer/throughput"]["get"]["parameters"]["query"]>["range"]
->;
+export type ThroughputRange = components["schemas"]["TimeRange"];
+export type TimelineEvent = components["schemas"]["TimelineEvent"];
 
 /** An error the console's API answered, with its problem description. */
 export class ApiError extends Error {

@@ -12,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/ReneP92/changeport/internal/events"
 )
 
 var root = filepath.Join("..", "..")
@@ -53,7 +55,9 @@ var metricName = regexp.MustCompile(`\b(changeport|debezium|kafka_connect)_[a-z_
 func TestRules(t *testing.T) {
 	// Operators' alerts link the runbook; customers' may link the guide to
 	// their alerts instead.
-	documents := map[string][]string{"runbook.md": anchors(t, "runbook.md"), "alerts.md": anchors(t, "alerts.md")}
+	documents := map[string][]string{
+		"runbook.md": anchors(t, "runbook.md"), "alerts.md": anchors(t, "alerts.md"), "timeline.md": anchors(t, "timeline.md"),
+	}
 	documented, err := os.ReadFile(filepath.Join(root, "docs", "metrics-labels.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -67,12 +71,18 @@ func TestRules(t *testing.T) {
 		if rule.Expr == "" {
 			t.Errorf("%s has no expression", rule.Alert)
 		}
-		// Only the Watchdog, which always fires, neither pages nor warns.
-		if severity := rule.Labels["severity"]; severity != "page" && severity != "warn" && (rule.Alert != "Watchdog" || severity != "none") {
+		// Only the Watchdog, which always fires, and the timeline's alerts,
+		// which mark changes, neither page nor warn.
+		timeline := rule.Labels["audience"] == events.TimelineAudience
+		if severity := rule.Labels["severity"]; severity != "page" && severity != "warn" && ((rule.Alert != "Watchdog" && !timeline) || severity != "none") {
 			t.Errorf("%s has severity %q, want page or warn", rule.Alert, severity)
 		}
-		if audience := rule.Labels["audience"]; audience != "operator" && audience != "customer" {
-			t.Errorf("%s has audience %q, want operator or customer", rule.Alert, audience)
+		if audience := rule.Labels["audience"]; audience != "operator" && audience != "customer" && !timeline {
+			t.Errorf("%s has audience %q, want operator, customer or timeline", rule.Alert, audience)
+		}
+		// The provisioner records only the timeline's alerts it knows.
+		if timeline && rule.Alert != events.ThrottlingAlert {
+			t.Errorf("%s is for the timeline, which records only %s", rule.Alert, events.ThrottlingAlert)
 		}
 		for _, annotation := range []string{"summary", "description", "runbook"} {
 			if rule.Annotations[annotation] == "" {
@@ -100,8 +110,11 @@ func TestRules(t *testing.T) {
 		if document == "alerts.md" && rule.Labels["audience"] != "customer" {
 			t.Errorf("%s is for operators, but links the customers' guide", rule.Alert)
 		}
+		if (document == "timeline.md") != timeline {
+			t.Errorf("%s links %s; only the timeline's alerts, and all of them, link docs/timeline.md", rule.Alert, document)
+		}
 		if !strings.HasPrefix(rule.Annotations["runbook"], docsURL) || !slices.Contains(documents[document], anchor) {
-			t.Errorf("%s's runbook %q is no section of docs/runbook.md or docs/alerts.md", rule.Alert, rule.Annotations["runbook"])
+			t.Errorf("%s's runbook %q is no section of docs/runbook.md, docs/alerts.md or docs/timeline.md", rule.Alert, rule.Annotations["runbook"])
 		}
 		for _, name := range metricName.FindAllString(rule.Expr, -1) {
 			if !strings.Contains(string(documented), "`"+name+"`") {

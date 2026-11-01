@@ -25,7 +25,9 @@ import (
 	"github.com/ReneP92/changeport/internal/clusters"
 	"github.com/ReneP92/changeport/internal/console"
 	"github.com/ReneP92/changeport/internal/console/ui"
+	"github.com/ReneP92/changeport/internal/events"
 	"github.com/ReneP92/changeport/internal/metrics"
+	"github.com/ReneP92/changeport/internal/provisioning"
 )
 
 func main() {
@@ -49,6 +51,8 @@ func run(ctx context.Context, args []string) error {
 	kubeContext := fs.String("context", "", "kubeconfig context to use (default: the current context, or the pod's service account in a cluster)")
 	allowPrivateDatabases := fs.Bool("allow-private-databases", false,
 		"let Postgres sources' databases be on private networks, as on kind, where a Postgres stands in for customers'")
+	eventsURL := fs.String("events-url", envOr("CHANGEPORT_EVENTS_URL", provisioning.EventsURL),
+		"address of VictoriaLogs, which holds the change timeline")
 	alertmanagerURL := fs.String("alertmanager-url", envOr("CHANGEPORT_ALERTMANAGER_URL", "http://alertmanager.metrics.svc:9093"),
 		"address of Alertmanager, which holds the customers' active alerts")
 	allowPrivateReceivers := fs.Bool("allow-private-receivers", false,
@@ -81,6 +85,15 @@ func run(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	timeline, err := events.NewClient(*eventsURL)
+	if err != nil {
+		return err
+	}
+	recorder := events.NewRecorder(timeline, logger, events.RecorderOptions{})
+	recorded := make(chan struct{})
+	go func() { recorder.Run(ctx); close(recorded) }()
+	// The last changes users made get written before the console exits.
+	defer func() { <-recorded }()
 	kafka := clusters.NewPool(console.KubeSecrets{Client: kube}, logger)
 	defer kafka.Close()
 
@@ -99,6 +112,8 @@ func run(ctx context.Context, args []string) error {
 			URL: *alertmanagerURL, HTTP: &http.Client{Timeout: 10 * time.Second},
 		},
 		AlertSettings: console.KubeAlertSettings{Client: kube},
+		Events:        timeline,
+		Recorder:      recorder,
 		Receivers:     console.Receivers{AllowPrivate: *allowPrivateReceivers},
 		// The addresses the platform's NAT gateways give its connections
 		// to the internet (Terraform's nat_public_ips).

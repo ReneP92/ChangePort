@@ -12,11 +12,13 @@ import { useAlerts, useMe } from "@/api/queries";
 import { Notice } from "@/components/Notice";
 import { Home } from "@/pages/Home";
 import { AlertsPage } from "@/pages/alerts/AlertsPage";
+import { ConsumerGroupPage } from "@/pages/consumer-groups/ConsumerGroupPage";
 import { OperatorCustomer } from "@/pages/operator/OperatorCustomer";
 import { OperatorCustomers } from "@/pages/operator/OperatorCustomers";
 import { NewSource } from "@/pages/sources/NewSource";
 import { SourcePage } from "@/pages/sources/SourcePage";
 import { Sources } from "@/pages/sources/Sources";
+import { TopicPage } from "@/pages/topics/TopicPage";
 import { cn } from "@/lib/utils";
 
 /** The console behind Clerk sign-in. */
@@ -72,6 +74,8 @@ function SignedIn() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/alerts" element={<AlertsPage />} />
+        <Route path="/topics/:name" element={<TopicPage />} />
+        <Route path="/consumer-groups/:group" element={<ConsumerGroupPage />} />
         <Route path="/sources" element={<Sources />} />
         <Route path="/sources/new" element={<NewSource />} />
         <Route path="/sources/:name" element={<SourcePage />} />

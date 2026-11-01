@@ -58,7 +58,12 @@ export function TopicsCard({ admin }: { admin: boolean }) {
                   <tr key={topic.name} className="border-b last:border-0">
                     <td className="py-2 font-medium">
                       <span className="flex items-center gap-2">
-                        {topic.name}
+                        <Link
+                          to={`/topics/${encodeURIComponent(topic.name)}`}
+                          className="underline-offset-4 hover:underline"
+                        >
+                          {topic.name}
+                        </Link>
                         <AlertBadge alerts={alertsAbout(alerts.data, { topic: topic.name })} />
                         {topic.source && (
                           <Badge variant="outline" asChild>

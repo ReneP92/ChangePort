@@ -85,11 +85,13 @@ CONFLUENT_KAFKA_PYTHON=2.16.0
 
 # What runs on the kind control-plane node, apart from customers' brokers on
 # the workers (deploy/overlays/kind): the metrics and alerting pipeline, with
-# its alert receiver, and the provisioner, whose image is built locally.
+# its alert receiver, the timeline's store, and the provisioner, whose image
+# is built locally.
 # Images are loaded by tag: one saved by digest alone has no name to import
 # under, and containerd then fails to create its containers.
 KIND_CONTROL_PLANE_IMAGES=(
   victoriametrics/victoria-metrics:v1.154.1
+  victoriametrics/victoria-logs:v1.53.0
   victoriametrics/vmalert:v1.154.1
   quay.io/prometheus/alertmanager:v0.34.2
   python:3.13.17-slim

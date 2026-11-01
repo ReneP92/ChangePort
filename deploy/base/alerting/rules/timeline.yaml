@@ -1,0 +1,25 @@
+# The timeline's alerts (docs/timeline.md): they mark when something in a
+# customer's cluster started and stopped, rather than call for action.
+# Alertmanager sends them only to the provisioner, which records each as two
+# events, when it fired and when it resolved; the console shows them on its
+# timeline.
+groups:
+  - name: timeline
+    rules:
+      # The brokers throttle a client, as it reports itself (KIP-714): any
+      # throttling at all, unlike the customer's ClientThrottled alert, which
+      # has a threshold. The platform's own clients, which connect with
+      # certificates, are left out.
+      - alert: TimelineClientThrottled
+        expr: >-
+          max by (tenant, cluster, env, client_id, principal) (
+            clients_org_apache_kafka_producer_produce_throttle_time_max{principal!~"User:CN=.*"}
+            or clients_org_apache_kafka_consumer_fetch_manager_fetch_throttle_time_max{principal!~"User:CN=.*"}
+          ) > 0
+        labels:
+          audience: timeline
+          severity: none
+        annotations:
+          summary: "The brokers throttle client {{ $labels.client_id }} of {{ $labels.tenant }}"
+          description: "It exceeds a quota, so the brokers delay its requests."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/timeline.md#throttling

@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -26,11 +28,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
 	"github.com/ReneP92/changeport/internal/cdc"
 	"github.com/ReneP92/changeport/internal/controller"
+	"github.com/ReneP92/changeport/internal/events"
 	"github.com/ReneP92/changeport/internal/provisioning"
 )
 
@@ -335,6 +340,8 @@ func runController(ctx context.Context, args []string, logger *slog.Logger, stde
 	probeAddress := fs.String("probe-address", ":8081", "address of the /healthz and /readyz endpoints")
 	leaderElection := fs.Bool("leader-elect", false, "elect a leader, so that only one of several replicas reconciles")
 	leaderNamespace := fs.String("leader-election-namespace", "", "namespace of the leader election lease (default: the pod's own)")
+	eventsURL := fs.String("events-url", provisioning.EventsURL, `VictoriaLogs to record brokers' restarts and clients' throttling in for the timeline, or "" for none`)
+	eventsAddress := fs.String("events-address", ":8082", "address of the endpoint Alertmanager sends the timeline's alerts to")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -370,11 +377,8 @@ func runController(ctx context.Context, args []string, logger *slog.Logger, stde
 		Metrics: metricsserver.Options{BindAddress: *metricsAddress},
 		// Secrets are read one at a time by name, never watched across
 		// customers' namespaces.
-		Client: client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}}},
-		// The only ConfigMaps watched are Alertmanager's.
-		Cache: cache.Options{ByObject: map[client.Object]cache.ByObject{
-			&corev1.ConfigMap{}: {Namespaces: map[string]cache.Config{controller.AlertmanagerNamespace: {}}},
-		}},
+		Client:                  client.Options{Cache: &client.CacheOptions{DisableFor: []client.Object{&corev1.Secret{}}}},
+		Cache:                   cache.Options{ByObject: cacheByObject(*eventsURL != "")},
 		HealthProbeBindAddress:  *probeAddress,
 		LeaderElection:          *leaderElection,
 		LeaderElectionID:        "changeport-provisioner",
@@ -410,6 +414,11 @@ func runController(ctx context.Context, args []string, logger *slog.Logger, stde
 	if err := routing.SetupWithManager(mgr); err != nil {
 		return err
 	}
+	if *eventsURL != "" {
+		if err := setupTimeline(mgr, *eventsURL, *eventsAddress, logger); err != nil {
+			return err
+		}
+	}
 	if err := mgr.AddHealthzCheck("ping", healthz.Ping); err != nil {
 		return err
 	}
@@ -443,4 +452,53 @@ func restConfig(kubeContext string) (*rest.Config, error) {
 		return nil, fmt.Errorf("load kubeconfig: %w", err)
 	}
 	return config, nil
+}
+
+// cacheByObject narrows what the controller manager's cache holds: the only
+// ConfigMaps watched are Alertmanager's, and with the timeline, the only
+// pods and Events those of brokers and of Strimzi.
+func cacheByObject(timeline bool) map[client.Object]cache.ByObject {
+	byObject := map[client.Object]cache.ByObject{
+		&corev1.ConfigMap{}: {Namespaces: map[string]cache.Config{controller.AlertmanagerNamespace: {}}},
+	}
+	if timeline {
+		maps.Copy(byObject, controller.BrokerEventsCache())
+	}
+	return byObject
+}
+
+// setupTimeline records brokers' restarts, and the throttling of clients
+// that Alertmanager reports, in VictoriaLogs for the console's timeline
+// (docs/timeline.md).
+func setupTimeline(mgr ctrl.Manager, eventsURL, address string, logger *slog.Logger) error {
+	store, err := events.NewClient(eventsURL)
+	if err != nil {
+		return err
+	}
+	recorder := events.NewRecorder(store, logger, events.RecorderOptions{Registry: metrics.Registry})
+	if err := mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		recorder.Run(ctx)
+		return nil
+	})); err != nil {
+		return err
+	}
+	brokers := &controller.BrokerEvents{Client: mgr.GetClient(), Recorder: recorder, ReplacementGrace: 30 * time.Second}
+	if err := brokers.SetupWithManager(mgr); err != nil {
+		return err
+	}
+	routes := http.NewServeMux()
+	routes.Handle("/alertmanager", events.AlertmanagerHandler(recorder, logger))
+	server := &http.Server{Addr: address, Handler: routes, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second}
+	return mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
+		served := make(chan error, 1)
+		go func() { served <- server.ListenAndServe() }()
+		select {
+		case err := <-served:
+			return fmt.Errorf("serve the timeline's alerts: %w", err)
+		case <-ctx.Done():
+		}
+		shutdown, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		return server.Shutdown(shutdown)
+	}))
 }

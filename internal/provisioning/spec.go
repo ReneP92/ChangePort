@@ -44,6 +44,10 @@ const (
 	ConsoleUser = "changeport-console"
 	// ConsoleNamespace is where the console runs.
 	ConsoleNamespace = "changeport"
+	// EventsURL is the store of the change timeline, VictoriaLogs
+	// (deploy/base/victoria-logs), which every platform runs at this address
+	// and each customer's Kafka agent records its cluster's changes into.
+	EventsURL = "http://victoria-logs.metrics.svc:9428"
 	// ConsoleServiceAccount is who the console runs as; each customer
 	// namespace lets it read the Secrets in Spec.ConsoleSecrets.
 	ConsoleServiceAccount = "changeport-console"

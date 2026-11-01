@@ -372,16 +372,16 @@ func (e SourceTableStatusSnapshot) Valid() bool {
 	}
 }
 
-// Defines values for GetThroughputParamsRange.
+// Defines values for TimeRange.
 const (
-	N1h  GetThroughputParamsRange = "1h"
-	N24h GetThroughputParamsRange = "24h"
-	N6h  GetThroughputParamsRange = "6h"
-	N7d  GetThroughputParamsRange = "7d"
+	N1h  TimeRange = "1h"
+	N24h TimeRange = "24h"
+	N6h  TimeRange = "6h"
+	N7d  TimeRange = "7d"
 )
 
-// Valid indicates whether the value is a known member of the GetThroughputParamsRange enum.
-func (e GetThroughputParamsRange) Valid() bool {
+// Valid indicates whether the value is a known member of the TimeRange enum.
+func (e TimeRange) Valid() bool {
 	switch e {
 	case N1h:
 		return true
@@ -390,6 +390,48 @@ func (e GetThroughputParamsRange) Valid() bool {
 	case N6h:
 		return true
 	case N7d:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TimelineEventKind.
+const (
+	AclAdded          TimelineEventKind = "acl.added"
+	AclRemoved        TimelineEventKind = "acl.removed"
+	BrokerRestarted   TimelineEventKind = "broker.restarted"
+	ClientThrottled   TimelineEventKind = "client.throttled"
+	ClientUnthrottled TimelineEventKind = "client.unthrottled"
+	GroupRebalanced   TimelineEventKind = "group.rebalanced"
+	TopicConfig       TimelineEventKind = "topic.config"
+	TopicCreated      TimelineEventKind = "topic.created"
+	TopicDeleted      TimelineEventKind = "topic.deleted"
+	TopicPartitions   TimelineEventKind = "topic.partitions"
+)
+
+// Valid indicates whether the value is a known member of the TimelineEventKind enum.
+func (e TimelineEventKind) Valid() bool {
+	switch e {
+	case AclAdded:
+		return true
+	case AclRemoved:
+		return true
+	case BrokerRestarted:
+		return true
+	case ClientThrottled:
+		return true
+	case ClientUnthrottled:
+		return true
+	case GroupRebalanced:
+		return true
+	case TopicConfig:
+		return true
+	case TopicCreated:
+		return true
+	case TopicDeleted:
+		return true
+	case TopicPartitions:
 		return true
 	default:
 		return false
@@ -532,6 +574,13 @@ type ConsumerGroupLag struct {
 	Topic      string  `json:"topic"`
 }
 
+// ConsumerGroupLagHistory defines model for ConsumerGroupLagHistory.
+type ConsumerGroupLagHistory struct {
+	Range       string            `json:"range"`
+	StepSeconds int               `json:"stepSeconds"`
+	Topics      []TopicLagHistory `json:"topics"`
+}
+
 // ConsumerGroupLagList defines model for ConsumerGroupLagList.
 type ConsumerGroupLagList struct {
 	Groups []ConsumerGroupLag `json:"groups"`
@@ -572,6 +621,14 @@ type CustomerProfile string
 // CustomerList defines model for CustomerList.
 type CustomerList struct {
 	Customers []Customer `json:"customers"`
+}
+
+// EventList defines model for EventList.
+type EventList struct {
+	Events []TimelineEvent `json:"events"`
+
+	// Truncated Whether there were more events than the list holds; the oldest are left out
+	Truncated bool `json:"truncated"`
 }
 
 // Health The brokers, and the partitions' health from the brokers' metrics,
@@ -948,6 +1005,28 @@ type Throughput struct {
 	StepSeconds int     `json:"stepSeconds"`
 }
 
+// TimeRange defines model for TimeRange.
+type TimeRange string
+
+// TimelineEvent defines model for TimelineEvent.
+type TimelineEvent struct {
+	// Actor Who made the change, where Changeport knows it
+	Actor         *string           `json:"actor,omitempty"`
+	Broker        *string           `json:"broker,omitempty"`
+	ClientId      *string           `json:"clientId,omitempty"`
+	ConsumerGroup *string           `json:"consumerGroup,omitempty"`
+	Id            string            `json:"id"`
+	Kind          TimelineEventKind `json:"kind"`
+
+	// Message What happened, in plain language
+	Message string    `json:"message"`
+	Time    time.Time `json:"time"`
+	Topic   *string   `json:"topic,omitempty"`
+}
+
+// TimelineEventKind defines model for TimelineEvent.Kind.
+type TimelineEventKind string
+
 // Topic defines model for Topic.
 type Topic struct {
 	BytesInPerSecond  *float32 `json:"bytesInPerSecond,omitempty"`
@@ -973,6 +1052,12 @@ type Topic struct {
 	Tiered bool `json:"tiered"`
 }
 
+// TopicLagHistory defines model for TopicLagHistory.
+type TopicLagHistory struct {
+	LagSeconds []Point `json:"lagSeconds"`
+	Topic      string  `json:"topic"`
+}
+
 // TopicList defines model for TopicList.
 type TopicList struct {
 	Topics []Topic `json:"topics"`
@@ -993,6 +1078,9 @@ type TopicPolicy struct {
 
 // CustomerID defines model for CustomerID.
 type CustomerID = string
+
+// Range defines model for Range.
+type Range = TimeRange
 
 // SourceName defines model for SourceName.
 type SourceName = string
@@ -1021,6 +1109,20 @@ type NotReady = Problem
 // Unauthorized An error, after RFC 9457
 type Unauthorized = Problem
 
+// GetConsumerGroupLagParams defines parameters for GetConsumerGroupLag.
+type GetConsumerGroupLagParams struct {
+	// Range How far back to look, up to now
+	Range *Range `form:"range,omitempty" json:"range,omitempty"`
+}
+
+// ListEventsParams defines parameters for ListEvents.
+type ListEventsParams struct {
+	// Range How far back to look, up to now
+	Range         *Range  `form:"range,omitempty" json:"range,omitempty"`
+	Topic         *string `form:"topic,omitempty" json:"topic,omitempty"`
+	ConsumerGroup *string `form:"consumerGroup,omitempty" json:"consumerGroup,omitempty"`
+}
+
 // DeleteSourceParams defines parameters for DeleteSource.
 type DeleteSourceParams struct {
 	// Confirm The source's name, typed again
@@ -1029,12 +1131,12 @@ type DeleteSourceParams struct {
 
 // GetThroughputParams defines parameters for GetThroughput.
 type GetThroughputParams struct {
-	// Range How far back to look
-	Range *GetThroughputParamsRange `form:"range,omitempty" json:"range,omitempty"`
-}
+	// Range How far back to look, up to now
+	Range *Range `form:"range,omitempty" json:"range,omitempty"`
 
-// GetThroughputParamsRange defines parameters for GetThroughput.
-type GetThroughputParamsRange string
+	// Topic Only this topic's bytes
+	Topic *string `form:"topic,omitempty" json:"topic,omitempty"`
+}
 
 // ChangeAlertSettingsJSONRequestBody defines body for ChangeAlertSettings for application/json ContentType.
 type ChangeAlertSettingsJSONRequestBody = AlertThresholds
@@ -1104,6 +1206,12 @@ type ServerInterface interface {
 	// ListConsumerGroups The consumer groups' lag per topic, with the last hour of it
 	// (GET /api/customer/consumer-groups)
 	ListConsumerGroups(w http.ResponseWriter, r *http.Request)
+	// GetConsumerGroupLag How far behind a consumer group was on each topic it reads, over a range
+	// (GET /api/customer/consumer-groups/{group}/lag)
+	GetConsumerGroupLag(w http.ResponseWriter, r *http.Request, group string, params GetConsumerGroupLagParams)
+	// ListEvents The changes in the cluster over a range, for the timeline over the graphs (docs/timeline.md): all of them, or those about a topic, or about a consumer group and the topics it reads. Broker restarts show in each.
+	// (GET /api/customer/events)
+	ListEvents(w http.ResponseWriter, r *http.Request, params ListEventsParams)
 	// GetHealth The brokers and the partitions' health
 	// (GET /api/customer/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -1149,7 +1257,7 @@ type ServerInterface interface {
 	// GetSourceSQL The SQL for a change to a source's database, for organization admins
 	// (POST /api/customer/sources/{source}/sql)
 	GetSourceSQL(w http.ResponseWriter, r *http.Request, source SourceName)
-	// GetThroughput Bytes in and out per second over the whole cluster
+	// GetThroughput Bytes in and out per second over the whole cluster, or one topic
 	// (GET /api/customer/throughput)
 	GetThroughput(w http.ResponseWriter, r *http.Request, params GetThroughputParams)
 	// GetTopicPolicy The guardrails on the customer's topics, for the create dialog
@@ -1362,6 +1470,107 @@ func (siw *ServerInterfaceWrapper) ListConsumerGroups(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListConsumerGroups(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetConsumerGroupLag operation middleware
+func (siw *ServerInterfaceWrapper) GetConsumerGroupLag(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "group" -------------
+	var group string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "group", r.PathValue("group"), &group, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetConsumerGroupLagParams
+
+	// ------------- Optional query parameter "range" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "range", r.URL.Query(), &params.Range, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "range"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "range", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetConsumerGroupLag(w, r, group, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEvents operation middleware
+func (siw *ServerInterfaceWrapper) ListEvents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEventsParams
+
+	// ------------- Optional query parameter "range" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "range", r.URL.Query(), &params.Range, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "range"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "range", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "topic" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "topic", r.URL.Query(), &params.Topic, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "topic"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "topic", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "consumerGroup" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "consumerGroup", r.URL.Query(), &params.ConsumerGroup, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "consumerGroup"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "consumerGroup", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEvents(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1711,6 +1920,19 @@ func (siw *ServerInterfaceWrapper) GetThroughput(w http.ResponseWriter, r *http.
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "range"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "range", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "topic" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "topic", r.URL.Query(), &params.Topic, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "topic"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "topic", Err: err})
 		}
 		return
 	}
@@ -2066,6 +2288,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.RemoveAlertReceiver)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.SetAlertReceiver)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/throughput", wrapper.GetThroughput)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/events", wrapper.ListEvents)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups/{group}/lag", wrapper.GetConsumerGroupLag)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups", wrapper.ListConsumerGroups)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/customers", wrapper.ListCustomers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/customers", wrapper.ProvisionCustomer)
@@ -2997,6 +3221,191 @@ func (response ListConsumerGroups404JSONResponse) VisitListConsumerGroupsRespons
 type ListConsumerGroups503JSONResponse struct{ NotConfiguredJSONResponse }
 
 func (response ListConsumerGroups503JSONResponse) VisitListConsumerGroupsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConsumerGroupLagRequestObject struct {
+	Group  string `json:"group"`
+	Params GetConsumerGroupLagParams
+}
+
+type GetConsumerGroupLagResponseObject interface {
+	VisitGetConsumerGroupLagResponse(w http.ResponseWriter) error
+}
+
+type GetConsumerGroupLag200JSONResponse ConsumerGroupLagHistory
+
+func (response GetConsumerGroupLag200JSONResponse) VisitGetConsumerGroupLagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConsumerGroupLag400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetConsumerGroupLag400JSONResponse) VisitGetConsumerGroupLagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConsumerGroupLag401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetConsumerGroupLag401JSONResponse) VisitGetConsumerGroupLagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConsumerGroupLag403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetConsumerGroupLag403JSONResponse) VisitGetConsumerGroupLagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConsumerGroupLag404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetConsumerGroupLag404JSONResponse) VisitGetConsumerGroupLagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetConsumerGroupLag503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response GetConsumerGroupLag503JSONResponse) VisitGetConsumerGroupLagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEventsRequestObject struct {
+	Params ListEventsParams
+}
+
+type ListEventsResponseObject interface {
+	VisitListEventsResponse(w http.ResponseWriter) error
+}
+
+type ListEvents200JSONResponse EventList
+
+func (response ListEvents200JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEvents400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ListEvents400JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEvents401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListEvents401JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEvents403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListEvents403JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEvents404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListEvents404JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEvents503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ListEvents503JSONResponse) VisitListEventsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -5290,6 +5699,12 @@ type StrictServerInterface interface {
 	// ListConsumerGroups The consumer groups' lag per topic, with the last hour of it
 	// (GET /api/customer/consumer-groups)
 	ListConsumerGroups(ctx context.Context, request ListConsumerGroupsRequestObject) (ListConsumerGroupsResponseObject, error)
+	// GetConsumerGroupLag How far behind a consumer group was on each topic it reads, over a range
+	// (GET /api/customer/consumer-groups/{group}/lag)
+	GetConsumerGroupLag(ctx context.Context, request GetConsumerGroupLagRequestObject) (GetConsumerGroupLagResponseObject, error)
+	// ListEvents The changes in the cluster over a range, for the timeline over the graphs (docs/timeline.md): all of them, or those about a topic, or about a consumer group and the topics it reads. Broker restarts show in each.
+	// (GET /api/customer/events)
+	ListEvents(ctx context.Context, request ListEventsRequestObject) (ListEventsResponseObject, error)
 	// GetHealth The brokers and the partitions' health
 	// (GET /api/customer/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
@@ -5335,7 +5750,7 @@ type StrictServerInterface interface {
 	// GetSourceSQL The SQL for a change to a source's database, for organization admins
 	// (POST /api/customer/sources/{source}/sql)
 	GetSourceSQL(ctx context.Context, request GetSourceSQLRequestObject) (GetSourceSQLResponseObject, error)
-	// GetThroughput Bytes in and out per second over the whole cluster
+	// GetThroughput Bytes in and out per second over the whole cluster, or one topic
 	// (GET /api/customer/throughput)
 	GetThroughput(ctx context.Context, request GetThroughputRequestObject) (GetThroughputResponseObject, error)
 	// GetTopicPolicy The guardrails on the customer's topics, for the create dialog
@@ -5684,6 +6099,59 @@ func (sh *strictHandler) ListConsumerGroups(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListConsumerGroupsResponseObject); ok {
 		if err := validResponse.VisitListConsumerGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetConsumerGroupLag operation middleware
+func (sh *strictHandler) GetConsumerGroupLag(w http.ResponseWriter, r *http.Request, group string, params GetConsumerGroupLagParams) {
+	var request GetConsumerGroupLagRequestObject
+
+	request.Group = group
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetConsumerGroupLag(ctx, request.(GetConsumerGroupLagRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetConsumerGroupLag")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetConsumerGroupLagResponseObject); ok {
+		if err := validResponse.VisitGetConsumerGroupLagResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEvents operation middleware
+func (sh *strictHandler) ListEvents(w http.ResponseWriter, r *http.Request, params ListEventsParams) {
+	var request ListEventsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEvents(ctx, request.(ListEventsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEvents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEventsResponseObject); ok {
+		if err := validResponse.VisitListEventsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

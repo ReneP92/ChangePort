@@ -5,7 +5,8 @@
 # secrets are files of the Secret alertmanager-receivers (just
 # alerting-config). The provisioner adds a route before these for each
 # customer that has receivers, for the alerts meant for customers
-# (docs/alerts.md); the others' go nowhere but the console.
+# (docs/alerts.md); the others' go nowhere but the console. The timeline's
+# alerts go to the provisioner (docs/timeline.md).
 global:
   resolve_timeout: 5m
 route:
@@ -15,6 +16,14 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   routes:
+    # The timeline's alerts mark when something started and stopped, such as
+    # a client being throttled; they go only to the provisioner, which
+    # records them (docs/timeline.md). Their times come from the alerts, so
+    # they need not go out soon.
+    - matchers: ['audience="timeline"']
+      receiver: timeline
+      group_by: [alertname, tenant, client_id]
+      repeat_interval: 1h
     - matchers: ['alertname="Watchdog"']
       receiver: watchdog
       group_wait: 0s
@@ -33,6 +42,10 @@ inhibit_rules:
     equal: [tenant, cluster]
 receivers:
   - name: none
+  - name: timeline
+    webhook_configs:
+      - url: http://changeport-provisioner.changeport.svc:8082/alertmanager
+        send_resolved: true
   - name: pagerduty
     pagerduty_configs:
       - routing_key_file: /etc/alertmanager/receivers/pagerduty-routing-key

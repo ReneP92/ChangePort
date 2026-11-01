@@ -226,6 +226,10 @@ type fixture struct {
 	// databases.
 	sources   *fakeSources
 	databases *fakeDatabases
+	// events are the customers' timelines, and recorded the changes the
+	// console recorded on them.
+	events   *fakeEvents
+	recorded *fakeRecorder
 	// alerts are the customers' active alerts, and alertSettings their
 	// settings.
 	alerts        *fakeAlerts
@@ -251,6 +255,8 @@ func newFixture(t *testing.T) *fixture {
 		sources:       newFakeSources(),
 		databases:     &fakeDatabases{},
 		alerts:        newFakeAlerts(),
+		events:        newFakeEvents(),
+		recorded:      &fakeRecorder{},
 		alertSettings: &fakeAlertSettings{settings: map[string]*v1alpha1.AlertSettings{}},
 		log:           &bytes.Buffer{},
 	}
@@ -267,6 +273,9 @@ func newFixture(t *testing.T) *fixture {
 		Sources:       f.sources,
 		Databases:     f.databases,
 		Alerts:        f.alerts,
+		Events:        f.events,
+		Recorder:      f.recorded,
+		Users:         fakeUsers{"user_3": "Ada Lovelace"},
 		AlertSettings: f.alertSettings,
 		Receivers:     Receivers{Resolver: resolver{netip.MustParseAddr("93.184.215.14")}},
 		AlertPoll:     20 * time.Millisecond,
@@ -371,6 +380,8 @@ func TestAuthorizationMatrix(t *testing.T) {
 	routes["/api/customer/topic-policy"] = customerRoute(`"max":12`, `"replicationFactor":1`, `"maxNameLength":200`)
 	routes["/api/customer/alerts"] = customerRoute(`"summary":"acme-billing is behind"`, `"consumerGroup":"acme-billing"`, `{"alerts":[]}`)
 	routes["/api/customer/alert-settings"] = customerRoute(`"consumerLag":{"enabled":true,"seconds":600}`, `"receivers":{}`, `"percent":5`)
+	routes["/api/customer/events"] = customerRoute(`"message":"Topic acme-orders was created`, `"kind":"broker.restarted"`, `"events":[]`)
+	routes["/api/customer/consumer-groups/billing/lag"] = customerRoute(`"topic":"acme-orders"`, `"lagSeconds":[{`, `"topic":"globex-orders"`)
 	routes["/api/customer/topics/acme-orders/consumer-groups"] = customerRoute(`{"groups":[]}`, `{"groups":[]}`, `{"groups":[]}`)
 	// Only an organization's admins may download its credentials.
 	clientProperties := customerRoute("", "sasl.jaas.config=", "")
@@ -691,7 +702,7 @@ var fakeLags = []fakeLag{
 	{group: "changeport-registry", seconds: 1, messages: 1},
 }
 
-func (fakeMetrics) Instant(_ context.Context, tenant string, q metrics.Query, _ metrics.Filter, at time.Time) ([]metrics.Series, error) {
+func (fakeMetrics) Instant(_ context.Context, tenant string, q metrics.Query, filter metrics.Filter, at time.Time) ([]metrics.Series, error) {
 	if lag, ok := map[metrics.Query]func(fakeLag) float64{
 		metrics.LagSeconds:  func(l fakeLag) float64 { return l.seconds },
 		metrics.LagMessages: func(l fakeLag) float64 { return l.messages },
@@ -704,6 +715,9 @@ func (fakeMetrics) Instant(_ context.Context, tenant string, q metrics.Query, _ 
 	}[q]; ok {
 		var series []metrics.Series
 		for _, l := range fakeLags {
+			if filter.ConsumerGroup != "" && filter.ConsumerGroup != l.group {
+				continue
+			}
 			series = append(series, metrics.Series{
 				Labels: map[string]string{"consumer_group": l.group, "topic": tenant + "-orders"},
 				Points: []metrics.Point{{Time: at, Value: lag(l)}},
@@ -719,8 +733,11 @@ func (fakeMetrics) Instant(_ context.Context, tenant string, q metrics.Query, _ 
 	return []metrics.Series{{Labels: labels, Points: []metrics.Point{{Time: at, Value: value}}}}, nil
 }
 
-func (fakeMetrics) Range(_ context.Context, tenant string, q metrics.Query, _ metrics.Filter, start, end time.Time, step time.Duration) ([]metrics.Series, error) {
+func (fakeMetrics) Range(_ context.Context, tenant string, q metrics.Query, filter metrics.Filter, start, end time.Time, step time.Duration) ([]metrics.Series, error) {
 	if q == metrics.LagSeconds {
+		if filter.ConsumerGroup != "" && filter.ConsumerGroup != "billing" {
+			return nil, nil
+		}
 		// The billing group fell behind over the hour; the others have no
 		// history.
 		billing := metrics.Series{Labels: map[string]string{"consumer_group": "billing", "topic": tenant + "-orders"}}
@@ -735,6 +752,9 @@ func (fakeMetrics) Range(_ context.Context, tenant string, q metrics.Query, _ me
 	}
 	// A second topic, so that the series must be added up.
 	two := metrics.Series{Labels: map[string]string{"topic": tenant + "-payments"}, Points: one.Points}
+	if filter.Topic != "" {
+		return slices.DeleteFunc([]metrics.Series{one, two}, func(s metrics.Series) bool { return s.Labels["topic"] != filter.Topic }), nil
+	}
 	return []metrics.Series{one, two}, nil
 }
 
