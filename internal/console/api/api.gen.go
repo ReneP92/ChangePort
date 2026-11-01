@@ -1160,6 +1160,72 @@ type TopicPolicy struct {
 	RetentionPresets  []RetentionPreset `json:"retentionPresets"`
 }
 
+// Topology defines model for Topology.
+type Topology struct {
+	Groups []TopologyGroup `json:"groups"`
+
+	// Producers The producers that report their own metrics (KIP-714), by Kafka user and client ID
+	Producers []TopologyProducer `json:"producers"`
+
+	// Reads Consumer groups reading topics
+	Reads  []TopologyRead  `json:"reads"`
+	Topics []TopologyTopic `json:"topics"`
+
+	// Writes Producers writing to topics
+	Writes []TopologyWrite `json:"writes"`
+}
+
+// TopologyGroup defines model for TopologyGroup.
+type TopologyGroup struct {
+	LagMessages *int64 `json:"lagMessages,omitempty"`
+
+	// LagSeconds How far behind the group is on the topic it is most behind on
+	LagSeconds *float32 `json:"lagSeconds,omitempty"`
+	Members    int      `json:"members"`
+	Name       string   `json:"name"`
+}
+
+// TopologyProducer defines model for TopologyProducer.
+type TopologyProducer struct {
+	BytesPerSecond float32 `json:"bytesPerSecond"`
+	ClientId       string  `json:"clientId"`
+
+	// Id The Kafka user and client ID, which writes name
+	Id        string `json:"id"`
+	Principal string `json:"principal"`
+}
+
+// TopologyRead defines model for TopologyRead.
+type TopologyRead struct {
+	// BytesPerSecond As the group's members report it, if they do
+	BytesPerSecond *float32 `json:"bytesPerSecond,omitempty"`
+	Capped         bool     `json:"capped"`
+	Group          string   `json:"group"`
+	LagMessages    int64    `json:"lagMessages"`
+	LagSeconds     float32  `json:"lagSeconds"`
+	Topic          string   `json:"topic"`
+}
+
+// TopologyTopic defines model for TopologyTopic.
+type TopologyTopic struct {
+	BytesInPerSecond  float32 `json:"bytesInPerSecond"`
+	BytesOutPerSecond float32 `json:"bytesOutPerSecond"`
+	Name              string  `json:"name"`
+
+	// Source The Postgres source that writes the topic, if any
+	Source *string `json:"source,omitempty"`
+
+	// UnreportedBytesInPerSecond The bytes in per second that no producer reports, from clients that do not report their own metrics, such as older ones
+	UnreportedBytesInPerSecond float32 `json:"unreportedBytesInPerSecond"`
+}
+
+// TopologyWrite defines model for TopologyWrite.
+type TopologyWrite struct {
+	BytesPerSecond float32 `json:"bytesPerSecond"`
+	Producer       string  `json:"producer"`
+	Topic          string  `json:"topic"`
+}
+
 // CustomerID defines model for CustomerID.
 type CustomerID = string
 
@@ -1377,6 +1443,9 @@ type ServerInterface interface {
 	// TailTopic The topic's recent messages and then new ones as they arrive, as server-sent events, for organization admins: a message event with a TailMessage per message, and a skipped event with a TailSkipped when more arrive than the stream shows. Each tail is audited; no message is kept. The stream ends when the session token expires; open it again with resume, to go on where it ended.
 	// (GET /api/customer/topics/{topic}/tail)
 	TailTopic(w http.ResponseWriter, r *http.Request, topic TopicName, params TailTopicParams)
+	// GetTopology How data flows through the cluster now, for the topology map: the producers, topics and consumer groups, and the bytes per second between them over the last 5 minutes, with each group's lag
+	// (GET /api/customer/topology)
+	GetTopology(w http.ResponseWriter, r *http.Request)
 	// GetMe Who is signed in, and what they may see
 	// (GET /api/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
@@ -2199,6 +2268,20 @@ func (siw *ServerInterfaceWrapper) TailTopic(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetTopology operation middleware
+func (siw *ServerInterfaceWrapper) GetTopology(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTopology(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMe operation middleware
 func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request) {
 
@@ -2446,6 +2529,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.RemoveAlertReceiver)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.SetAlertReceiver)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/throughput", wrapper.GetThroughput)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topology", wrapper.GetTopology)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/events", wrapper.ListEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups/{group}/lag", wrapper.GetConsumerGroupLag)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups", wrapper.ListConsumerGroups)
@@ -5620,6 +5704,97 @@ func (response TailTopic503JSONResponse) VisitTailTopicResponse(w http.ResponseW
 	return err
 }
 
+type GetTopologyRequestObject struct {
+}
+
+type GetTopologyResponseObject interface {
+	VisitGetTopologyResponse(w http.ResponseWriter) error
+}
+
+type GetTopology200JSONResponse Topology
+
+func (response GetTopology200JSONResponse) VisitGetTopologyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTopology401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetTopology401JSONResponse) VisitGetTopologyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTopology403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetTopology403JSONResponse) VisitGetTopologyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTopology404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetTopology404JSONResponse) VisitGetTopologyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTopology409JSONResponse struct{ NotReadyJSONResponse }
+
+func (response GetTopology409JSONResponse) VisitGetTopologyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTopology503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response GetTopology503JSONResponse) VisitGetTopologyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMeRequestObject struct {
 }
 
@@ -6081,6 +6256,9 @@ type StrictServerInterface interface {
 	// TailTopic The topic's recent messages and then new ones as they arrive, as server-sent events, for organization admins: a message event with a TailMessage per message, and a skipped event with a TailSkipped when more arrive than the stream shows. Each tail is audited; no message is kept. The stream ends when the session token expires; open it again with resume, to go on where it ended.
 	// (GET /api/customer/topics/{topic}/tail)
 	TailTopic(ctx context.Context, request TailTopicRequestObject) (TailTopicResponseObject, error)
+	// GetTopology How data flows through the cluster now, for the topology map: the producers, topics and consumer groups, and the bytes per second between them over the last 5 minutes, with each group's lag
+	// (GET /api/customer/topology)
+	GetTopology(ctx context.Context, request GetTopologyRequestObject) (GetTopologyResponseObject, error)
 	// GetMe Who is signed in, and what they may see
 	// (GET /api/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
@@ -7075,6 +7253,30 @@ func (sh *strictHandler) TailTopic(w http.ResponseWriter, r *http.Request, topic
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(TailTopicResponseObject); ok {
 		if err := validResponse.VisitTailTopicResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTopology operation middleware
+func (sh *strictHandler) GetTopology(w http.ResponseWriter, r *http.Request) {
+	var request GetTopologyRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTopology(ctx, request.(GetTopologyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTopology")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTopologyResponseObject); ok {
+		if err := validResponse.VisitGetTopologyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -224,3 +224,19 @@ func TestQueriesAgainstVictoriaMetrics(t *testing.T) {
 		}
 	}
 }
+
+func TestClientQueriesLeaveOutThePlatformsClients(t *testing.T) {
+	got, err := Expr(ProducerBytes, "acme", Filter{})
+	want := `sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (rate(clients_org_apache_kafka_producer_topic_byte_total{tenant="acme", topic!="", principal!~"User:CN=.*"}[5m])))`
+	if err != nil || got != want {
+		t.Errorf("Expr(ProducerBytes) = %s, %v\nwant %s", got, err, want)
+	}
+	got, err = Expr(ConsumerBytes, "acme", Filter{Topic: "orders"})
+	want = `sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (rate(clients_org_apache_kafka_consumer_fetch_manager_bytes_consumed_total{tenant="acme", topic="orders", principal!~"User:CN=.*"}[5m])))`
+	if err != nil || got != want {
+		t.Errorf("Expr(ConsumerBytes, orders) = %s, %v\nwant %s", got, err, want)
+	}
+	if _, err := Expr(ConsumerBytes, "acme", Filter{ConsumerGroup: "billing"}); err == nil {
+		t.Error("Expr(ConsumerBytes) of a group succeeded; clients' series name no group")
+	}
+}

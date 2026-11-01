@@ -476,6 +476,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/customer/topology": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How data flows through the cluster now, for the topology map: the producers, topics and consumer groups, and the bytes per second between them over the last 5 minutes, with each group's lag */
+        get: operations["getTopology"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/customer/events": {
         parameters: {
             query?: never;
@@ -966,6 +983,55 @@ export interface components {
             stepSeconds: number;
             bytesIn: components["schemas"]["Point"][];
             bytesOut: components["schemas"]["Point"][];
+        };
+        Topology: {
+            /** @description The producers that report their own metrics (KIP-714), by Kafka user and client ID */
+            producers: components["schemas"]["TopologyProducer"][];
+            topics: components["schemas"]["TopologyTopic"][];
+            groups: components["schemas"]["TopologyGroup"][];
+            /** @description Producers writing to topics */
+            writes: components["schemas"]["TopologyWrite"][];
+            /** @description Consumer groups reading topics */
+            reads: components["schemas"]["TopologyRead"][];
+        };
+        TopologyProducer: {
+            /** @description The Kafka user and client ID, which writes name */
+            id: string;
+            clientId: string;
+            principal: string;
+            bytesPerSecond: number;
+        };
+        TopologyTopic: {
+            name: string;
+            bytesInPerSecond: number;
+            bytesOutPerSecond: number;
+            /** @description The bytes in per second that no producer reports, from clients that do not report their own metrics, such as older ones */
+            unreportedBytesInPerSecond: number;
+            /** @description The Postgres source that writes the topic, if any */
+            source?: string;
+        };
+        TopologyGroup: {
+            name: string;
+            members: number;
+            /** @description How far behind the group is on the topic it is most behind on */
+            lagSeconds?: number;
+            /** Format: int64 */
+            lagMessages?: number;
+        };
+        TopologyWrite: {
+            producer: string;
+            topic: string;
+            bytesPerSecond: number;
+        };
+        TopologyRead: {
+            group: string;
+            topic: string;
+            /** @description As the group's members report it, if they do */
+            bytesPerSecond?: number;
+            lagSeconds: number;
+            /** Format: int64 */
+            lagMessages: number;
+            capped: boolean;
         };
         /** @description A message of a topic's tail */
         TailMessage: {
@@ -2075,6 +2141,31 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    getTopology: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The topology */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Topology"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["NotReady"];
             503: components["responses"]["NotConfigured"];
         };
     };

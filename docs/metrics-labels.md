@@ -185,14 +185,16 @@ many clients count.
 
 The console never sends PromQL from the browser. It asks for named queries
 (`internal/metrics`): bytes in and out and messages in per topic, each
-topic's size on the brokers and in tiered storage, each consumer group's
-lag in seconds and messages and whether it is capped, and the cluster's health: under-replicated,
-under-min-ISR and offline partitions, active controllers, and active and
-fenced brokers, summed over the brokers or, for the controller's counts,
-taken from the active controller. The server writes the PromQL and always
-selects the signed-in customer's `tenant`, with any topic or consumer group
-quoted as a label value. The end-to-end test runs every named query against
-the local VictoriaMetrics.
+topic's size on the brokers and in tiered storage, each consumer group's lag
+in seconds and messages and whether it is capped, the bytes per second each
+producer writes to and each consumer reads from each topic, as they report
+it themselves, for the topology map, and the cluster's health:
+under-replicated, under-min-ISR and offline partitions, active controllers,
+and active and fenced brokers, summed over the brokers or, for the
+controller's counts, taken from the active controller. The server writes the
+PromQL and always selects the signed-in customer's `tenant`, with any topic
+or consumer group quoted as a label value. The end-to-end test runs every
+named query against the local VictoriaMetrics.
 
 ## Relabel rules
 

@@ -384,6 +384,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 	routes["/api/customer/topic-policy"] = customerRoute(`"max":12`, `"replicationFactor":1`, `"maxNameLength":200`)
 	routes["/api/customer/alerts"] = customerRoute(`"summary":"acme-billing is behind"`, `"consumerGroup":"acme-billing"`, `{"alerts":[]}`)
 	routes["/api/customer/alert-settings"] = customerRoute(`"consumerLag":{"enabled":true,"seconds":600}`, `"receivers":{}`, `"percent":5`)
+	routes["/api/customer/topology"] = customerRoute(`"name":"acme-orders"`, `"group":"billing"`, `"name":"globex-orders"`)
 	routes["/api/customer/events"] = customerRoute(`"message":"Topic acme-orders was created`, `"kind":"broker.restarted"`, `"events":[]`)
 	routes["/api/customer/consumer-groups/billing/lag"] = customerRoute(`"topic":"acme-orders"`, `"lagSeconds":[{`, `"topic":"globex-orders"`)
 	routes["/api/customer/topics/acme-orders/consumer-groups"] = customerRoute(`{"groups":[]}`, `{"groups":[]}`, `{"groups":[]}`)
@@ -652,6 +653,10 @@ func (f *fakeClusters) DeleteTopic(_ context.Context, id, name string) error {
 	}
 	f.deleted = append(f.deleted, id+"/"+name)
 	return nil
+}
+
+func (f *fakeClusters) GroupMembers(_ context.Context, id string) (map[string][]string, error) {
+	return map[string][]string{"billing": {id + "-billing-1"}}, nil
 }
 
 func (f *fakeClusters) TopicConsumerGroups(_ context.Context, _, topic string) ([]string, error) {

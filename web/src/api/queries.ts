@@ -158,6 +158,21 @@ export function useTopics() {
   });
 }
 
+/**
+ * How data flows through the cluster now, for the topology map: producers,
+ * topics, consumer groups and the bytes between them. Clients report every
+ * few seconds to a minute, so it refreshes every 15 seconds.
+ */
+export function useTopology() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["customer", "topology", organization],
+    queryFn: async () => unwrap(await api.GET("/api/customer/topology")),
+    refetchInterval: 15_000,
+  });
+}
+
 /** The bytes in and out per second over range, of the cluster or a topic. */
 export function useThroughput(range: ThroughputRange, topic?: string) {
   const api = useApi();

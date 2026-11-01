@@ -6,6 +6,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* The topology map's edges: dashes flowing from producer to consumer. */
+  --animate-flow: flow 1.5s linear infinite;
   --font-heading: var(--font-sans);
   --font-sans: "Geist Variable", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -128,5 +130,11 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+@keyframes flow {
+  to {
+    stroke-dashoffset: -12;
   }
 }
