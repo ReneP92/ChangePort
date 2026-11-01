@@ -34,6 +34,9 @@ export type AlertThresholds = components["schemas"]["AlertThresholds"];
 export type ReceiverKind = components["schemas"]["ReceiverKind"];
 export type ThroughputRange = components["schemas"]["TimeRange"];
 export type TimelineEvent = components["schemas"]["TimelineEvent"];
+export type TailMessage = components["schemas"]["TailMessage"];
+export type TailPayload = components["schemas"]["TailPayload"];
+export type TailSkipped = components["schemas"]["TailSkipped"];
 
 /** An error the console's API answered, with its problem description. */
 export class ApiError extends Error {

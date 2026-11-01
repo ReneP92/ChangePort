@@ -473,6 +473,30 @@ spec:
           type: cluster
         operations: [Describe]
 ---
+# The user the console reads messages as, only to show admins a topic's
+# recent messages: it reads and describes topics, and nothing else. Without
+# access to consumer groups it never commits offsets, so a tail cannot
+# disturb the customer's consumers.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: {{ .TailUser }}
+  namespace: {{ .Namespace }}
+  labels:
+    strimzi.io/cluster: {{ quote .ClusterName }}
+{{- template "labels" . }}
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource:
+          type: topic
+          name: "*"
+          patternType: literal
+        operations: [Read, Describe]
+---
 # Lets the console's service account read the Secrets it needs in this
 # namespace, by name, and the pods, to show the brokers' health.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -1123,8 +1147,9 @@ spec:
 {{- end }}
 ---
 # Only the Connect worker reaches the registry, the source controller, which
-# decodes the snapshot notifications with its schemas, and the registry
-# gateway; the registry reaches only DNS and the brokers.
+# decodes the snapshot notifications with its schemas, the console, which
+# decodes the messages it shows admins, and the registry gateway; the
+# registry reaches only DNS and the brokers.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -1140,6 +1165,9 @@ spec:
         - podSelector: {{ template "connect-selector" . }}
         - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ .ConsoleNamespace }}}}
           podSelector: {matchLabels: {app.kubernetes.io/name: changeport-provisioner}}
+        # The console, which decodes the messages it shows with the schemas.
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ .ConsoleNamespace }}}}
+          podSelector: {matchLabels: {app.kubernetes.io/name: changeport-console}}
 {{- with .CDC.Gateway }}
         - podSelector: {matchLabels: {app.kubernetes.io/name: {{ .Name }}}}
 {{- end }}

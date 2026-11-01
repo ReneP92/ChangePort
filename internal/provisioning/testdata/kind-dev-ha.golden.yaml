@@ -316,6 +316,31 @@ spec:
           type: cluster
         operations: [Describe]
 ---
+# The user the console reads messages as, only to show admins a topic's
+# recent messages: it reads and describes topics, and nothing else. Without
+# access to consumer groups it never commits offsets, so a tail cannot
+# disturb the customer's consumers.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: changeport-tail
+  namespace: customer-acme
+  labels:
+    strimzi.io/cluster: "acme"
+    app.kubernetes.io/managed-by: changeport-provisioner
+    changeport.io/tenant: "acme"
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource:
+          type: topic
+          name: "*"
+          patternType: literal
+        operations: [Read, Describe]
+---
 # Lets the console's service account read the Secrets it needs in this
 # namespace, by name, and the pods, to show the brokers' health.
 apiVersion: rbac.authorization.k8s.io/v1
@@ -331,6 +356,7 @@ rules:
     resources: [secrets]
     resourceNames:
       - "changeport-console"
+      - "changeport-tail"
       - "acme-cluster-ca-cert"
       - "admin"
       - "external-listener-tls"

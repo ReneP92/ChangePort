@@ -138,10 +138,11 @@ func TestRenderCDCUsersCannotReadCustomerTopics(t *testing.T) {
 		}
 	}
 
-	// Of all users but the customer's own, only these read topics, all of
-	// them the platform's.
+	// Of all users but the customer's own and the console's tail, which
+	// shows admins messages (TestRenderTailUserOnlyReads), only these read
+	// topics, all of them the platform's.
 	for _, obj := range objects {
-		if obj.GetKind() != "KafkaUser" || obj.GetName() == AdminUser {
+		if obj.GetKind() != "KafkaUser" || obj.GetName() == AdminUser || obj.GetName() == TailUser {
 			continue
 		}
 		for _, acl := range acls(t, obj) {

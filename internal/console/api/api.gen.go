@@ -372,6 +372,30 @@ func (e SourceTableStatusSnapshot) Valid() bool {
 	}
 }
 
+// Defines values for TailPayloadFormat.
+const (
+	Avro   TailPayloadFormat = "avro"
+	Binary TailPayloadFormat = "binary"
+	Json   TailPayloadFormat = "json"
+	Text   TailPayloadFormat = "text"
+)
+
+// Valid indicates whether the value is a known member of the TailPayloadFormat enum.
+func (e TailPayloadFormat) Valid() bool {
+	switch e {
+	case Avro:
+		return true
+	case Binary:
+		return true
+	case Json:
+		return true
+	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TimeRange.
 const (
 	N1h  TimeRange = "1h"
@@ -432,6 +456,24 @@ func (e TimelineEventKind) Valid() bool {
 	case TopicDeleted:
 		return true
 	case TopicPartitions:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TailTopicParamsFrom.
+const (
+	Latest TailTopicParamsFrom = "latest"
+	Recent TailTopicParamsFrom = "recent"
+)
+
+// Valid indicates whether the value is a known member of the TailTopicParamsFrom enum.
+func (e TailTopicParamsFrom) Valid() bool {
+	switch e {
+	case Latest:
+		return true
+	case Recent:
 		return true
 	default:
 		return false
@@ -997,6 +1039,48 @@ type TableRef struct {
 	Schema string `json:"schema"`
 }
 
+// TailHeader defines model for TailHeader.
+type TailHeader struct {
+	Key string `json:"key"`
+
+	// Value A key, value or header value as shown, cut at a limit
+	Value *TailPayload `json:"value,omitempty"`
+}
+
+// TailMessage A message of a topic's tail
+type TailMessage struct {
+	Headers []TailHeader `json:"headers"`
+
+	// Key A key, value or header value as shown, cut at a limit
+	Key       *TailPayload `json:"key,omitempty"`
+	Offset    int64        `json:"offset"`
+	Partition int32        `json:"partition"`
+	Timestamp time.Time    `json:"timestamp"`
+
+	// Value A key, value or header value as shown, cut at a limit
+	Value *TailPayload `json:"value,omitempty"`
+}
+
+// TailPayload A key, value or header value as shown, cut at a limit
+type TailPayload struct {
+	// Format How text shows it; binary is hex, and avro is JSON decoded with the registry's schema
+	Format   TailPayloadFormat `json:"format"`
+	SchemaId *int64            `json:"schemaId,omitempty"`
+
+	// Size Its size in bytes
+	Size      int    `json:"size"`
+	Text      string `json:"text"`
+	Truncated bool   `json:"truncated"`
+}
+
+// TailPayloadFormat How text shows it; binary is hex, and avro is JSON decoded with the registry's schema
+type TailPayloadFormat string
+
+// TailSkipped How many messages the tail has skipped so far, to stay within its rate
+type TailSkipped struct {
+	Skipped int64 `json:"skipped"`
+}
+
 // Throughput defines model for Throughput.
 type Throughput struct {
 	BytesIn     []Point `json:"bytesIn"`
@@ -1106,6 +1190,9 @@ type NotFound = Problem
 // NotReady An error, after RFC 9457
 type NotReady = Problem
 
+// TooManyRequests An error, after RFC 9457
+type TooManyRequests = Problem
+
 // Unauthorized An error, after RFC 9457
 type Unauthorized = Problem
 
@@ -1137,6 +1224,18 @@ type GetThroughputParams struct {
 	// Topic Only this topic's bytes
 	Topic *string `form:"topic,omitempty" json:"topic,omitempty"`
 }
+
+// TailTopicParams defines parameters for TailTopic.
+type TailTopicParams struct {
+	// From Start with the topic's last messages, or only with new ones
+	From *TailTopicParamsFrom `form:"from,omitempty" json:"from,omitempty"`
+
+	// Resume Where to go on in each partition, as partition:offset pairs, such as 0:120,1:98
+	Resume *string `form:"resume,omitempty" json:"resume,omitempty"`
+}
+
+// TailTopicParamsFrom defines parameters for TailTopic.
+type TailTopicParamsFrom string
 
 // ChangeAlertSettingsJSONRequestBody defines body for ChangeAlertSettings for application/json ContentType.
 type ChangeAlertSettingsJSONRequestBody = AlertThresholds
@@ -1275,6 +1374,9 @@ type ServerInterface interface {
 	// ListTopicConsumerGroups The consumer groups with committed offsets on a topic
 	// (GET /api/customer/topics/{topic}/consumer-groups)
 	ListTopicConsumerGroups(w http.ResponseWriter, r *http.Request, topic TopicName)
+	// TailTopic The topic's recent messages and then new ones as they arrive, as server-sent events, for organization admins: a message event with a TailMessage per message, and a skipped event with a TailSkipped when more arrive than the stream shows. Each tail is audited; no message is kept. The stream ends when the session token expires; open it again with resume, to go on where it ended.
+	// (GET /api/customer/topics/{topic}/tail)
+	TailTopic(w http.ResponseWriter, r *http.Request, topic TopicName, params TailTopicParams)
 	// GetMe Who is signed in, and what they may see
 	// (GET /api/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
@@ -2042,6 +2144,61 @@ func (siw *ServerInterfaceWrapper) ListTopicConsumerGroups(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// TailTopic operation middleware
+func (siw *ServerInterfaceWrapper) TailTopic(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "topic" -------------
+	var topic TopicName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "topic", r.PathValue("topic"), &topic, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "topic", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TailTopicParams
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resume" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resume", r.URL.Query(), &params.Resume, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resume"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resume", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TailTopic(w, r, topic, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMe operation middleware
 func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request) {
 
@@ -2265,6 +2422,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topic-policy", wrapper.GetTopicPolicy)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/topics/{topic}", wrapper.DeleteTopic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topics/{topic}/consumer-groups", wrapper.ListTopicConsumerGroups)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topics/{topic}/tail", wrapper.TailTopic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topics", wrapper.ListTopics)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/customer/topics", wrapper.CreateTopic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/source-options", wrapper.GetSourceOptions)
@@ -2310,6 +2468,8 @@ type NotConfiguredJSONResponse Problem
 type NotFoundJSONResponse Problem
 
 type NotReadyJSONResponse Problem
+
+type TooManyRequestsJSONResponse Problem
 
 type UnauthorizedJSONResponse Problem
 
@@ -5310,6 +5470,156 @@ func (response ListTopicConsumerGroups503JSONResponse) VisitListTopicConsumerGro
 	return err
 }
 
+type TailTopicRequestObject struct {
+	Topic  TopicName `json:"topic"`
+	Params TailTopicParams
+}
+
+type TailTopicResponseObject interface {
+	VisitTailTopicResponse(w http.ResponseWriter) error
+}
+
+type TailTopic200TexteventStreamResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response TailTopic200TexteventStreamResponse) VisitTailTopicResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		// If w doesn't support flushing, fall back to io.Copy.
+		_, err := io.Copy(w, response.Body)
+		return err
+	}
+	// text/event-stream messages are typically small; use a
+	// modest buffer and flush after each chunk so clients see
+	// events immediately instead of waiting on OS buffering.
+	buf := make([]byte, 4096)
+	for {
+		n, err := response.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+			flusher.Flush()
+		}
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
+type TailTopic400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response TailTopic400JSONResponse) VisitTailTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TailTopic401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response TailTopic401JSONResponse) VisitTailTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TailTopic403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response TailTopic403JSONResponse) VisitTailTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TailTopic404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response TailTopic404JSONResponse) VisitTailTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TailTopic409JSONResponse struct{ NotReadyJSONResponse }
+
+func (response TailTopic409JSONResponse) VisitTailTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TailTopic429JSONResponse struct{ TooManyRequestsJSONResponse }
+
+func (response TailTopic429JSONResponse) VisitTailTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TailTopic503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response TailTopic503JSONResponse) VisitTailTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMeRequestObject struct {
 }
 
@@ -5768,6 +6078,9 @@ type StrictServerInterface interface {
 	// ListTopicConsumerGroups The consumer groups with committed offsets on a topic
 	// (GET /api/customer/topics/{topic}/consumer-groups)
 	ListTopicConsumerGroups(ctx context.Context, request ListTopicConsumerGroupsRequestObject) (ListTopicConsumerGroupsResponseObject, error)
+	// TailTopic The topic's recent messages and then new ones as they arrive, as server-sent events, for organization admins: a message event with a TailMessage per message, and a skipped event with a TailSkipped when more arrive than the stream shows. Each tail is audited; no message is kept. The stream ends when the session token expires; open it again with resume, to go on where it ended.
+	// (GET /api/customer/topics/{topic}/tail)
+	TailTopic(ctx context.Context, request TailTopicRequestObject) (TailTopicResponseObject, error)
 	// GetMe Who is signed in, and what they may see
 	// (GET /api/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
@@ -6735,6 +7048,33 @@ func (sh *strictHandler) ListTopicConsumerGroups(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListTopicConsumerGroupsResponseObject); ok {
 		if err := validResponse.VisitListTopicConsumerGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TailTopic operation middleware
+func (sh *strictHandler) TailTopic(w http.ResponseWriter, r *http.Request, topic TopicName, params TailTopicParams) {
+	var request TailTopicRequestObject
+
+	request.Topic = topic
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TailTopic(ctx, request.(TailTopicRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TailTopic")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TailTopicResponseObject); ok {
+		if err := validResponse.VisitTailTopicResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

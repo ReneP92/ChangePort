@@ -7,3 +7,7 @@ generate:
   std-http-server: true
   strict-server: true
   embedded-spec: false
+output-options:
+  # The schemas of server-sent events, such as TailMessage, are no request's
+  # or response's body, which pruning would drop.
+  skip-prune: true

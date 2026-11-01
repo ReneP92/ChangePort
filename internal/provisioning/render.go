@@ -54,6 +54,7 @@ type templateValues struct {
 	AgentUser              string
 	EventsURL              string
 	ConsoleUser            string
+	TailUser               string
 	InternalPort           int
 	// ConsoleNamespace, ConsoleServiceAccount and ConsoleSecrets let the
 	// console read the Secrets it needs, by name.
@@ -207,6 +208,7 @@ func RenderYAML(spec Spec) ([]byte, error) {
 		AgentUser:              AgentUser,
 		EventsURL:              EventsURL,
 		ConsoleUser:            ConsoleUser,
+		TailUser:               TailUser,
 		InternalPort:           InternalPort,
 
 		ConsoleNamespace:      ConsoleNamespace,

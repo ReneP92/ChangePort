@@ -42,6 +42,26 @@ reconfigured, rebalances, broker restarts, throttling (see
 
 ![A consumer group](screenshots/18-consumer-group-desktop.png)
 
+### A topic's messages
+
+Admins read a topic's messages on its page: its last 50, then new ones as
+they arrive, at most 20 a second, with how many more were skipped. Each
+shows its partition, offset, time, key and value; opened, the whole of it
+and its headers. Values show as indented JSON, as text, or as hex when
+binary, up to 8 KiB each. A Postgres source's topics hold Avro, which shows
+as JSON, decoded with the schemas of the source's registry. Here Ada reads
+the orders of the source `shop`.
+
+![A topic's messages](screenshots/19-topic-messages-desktop.png)
+
+The console reads the messages as a Kafka user of their own,
+`changeport-tail`, which may read topics and nothing else: it neither
+writes nor uses a consumer group, so it never moves a group's offsets. Only
+admins may read messages; members see why not. Every tail is audited when
+it starts and when it ends, with who read which topic, never with what the
+messages hold, and Changeport keeps no message: they pass through on their
+way to the browser. An organization runs at most three tails at once.
+
 Creating a topic within the guardrails, which the dialog applies as Ada
 types.
 

@@ -9,17 +9,18 @@ import { cn } from "@/lib/utils";
 import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { ThroughputCard } from "@/pages/overview/ThroughputCard";
+import { TailCard } from "@/pages/topics/TailCard";
 
 /**
- * One topic: its settings, its traffic with what changed meanwhile, and the
- * consumer groups reading it.
+ * One topic: its settings, its traffic with what changed meanwhile, the
+ * consumer groups reading it, and for admins its messages.
  */
 export function TopicPage() {
   const { name = "" } = useParams();
-  return <CustomerArea>{() => <Topic name={name} />}</CustomerArea>;
+  return <CustomerArea>{(_, admin) => <Topic name={name} admin={admin} />}</CustomerArea>;
 }
 
-function Topic({ name }: { name: string }) {
+function Topic({ name, admin }: { name: string; admin: boolean }) {
   const topics = useTopics();
   const alerts = useAlerts();
   if (topics.isPending) {
@@ -104,6 +105,7 @@ function Topic({ name }: { name: string }) {
       </Card>
       <ThroughputCard topic={topic.name} />
       <ReadersCard topic={topic.name} />
+      <TailCard topic={topic.name} admin={admin} />
     </main>
   );
 }

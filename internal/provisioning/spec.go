@@ -42,6 +42,11 @@ const (
 	// mTLS listener: it manages topics and reads cluster metadata, and cannot
 	// read or write messages.
 	ConsoleUser = "changeport-console"
+	// TailUser is the KafkaUser the console reads messages as, only to show
+	// admins a topic's recent messages (docs/console.md): it may read and
+	// describe topics, and nothing else, not even consumer groups, so a tail
+	// never commits offsets or writes.
+	TailUser = "changeport-tail"
 	// ConsoleNamespace is where the console runs.
 	ConsoleNamespace = "changeport"
 	// EventsURL is the store of the change timeline, VictoriaLogs
@@ -264,7 +269,7 @@ func (s Spec) ClusterCASecret() string { return s.ClusterName() + "-cluster-ca-c
 // listener, and the admin user's credentials and the public listener's CA
 // for the client.properties customers download.
 func (s Spec) ConsoleSecrets() []string {
-	return []string{ConsoleUser, s.ClusterCASecret(), AdminUser, ExternalListenerSecret}
+	return []string{ConsoleUser, TailUser, s.ClusterCASecret(), AdminUser, ExternalListenerSecret}
 }
 
 // BootstrapAddress is the public bootstrap address customers connect to.

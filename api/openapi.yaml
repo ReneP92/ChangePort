@@ -185,6 +185,53 @@ paths:
           $ref: "#/components/responses/NotReady"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/customer/topics/{topic}/tail:
+    get:
+      operationId: tailTopic
+      summary: >-
+        The topic's recent messages and then new ones as they arrive, as server-sent events, for
+        organization admins: a message event with a TailMessage per message, and a skipped event with a
+        TailSkipped when more arrive than the stream shows. Each tail is audited; no message is kept. The
+        stream ends when the session token expires; open it again with resume, to go on where it ended.
+      parameters:
+        - $ref: "#/components/parameters/TopicName"
+        - name: from
+          in: query
+          required: false
+          description: Start with the topic's last messages, or only with new ones
+          schema:
+            type: string
+            enum: [recent, latest]
+            default: recent
+        - name: resume
+          in: query
+          required: false
+          description: Where to go on in each partition, as partition:offset pairs, such as 0:120,1:98
+          schema:
+            type: string
+            maxLength: 4096
+            pattern: "^([0-9]+:[0-9]+)(,[0-9]+:[0-9]+)*$"
+      responses:
+        "200":
+          description: The stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/NotReady"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/customer/topics:
     post:
       operationId: createTopic
@@ -987,6 +1034,12 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/Problem"
+    TooManyRequests:
+      description: Too many of these at once; try again in a moment
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     NotReady:
       description: The cluster is not ready for this yet
       content:
@@ -1746,6 +1799,63 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Point"
+    TailMessage:
+      type: object
+      description: A message of a topic's tail
+      required: [partition, offset, timestamp, headers]
+      properties:
+        partition:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int64
+        timestamp:
+          type: string
+          format: date-time
+        key:
+          $ref: "#/components/schemas/TailPayload"
+        value:
+          $ref: "#/components/schemas/TailPayload"
+        headers:
+          type: array
+          items:
+            $ref: "#/components/schemas/TailHeader"
+    TailHeader:
+      type: object
+      required: [key]
+      properties:
+        key:
+          type: string
+        value:
+          $ref: "#/components/schemas/TailPayload"
+    TailPayload:
+      type: object
+      description: A key, value or header value as shown, cut at a limit
+      required: [format, text, size, truncated]
+      properties:
+        format:
+          type: string
+          enum: [json, text, binary, avro]
+          description: How text shows it; binary is hex, and avro is JSON decoded with the registry's schema
+        text:
+          type: string
+        size:
+          type: integer
+          description: Its size in bytes
+        truncated:
+          type: boolean
+        schemaId:
+          type: integer
+          format: int64
+    TailSkipped:
+      type: object
+      description: How many messages the tail has skipped so far, to stay within its rate
+      required: [skipped]
+      properties:
+        skipped:
+          type: integer
+          format: int64
     TimeRange:
       type: string
       enum: [1h, 6h, 24h, 7d]

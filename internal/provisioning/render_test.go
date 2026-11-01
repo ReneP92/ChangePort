@@ -158,7 +158,7 @@ func TestRenderProducesLabeledObjectsInApplyOrder(t *testing.T) {
 	}
 	// The tiered storage keys and the certificate come before the Kafka
 	// cluster that uses them.
-	wantKinds := []string{"Namespace", "Secret", "Certificate", "KafkaNodePool", "Kafka", "KafkaUser", "KafkaUser", "KafkaUser", "Role", "RoleBinding", "Deployment"}
+	wantKinds := []string{"Namespace", "Secret", "Certificate", "KafkaNodePool", "Kafka", "KafkaUser", "KafkaUser", "KafkaUser", "KafkaUser", "Role", "RoleBinding", "Deployment"}
 	if len(objects) != len(wantKinds) {
 		t.Fatalf("got %d objects, want %d", len(objects), len(wantKinds))
 	}
@@ -249,7 +249,7 @@ func TestRenderConsoleSecretAccess(t *testing.T) {
 				v, _, _ := unstructured.NestedStringSlice(r, "verbs")
 				return strings.Join(res, ","), strings.Join(n, ","), strings.Join(v, ",")
 			}
-			if res, names, verbs := rule(0); res != "secrets" || verbs != "get" || names != "changeport-console,acme-cluster-ca-cert,admin,external-listener-tls" {
+			if res, names, verbs := rule(0); res != "secrets" || verbs != "get" || names != "changeport-console,changeport-tail,acme-cluster-ca-cert,admin,external-listener-tls" {
 				t.Errorf("Role %s allows %s on %s named %s, want get on the console's secrets by name", obj.GetName(), verbs, res, names)
 			}
 			if res, names, verbs := rule(1); res != "pods" || verbs != "get,list" || names != "" {
@@ -432,5 +432,18 @@ func TestRenderDedicatedNodes(t *testing.T) {
 	}
 	if spread, _, _ := unstructured.NestedSlice(pod, "topologySpreadConstraints"); len(spread) != 1 {
 		t.Errorf("kind dev-ha brokers spread = %v, want one zone constraint", spread)
+	}
+}
+
+// The console reads messages only as the tail user, which may read and
+// describe topics and do nothing else: no writes, and no consumer groups,
+// so a tail never commits offsets.
+func TestRenderTailUserOnlyReads(t *testing.T) {
+	objects, err := Render(Spec{CustomerID: "acme", Profile: DevProfile, Platform: KindPlatform})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := acls(t, kafkaUser(t, objects, TailUser)), []string{"Read topic literal *", "Describe topic literal *"}; !slices.Equal(got, want) {
+		t.Errorf("the tail user's ACLs are %v, want %v", got, want)
 	}
 }

@@ -396,6 +396,21 @@ test("every screen of the console", async ({ browser }) => {
   await admin.goto("/sources/shop");
   await expectStreaming(admin, acme.id, "shop", 10 * 60_000);
   await shot(admin, "26-source");
+
+  // The messages of one of its topics, as Ada reads them on the topic's
+  // page: Debezium's records, Avro decoded with the source's registry.
+  await admin.goto("/topics/shop.public.orders");
+  const messages = main
+    .locator('[data-slot="card"]')
+    .filter({ has: admin.getByRole("heading", { name: "Messages" }) });
+  await messages.getByRole("button", { name: "Show messages" }).click();
+  const record = messages.getByRole("list", { name: "Messages" }).getByRole("listitem").first();
+  await expect(record).toContainText("Avro", { timeout: 30_000 });
+  await record.getByRole("button").click();
+  await messages.scrollIntoViewIfNeeded();
+  await shot(admin, "19-topic-messages");
+  await messages.getByRole("button", { name: "Stop" }).click();
+  await admin.goto("/sources/shop");
   await main.getByRole("button", { name: "Add tables" }).click();
   const addTables = admin.getByRole("dialog");
   await expect(addTables.getByRole("checkbox", { name: /public\.customers/ })).toBeChecked({

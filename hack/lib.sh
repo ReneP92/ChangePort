@@ -303,42 +303,42 @@ build_cache_args() {
 build_kafka_image() {
   log "Building $KAFKA_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args kafka) -t "$KAFKA_IMAGE" images/kafka >/dev/null
+  retry_registry docker buildx build --load --quiet $(build_cache_args kafka) -t "$KAFKA_IMAGE" images/kafka >/dev/null || return
   tag_content "$KAFKA_IMAGE"
 }
 
 build_connect_image() {
   log "Building $CONNECT_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args connect) -t "$CONNECT_IMAGE" images/connect >/dev/null
+  retry_registry docker buildx build --load --quiet $(build_cache_args connect) -t "$CONNECT_IMAGE" images/connect >/dev/null || return
   tag_content "$CONNECT_IMAGE"
 }
 
 build_agent_image() {
   log "Building $AGENT_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args agent) -t "$AGENT_IMAGE" -f images/agent/Dockerfile . >/dev/null
+  retry_registry docker buildx build --load --quiet $(build_cache_args agent) -t "$AGENT_IMAGE" -f images/agent/Dockerfile . >/dev/null || return
   tag_content "$AGENT_IMAGE"
 }
 
 build_registry_gateway_image() {
   log "Building $REGISTRY_GATEWAY_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args registry-gateway) -t "$REGISTRY_GATEWAY_IMAGE" -f images/registry-gateway/Dockerfile . >/dev/null
+  retry_registry docker buildx build --load --quiet $(build_cache_args registry-gateway) -t "$REGISTRY_GATEWAY_IMAGE" -f images/registry-gateway/Dockerfile . >/dev/null || return
   tag_content "$REGISTRY_GATEWAY_IMAGE"
 }
 
 build_provisioner_image() {
   log "Building $PROVISIONER_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args provisioner) -t "$PROVISIONER_IMAGE" -f images/provisioner/Dockerfile . >/dev/null
+  retry_registry docker buildx build --load --quiet $(build_cache_args provisioner) -t "$PROVISIONER_IMAGE" -f images/provisioner/Dockerfile . >/dev/null || return
   tag_content "$PROVISIONER_IMAGE"
 }
 
 build_console_image() {
   log "Building $CONSOLE_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args console) -t "$CONSOLE_IMAGE" -f images/console/Dockerfile . >/dev/null
+  retry_registry docker buildx build --load --quiet $(build_cache_args console) -t "$CONSOLE_IMAGE" -f images/console/Dockerfile . >/dev/null || return
   tag_content "$CONSOLE_IMAGE"
 }
 
