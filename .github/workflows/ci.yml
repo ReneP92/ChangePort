@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-  # Runs CI on demand, for example to check the end-to-end job for flakiness.
+  # Runs CI on demand, the only way the end-to-end jobs on kind run.
   workflow_dispatch:
 
 permissions:
@@ -103,9 +103,13 @@ jobs:
           retention-days: 14
 
   # The end-to-end suites on kind, each on a cluster of its own: the failover
-  # suite freezes a zone, which would disturb the core suite's tests.
+  # suite freezes a zone, which would disturb the core suite's tests. They
+  # take about half an hour, so for now pushes and pull requests rely on the
+  # other jobs, and these run only when CI is started by hand
+  # (docs/PROJECT_PLAN.md).
   e2e:
     name: End to end on kind (${{ matrix.suite }})
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     strategy:
@@ -162,9 +166,11 @@ jobs:
   # secret is not available, such as in pull requests from forks, it skips
   # with a notice.
   # The suite runs in two shards, each on a kind cluster and with Clerk test
-  # users of its own, as one runner took longer than its timeout.
+  # users of its own, as one runner took longer than its timeout. Like the
+  # other kind jobs, it runs only when CI is started by hand.
   console-e2e:
     name: Console end to end with Clerk (${{ matrix.shard }}/2)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     strategy:
