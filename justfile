@@ -146,8 +146,8 @@ console-test:
 
 # Run the console's Playwright tests on kind, signed in as Clerk test users (needs .env)
 [group('Images')]
-ui-e2e:
-    hack/ui-e2e.sh
+ui-e2e *args:
+    hack/ui-e2e.sh {{ args }}
 
 # Capture every screen of the console on kind into docs/screenshots (needs .env)
 [group('Images')]
