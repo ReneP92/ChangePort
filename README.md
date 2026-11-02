@@ -171,8 +171,7 @@ client telemetry, console, tiered storage, host access, connection guide,
 Postgres and CDC runtime tests, and removes the second customer again; its failover suite freezes a zone and drains a
 broker of a three-zone customer; its cdc suite takes a Postgres CDC source
 from created through streaming and paused to deleted. CI runs the three on
-separate clusters at once when started by hand; locally `just e2e` runs them
-one after the other:
+separate clusters at once; locally `just e2e` runs them one after the other:
 
 ```bash
 just provision acme
@@ -518,10 +517,8 @@ generated code.
 
 CI runs the same Go lint and tests, the web app's checks and Playwright
 tests, `just tf-fmt tf-validate tf-test`, `just shellcheck`, and `just check-text`,
-which fails on any em dash in the repository, on every push and pull
-request. The end-to-end jobs on kind take about half an hour, so they run
-only when CI is started by hand (`gh workflow run ci.yml --ref <branch>`):
-the whole end-to-end suite on a fresh kind cluster, `just dev-up e2e
+which fails on any em dash in the repository, and on every push and pull
+request the whole end-to-end suite on a fresh kind cluster: `just dev-up e2e
 platform-check`, where `platform-check` also server-side dry-runs the EKS
 overlays. When that job fails, it uploads
 the output of `hack/diagnostics.sh` (pods, events, resources and logs) as the
