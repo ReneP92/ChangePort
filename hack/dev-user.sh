@@ -7,7 +7,8 @@
 # - <developer>-demo+clerk_test@example.com, an admin of an organization of
 #   your own, "Demo (<developer>)", which it links to the demo customer, who
 #   sees exactly what a customer's admin sees.
-# It creates what is missing and changes nothing that is already right. The
+# Neither has a password, which Clerk would ask for instead of the code. It
+# creates what is missing and changes nothing that is already right. The
 # developer's name is CHANGEPORT_DEV_USER from .env, or else the start of
 # your git email address, up to a dot or plus sign; CHANGEPORT_DEV_USER=none
 # turns this off. It does nothing without .env or in CI, whose signed-in tests

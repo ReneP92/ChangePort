@@ -369,7 +369,8 @@ which Clerk's development instances verify with the code 424242:
   customer's admin sees: the demo's overview, topics and consumer groups,
   and nothing of the operator console.
 
-Neither may create organizations, and neither is a member of the other's
+Neither may create organizations or has a password, which Clerk would ask
+for instead of the code, and neither is a member of the other's
 organization. It creates only what is missing; `<you>` is
 `CHANGEPORT_DEV_USER` in `.env`, or else the start of your git email address.
 The signed-in tests' cleanup only removes their own `e2e...` users and

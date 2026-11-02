@@ -2,6 +2,7 @@ package devuser
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/clerk/clerk-sdk-go/v2/organization"
@@ -35,7 +36,7 @@ func (a API) FindUser(ctx context.Context, email string) (*User, error) {
 		return nil, err
 	}
 	found := list.Users[0]
-	return &User{ID: found.ID, CanCreateOrganizations: found.CreateOrganizationEnabled}, nil
+	return &User{ID: found.ID, CanCreateOrganizations: found.CreateOrganizationEnabled, HasPassword: found.PasswordEnabled}, nil
 }
 
 // CreateUser implements Clerk.
@@ -57,6 +58,16 @@ func (a API) CreateUser(ctx context.Context, email, firstName, lastName string) 
 func (a API) DisallowOrganizations(ctx context.Context, userID string) error {
 	_, err := a.users.Update(ctx, userID, &user.UpdateParams{CreateOrganizationEnabled: clerk.Bool(false)})
 	return err
+}
+
+// RemovePassword implements Clerk, with Clerk's remove_password endpoint,
+// which the SDK does not cover yet.
+func (a API) RemovePassword(ctx context.Context, userID string) error {
+	path, err := clerk.JoinPath("/users", userID, "remove_password")
+	if err != nil {
+		return err
+	}
+	return a.users.Backend.Call(ctx, clerk.NewAPIRequest(http.MethodPost, path), &clerk.User{})
 }
 
 // FindOrganization implements Clerk. Clerk's query matches parts of names,

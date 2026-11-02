@@ -13,6 +13,7 @@ import (
 type fakeClerk struct {
 	users         map[string]string // email to ID
 	creators      map[string]bool   // IDs of users who may create organizations
+	passwords     map[string]bool   // IDs of users with a password
 	organizations map[string]string // name to ID
 	roles         map[string]string // organization/user to role
 	calls         []string          // the changing calls, in order
@@ -22,6 +23,7 @@ func newFakeClerk() *fakeClerk {
 	return &fakeClerk{
 		users:         map[string]string{},
 		creators:      map[string]bool{},
+		passwords:     map[string]bool{},
 		organizations: map[string]string{"ChangePort": "org_staff", "Demo (renee)": "org_other"},
 		roles:         map[string]string{},
 	}
@@ -32,7 +34,13 @@ func (f *fakeClerk) FindUser(_ context.Context, email string) (*User, error) {
 	if !ok {
 		return nil, nil
 	}
-	return &User{ID: id, CanCreateOrganizations: f.creators[id]}, nil
+	return &User{ID: id, CanCreateOrganizations: f.creators[id], HasPassword: f.passwords[id]}, nil
+}
+
+func (f *fakeClerk) RemovePassword(_ context.Context, userID string) error {
+	f.passwords[userID] = false
+	f.calls = append(f.calls, "remove the password of "+userID)
+	return nil
 }
 
 func (f *fakeClerk) DisallowOrganizations(_ context.Context, userID string) error {
@@ -226,6 +234,34 @@ func TestEnsureStopsUsersFromCreatingOrganizations(t *testing.T) {
 		t.Errorf("calls = %q, want %q", clerk.calls, want)
 	}
 	if want := []string{"rene+clerk_test@example.com: stopped the user from creating organizations"}; !slices.Equal(result.Changes, want) {
+		t.Errorf("changes = %q, want %q", result.Changes, want)
+	}
+
+	clerk.calls = nil
+	if _, err := Ensure(t.Context(), clerk, Options{Developer: "rene", StaffOrganizationID: "org_staff"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(clerk.calls) != 0 {
+		t.Errorf("a second run made calls %q, want none", clerk.calls)
+	}
+}
+
+// A user with a password, as when the developer signed up through the
+// console before dev users were set up, loses it, as Clerk's sign-in would
+// ask for it instead of the code; a user without one is left alone.
+func TestEnsureRemovesPasswords(t *testing.T) {
+	clerk := newFakeClerk()
+	clerk.users["rene+clerk_test@example.com"] = "user_7"
+	clerk.passwords["user_7"] = true
+	clerk.roles["org_staff/user_7"] = AdminRole
+	result, err := Ensure(t.Context(), clerk, Options{Developer: "rene", StaffOrganizationID: "org_staff"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"remove the password of user_7"}; !slices.Equal(clerk.calls, want) {
+		t.Errorf("calls = %q, want %q", clerk.calls, want)
+	}
+	if want := []string{"rene+clerk_test@example.com: removed the user's password, so that sign-in asks for the code"}; !slices.Equal(result.Changes, want) {
 		t.Errorf("changes = %q, want %q", result.Changes, want)
 	}
 

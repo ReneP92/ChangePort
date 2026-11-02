@@ -10,7 +10,8 @@
 //
 // Each is a member of its own organization only. Like customers, neither may
 // create organizations: organizations are customers, which operators create
-// in the operator console. Ensure creates what is missing and changes nothing
+// in the operator console. Neither has a password, for which Clerk would ask
+// instead of the code. Ensure creates what is missing and changes nothing
 // that is already right.
 package devuser
 
@@ -34,6 +35,8 @@ type Clerk interface {
 	CreateUser(ctx context.Context, email, firstName, lastName string) (string, error)
 	// DisallowOrganizations stops the user from creating organizations.
 	DisallowOrganizations(ctx context.Context, userID string) error
+	// RemovePassword removes the user's password.
+	RemovePassword(ctx context.Context, userID string) error
 	// FindOrganization returns the ID of the organization named exactly
 	// name, or "".
 	FindOrganization(ctx context.Context, name string) (string, error)
@@ -56,6 +59,9 @@ type User struct {
 	// CanCreateOrganizations says whether the user may create organizations,
 	// which Clerk then offers in the organization switcher.
 	CanCreateOrganizations bool
+	// HasPassword says whether the user has a password, which Clerk's
+	// sign-in then asks for first.
+	HasPassword bool
 }
 
 // Options say whom to set up.
@@ -179,28 +185,34 @@ func (e ensurer) changed(account Account, change string) {
 	e.result.Changes = append(e.result.Changes, account.Email+": "+change)
 }
 
-// user makes sure the user with email exists and may not create
-// organizations.
+// user makes sure the user with email exists, may not create organizations
+// and has no password, such as one set when signing up through the console
+// before dev users were set up.
 func (e ensurer) user(ctx context.Context, email, firstName, lastName string) (Account, error) {
 	account := Account{Email: email}
 	user, err := e.clerk.FindUser(ctx, email)
 	if err != nil {
 		return account, fmt.Errorf("find user %s: %w", email, err)
 	}
-	switch {
-	case user == nil:
+	if user == nil {
 		if account.UserID, err = e.clerk.CreateUser(ctx, email, firstName, lastName); err != nil {
 			return account, fmt.Errorf("create user %s: %w", email, err)
 		}
 		e.changed(account, "created the user")
-	case user.CanCreateOrganizations:
-		account.UserID = user.ID
+		return account, nil
+	}
+	account.UserID = user.ID
+	if user.CanCreateOrganizations {
 		if err := e.clerk.DisallowOrganizations(ctx, user.ID); err != nil {
 			return account, fmt.Errorf("stop user %s from creating organizations: %w", email, err)
 		}
 		e.changed(account, "stopped the user from creating organizations")
-	default:
-		account.UserID = user.ID
+	}
+	if user.HasPassword {
+		if err := e.clerk.RemovePassword(ctx, user.ID); err != nil {
+			return account, fmt.Errorf("remove the password of user %s: %w", email, err)
+		}
+		e.changed(account, "removed the user's password, so that sign-in asks for the code")
 	}
 	return account, nil
 }
