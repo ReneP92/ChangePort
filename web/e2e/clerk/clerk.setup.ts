@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { isClerkAPIResponseError } from "@clerk/backend/errors";
 import { clerkSetup } from "@clerk/testing/playwright";
 import { test as setup } from "@playwright/test";
 import {
@@ -6,6 +7,7 @@ import {
   clerkClient,
   env,
   kubectl,
+  operatorEmail,
   runLabel,
   testEmail,
   testEmailPattern,
@@ -14,6 +16,7 @@ import {
   writeFixtures,
   type CustomerFixture,
   type Fixtures,
+  type UserFixture,
 } from "./fixtures";
 
 // Creates this run's Clerk users and organizations, and a customer for each
@@ -43,7 +46,7 @@ setup("create this run's users, organizations and customers", async () => {
     memberA: await user("member-a"),
     adminA: await user("admin-a"),
     memberB: await user("member-b"),
-    staff: await user("staff"),
+    staff: await sharedOperator(),
   };
   const organizationA = await clerk.organizations.createOrganization({ name: `E2E ${run} A` });
   const organizationB = await clerk.organizations.createOrganization({ name: `E2E ${run} B` });
@@ -53,7 +56,6 @@ setup("create this run's users, organizations and customers", async () => {
     [organizationA.id, users.memberA.id, "org:member"],
     [organizationA.id, users.adminA.id, "org:admin"],
     [organizationB.id, users.memberB.id, "org:member"],
-    [env("CHANGEPORT_STAFF_ORG_ID"), users.staff.id, "org:member"],
   ];
   for (const [organizationId, userId, role] of memberships) {
     await clerk.organizations.createOrganizationMembership({ organizationId, userId, role });
@@ -96,6 +98,48 @@ setup("create this run's users, organizations and customers", async () => {
 });
 
 /**
+ * Returns the operator every run shares, creating it the first time, and
+ * keeps it in the staff organization.
+ */
+async function sharedOperator(): Promise<UserFixture> {
+  const clerk = clerkClient();
+  const find = async () =>
+    (await clerk.users.getUserList({ emailAddress: [operatorEmail] })).data.at(0);
+  let operator = await find();
+  if (!operator) {
+    try {
+      operator = await clerk.users.createUser({
+        emailAddress: [operatorEmail],
+        firstName: "E2E",
+        lastName: "operator",
+        skipPasswordRequirement: true,
+      });
+    } catch (error) {
+      // Another run created it at the same moment.
+      operator = await find();
+      if (!operator) {
+        throw error;
+      }
+    }
+  }
+  try {
+    await clerk.organizations.createOrganizationMembership({
+      organizationId: env("CHANGEPORT_STAFF_ORG_ID"),
+      userId: operator.id,
+      role: "org:member",
+    });
+  } catch (error) {
+    const member =
+      isClerkAPIResponseError(error) &&
+      error.errors.some((e) => e.code === "already_a_member_in_organization");
+    if (!member) {
+      throw error;
+    }
+  }
+  return { id: operator.id, email: operatorEmail };
+}
+
+/**
  * The janitor: removes the test users, organizations and customers of runs
  * that started over an hour ago and never cleaned up, so that a crashed run
  * costs nothing for long. Younger ones may belong to a run in progress.
@@ -103,7 +147,9 @@ setup("create this run's users, organizations and customers", async () => {
 async function removeAbandoned(): Promise<void> {
   const clerk = clerkClient();
   const cutoff = Date.now() - abandonedAfterMs;
-  const users = await clerk.users.getUserList({ query: "+clerk_test@example.com", limit: 100 });
+  // Clerk's search finds nothing for a query with + or @ in it, so this
+  // searches for every test address and the pattern picks the runs' users.
+  const users = await clerk.users.getUserList({ query: "clerk_test", limit: 100 });
   for (const u of users.data) {
     const email = u.primaryEmailAddress?.emailAddress ?? "";
     if (testEmailPattern.test(email) && u.createdAt < cutoff) {
