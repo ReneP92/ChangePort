@@ -7,11 +7,6 @@ mock_provider "aws" {
       id = "o-abcdefghij"
     }
   }
-  mock_resource "aws_iam_openid_connect_provider" {
-    defaults = {
-      arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
-    }
-  }
   mock_resource "aws_ecr_repository" {
     defaults = {
       arn            = "arn:aws:ecr:us-east-1:123456789012:repository/changeport/mocked"
@@ -21,8 +16,9 @@ mock_provider "aws" {
 }
 
 variables {
-  name              = "changeport-test"
-  github_repository = "ReneP92/changeport"
+  name                     = "changeport-test"
+  github_repository        = "ReneP92/ChangePort"
+  github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
 }
 
 run "repositories" {
@@ -76,7 +72,7 @@ run "only_main_pushes" {
   command = apply
 
   assert {
-    condition     = jsondecode(aws_iam_role.push.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:ReneP92/changeport:ref:refs/heads/main"
+    condition     = jsondecode(aws_iam_role.push.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:ReneP92/ChangePort:ref:refs/heads/main"
     error_message = "Only workflow runs for pushes to main may assume the push role."
   }
   assert {

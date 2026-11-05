@@ -1,6 +1,6 @@
-# Base infrastructure of the prod environment, in its own AWS account.
-# Nothing here has been applied yet; the account and the state backend are
-# chosen in https://github.com/ReneP92/changeport/issues/10.
+# Base infrastructure of the prod environment, in its own AWS account of the
+# Organization (terraform/environments/management). Nothing here has been
+# applied yet; terraform/README.md lists the steps.
 
 provider "aws" {
   region = var.region
@@ -14,7 +14,23 @@ provider "aws" {
 }
 
 locals {
-  name = "changeport-prod"
+  name              = "changeport-prod"
+  github_repository = "ReneP92/ChangePort"
+}
+
+# The state of this account, which `just tf-bootstrap prod` creates.
+module "state_backend" {
+  source = "../../modules/state-backend"
+
+  name = local.name
+}
+
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+
+  name              = local.name
+  github_repository = local.github_repository
+  state_bucket_arn  = module.state_backend.bucket_arn
 }
 
 module "vpc" {
@@ -65,6 +81,7 @@ module "iam" {
 module "ecr" {
   source = "../../modules/ecr"
 
-  name              = local.name
-  github_repository = "ReneP92/changeport"
+  name                     = local.name
+  github_repository        = local.github_repository
+  github_oidc_provider_arn = module.github_oidc.provider_arn
 }

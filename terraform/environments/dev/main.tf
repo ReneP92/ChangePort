@@ -1,6 +1,6 @@
-# Base infrastructure of the dev environment, in its own AWS account.
-# Nothing here has been applied yet; the account and the state backend are
-# chosen in https://github.com/ReneP92/changeport/issues/10.
+# Base infrastructure of the dev environment, in its own AWS account of the
+# Organization (terraform/environments/management). Nothing here has been
+# applied yet; terraform/README.md lists the steps.
 
 provider "aws" {
   region = var.region
@@ -14,7 +14,23 @@ provider "aws" {
 }
 
 locals {
-  name = "changeport-dev"
+  name              = "changeport-dev"
+  github_repository = "ReneP92/ChangePort"
+}
+
+# The state of this account, which `just tf-bootstrap dev` creates.
+module "state_backend" {
+  source = "../../modules/state-backend"
+
+  name = local.name
+}
+
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+
+  name              = local.name
+  github_repository = local.github_repository
+  state_bucket_arn  = module.state_backend.bucket_arn
 }
 
 module "vpc" {

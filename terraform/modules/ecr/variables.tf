@@ -10,13 +10,18 @@ variable "repositories" {
 }
 
 variable "github_repository" {
-  description = "The GitHub repository whose workflows on main may push, as owner/name."
+  description = "The GitHub repository whose workflows on main may push, as owner/name, in the case GitHub shows it: the token's sub claim keeps it, and IAM compares it case-sensitively."
   type        = string
 
   validation {
     condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
     error_message = "Name the repository as owner/name."
   }
+}
+
+variable "github_oidc_provider_arn" {
+  description = "ARN of the account's GitHub Actions OpenID Connect provider (terraform/modules/github-oidc)."
+  type        = string
 }
 
 variable "keep_tagged_images" {
