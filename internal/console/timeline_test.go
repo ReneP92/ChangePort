@@ -78,6 +78,15 @@ func (f fakeUsers) Name(_ context.Context, userID string) (string, error) {
 	return "", errors.New("no such user")
 }
 
+// VerifiedEmail gives every user the address <user>@example.com, but
+// user_unverified none.
+func (f fakeUsers) VerifiedEmail(_ context.Context, userID string) (string, error) {
+	if userID == "user_unverified" {
+		return "", ErrNoVerifiedEmail
+	}
+	return userID + "@example.com", nil
+}
+
 func TestEventsOfARangeATopicAndAGroup(t *testing.T) {
 	f := newFixture(t)
 	member := f.signer.token(t, session{user: "user_2", org: "org_acme", role: "member"})

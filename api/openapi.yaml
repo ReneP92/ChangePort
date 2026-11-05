@@ -901,6 +901,141 @@ paths:
           $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/trial-requests:
+    post:
+      operationId: requestTrial
+      summary: Request a trial
+      description: >-
+        For a signed-in user whose active organization, if any, has no Kafka
+        cluster. The requester's email address is their verified primary
+        address in Clerk, never the form's. A user may have one pending
+        request, one trial ever, and must wait a week after a decline before
+        asking again.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewTrialRequest"
+      responses:
+        "201":
+          description: The request, pending an operator's decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrialRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/trial-requests/mine:
+    get:
+      operationId: listMyTrialRequests
+      summary: The signed-in user's trial requests, newest first
+      responses:
+        "200":
+          description: The requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrialRequestList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/operator/trial-requests:
+    get:
+      operationId: listTrialRequests
+      summary: Every trial request, newest first, for operators
+      responses:
+        "200":
+          description: The requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrialRequestList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/operator/trial-requests/{trialRequestID}/approve:
+    post:
+      operationId: approveTrialRequest
+      summary: Approve a pending trial request, for operators
+      description: >-
+        Creates a Clerk organization named after the company, adds the
+        requester to it as an admin, and creates a customer on the chosen
+        profile, dev unless given, without deletion protection. Undoes all of
+        it when a step fails or another operator decided first.
+      parameters:
+        - $ref: "#/components/parameters/TrialRequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrialApproval"
+      responses:
+        "200":
+          description: The approved request, which names the new customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrialRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/operator/trial-requests/{trialRequestID}/decline:
+    post:
+      operationId: declineTrialRequest
+      summary: Decline a pending trial request, for operators
+      description: The reason is shown to the requester.
+      parameters:
+        - $ref: "#/components/parameters/TrialRequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrialDecline"
+      responses:
+        "200":
+          description: The declined request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrialRequest"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/operator/customers:
     get:
       operationId: listCustomers
@@ -1023,6 +1158,13 @@ components:
         type: string
         pattern: "^[a-z]([-a-z0-9]*[a-z0-9])?$"
         maxLength: 40
+    TrialRequestID:
+      name: trialRequestID
+      in: path
+      required: true
+      description: The trial request's ID, such as tr-7f3k2q
+      schema:
+        type: string
     CustomerID:
       name: customerID
       in: path
@@ -2069,6 +2211,106 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Customer"
+    NewTrialRequest:
+      type: object
+      required: [company, role, useCase, throughput, retention]
+      properties:
+        company:
+          type: string
+          description: The company, which names the customer once approved
+          minLength: 1
+          maxLength: 100
+        role:
+          type: string
+          description: The requester's role at the company
+          minLength: 1
+          maxLength: 100
+        useCase:
+          type: string
+          description: What they want Kafka for
+          minLength: 1
+          maxLength: 2000
+        throughput:
+          $ref: "#/components/schemas/TrialThroughput"
+        retention:
+          $ref: "#/components/schemas/TrialRetention"
+        preferredStart:
+          type: string
+          format: date
+          description: The day they would like to start, if they say
+    TrialThroughput:
+      type: string
+      description: Roughly how much they write at peak
+      enum: [under-1-mbps, 1-10-mbps, 10-100-mbps, over-100-mbps]
+    TrialRetention:
+      type: string
+      description: Roughly how long they keep messages
+      enum: [up-to-1-day, up-to-7-days, up-to-30-days, over-30-days]
+    TrialRequest:
+      type: object
+      required: [id, userID, email, company, role, useCase, throughput, retention, phase, createdAt]
+      properties:
+        id:
+          type: string
+        userID:
+          type: string
+          description: The requester's Clerk user ID
+        email:
+          type: string
+          description: The requester's verified email address
+        company:
+          type: string
+        role:
+          type: string
+        useCase:
+          type: string
+        throughput:
+          $ref: "#/components/schemas/TrialThroughput"
+        retention:
+          $ref: "#/components/schemas/TrialRetention"
+        preferredStart:
+          type: string
+          format: date
+        phase:
+          type: string
+          enum: [Pending, Approved, Declined]
+        decidedAt:
+          type: string
+          format: date-time
+          description: When an operator decided, once one has
+        reason:
+          type: string
+          description: Why the request was declined
+        customerID:
+          type: string
+          description: The customer an approval created
+        createdAt:
+          type: string
+          format: date-time
+    TrialRequestList:
+      type: object
+      required: [trialRequests]
+      properties:
+        trialRequests:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrialRequest"
+    TrialApproval:
+      type: object
+      properties:
+        profile:
+          type: string
+          enum: [dev, dev-ha, production]
+          description: The new customer's profile, dev unless given
+    TrialDecline:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          description: Why, which the requester sees
+          minLength: 1
+          maxLength: 1000
     NewCustomer:
       type: object
       required: [displayName, profile, deletionProtection]

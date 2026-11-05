@@ -125,8 +125,9 @@ type fakeOrganizations struct {
 	// created and deleted are the organizations by ID; names by ID.
 	created, deleted []string
 	names            map[string]string
-	// invited are the admins invited, as organization/email.
-	invited []string
+	// invited are the admins invited, as organization/email, and admins the
+	// users made admins, as organization/user. Clerk knows no user_gone.
+	invited, admins []string
 }
 
 func (f *fakeOrganizations) Create(_ context.Context, name string) (string, error) {
@@ -141,6 +142,14 @@ func (f *fakeOrganizations) InviteAdmin(_ context.Context, organizationID, email
 		return fmt.Errorf("%w: this address is blocked", ErrInvitationRefused)
 	}
 	f.invited = append(f.invited, organizationID+"/"+email)
+	return nil
+}
+
+func (f *fakeOrganizations) AddAdmin(_ context.Context, organizationID, userID string) error {
+	if userID == "user_gone" {
+		return errors.New("clerk: user not found")
+	}
+	f.admins = append(f.admins, organizationID+"/"+userID)
 	return nil
 }
 
@@ -236,6 +245,7 @@ type fixture struct {
 	// settings.
 	alerts        *fakeAlerts
 	alertSettings *fakeAlertSettings
+	trialRequests *fakeTrialRequests
 	// log is what the server logged, as JSON lines.
 	log     *bytes.Buffer
 	fetches int
@@ -261,6 +271,7 @@ func newFixture(t *testing.T) *fixture {
 		recorded:      &fakeRecorder{},
 		messages:      &fakeMessages{},
 		alertSettings: &fakeAlertSettings{settings: map[string]*v1alpha1.AlertSettings{}},
+		trialRequests: newFakeTrialRequests(),
 		log:           &bytes.Buffer{},
 	}
 	server, err := New(Config{
@@ -271,6 +282,7 @@ func newFixture(t *testing.T) *fixture {
 	}, Options{
 		Customers:     f.customers,
 		Organizations: f.organizations,
+		TrialRequests: f.trialRequests,
 		Clusters:      f.clusters,
 		Metrics:       fakeMetrics{},
 		Sources:       f.sources,
@@ -358,6 +370,16 @@ func TestAuthorizationMatrix(t *testing.T) {
 			"anonymous": {401, "Sign in first"}, "no organization": {403, "Operators only"}, "acme member": {403, "Operators only"},
 			"acme admin": {403, "Operators only"}, "globex member": {403, "Operators only"}, "organization without": {403, "Operators only"},
 			"staff": {200, `{"customers":[{`},
+		},
+		"/api/trial-requests/mine": {
+			"anonymous": {401, "Sign in first"}, "no organization": {200, `{"trialRequests":[]}`}, "acme member": {200, `{"trialRequests":[]}`},
+			"acme admin": {200, `{"trialRequests":[]}`}, "globex member": {200, `{"trialRequests":[]}`}, "organization without": {200, `{"trialRequests":[]}`},
+			"staff": {200, `{"trialRequests":[]}`},
+		},
+		"/api/operator/trial-requests": {
+			"anonymous": {401, "Sign in first"}, "no organization": {403, "Operators only"}, "acme member": {403, "Operators only"},
+			"acme admin": {403, "Operators only"}, "globex member": {403, "Operators only"}, "organization without": {403, "Operators only"},
+			"staff": {200, `"id":"tr-pend22"`},
 		},
 		"/api/operator/customers/acme": {
 			"anonymous": {401, "Sign in first"}, "no organization": {403, "Operators only"}, "acme member": {403, "Operators only"},

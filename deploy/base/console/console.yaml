@@ -25,6 +25,15 @@ rules:
   - apiGroups: [changeport.io]
     resources: [alertsettings]
     verbs: [get, create, update]
+  # Trial requests, which users make and operators decide through the
+  # status. A request never changes once made; the console deletes only the
+  # later of two a user made at once.
+  - apiGroups: [changeport.io]
+    resources: [trialrequests]
+    verbs: [get, list, create, delete]
+  - apiGroups: [changeport.io]
+    resources: [trialrequests/status]
+    verbs: [update]
   # Only the sources' write-once password Secrets and the alert receivers'
   # write-once Secrets, which the admission policy
   # changeport-console-secrets narrows this to.

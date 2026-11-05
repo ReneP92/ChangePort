@@ -8,6 +8,7 @@ import (
 	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/clerk/clerk-sdk-go/v2/organization"
 	"github.com/clerk/clerk-sdk-go/v2/organizationinvitation"
+	"github.com/clerk/clerk-sdk-go/v2/organizationmembership"
 )
 
 // Organizations manages customers' Clerk organizations, whose members sign
@@ -20,6 +21,9 @@ type Organizations interface {
 	// returns an error satisfying errors.Is(err, ErrInvitationRefused) with
 	// Clerk's reason.
 	InviteAdmin(ctx context.Context, organizationID, email string) error
+	// AddAdmin makes an existing user an admin of the organization at once,
+	// without an invitation.
+	AddAdmin(ctx context.Context, organizationID, userID string) error
 	// Delete deletes an organization.
 	Delete(ctx context.Context, organizationID string) error
 }
@@ -35,6 +39,7 @@ const adminRole = "org:admin"
 type ClerkOrganizations struct {
 	organizations *organization.Client
 	invitations   *organizationinvitation.Client
+	memberships   *organizationmembership.Client
 	// redirectURL is where an invitation's link leads once accepted: the
 	// console.
 	redirectURL string
@@ -49,6 +54,7 @@ func NewClerkOrganizations(secretKey, redirectURL string) ClerkOrganizations {
 	return ClerkOrganizations{
 		organizations: organization.NewClient(config),
 		invitations:   organizationinvitation.NewClient(config),
+		memberships:   organizationmembership.NewClient(config),
 		redirectURL:   redirectURL,
 	}
 }
@@ -86,6 +92,19 @@ func (c ClerkOrganizations) InviteAdmin(ctx context.Context, organizationID, ema
 	}
 	if err != nil {
 		return fmt.Errorf("invite %s to Clerk organization %s: %w", email, organizationID, err)
+	}
+	return nil
+}
+
+// AddAdmin implements Organizations.
+func (c ClerkOrganizations) AddAdmin(ctx context.Context, organizationID, userID string) error {
+	_, err := c.memberships.Create(ctx, &organizationmembership.CreateParams{
+		OrganizationID: organizationID,
+		UserID:         &userID,
+		Role:           clerk.String(adminRole),
+	})
+	if err != nil {
+		return fmt.Errorf("add %s to Clerk organization %s as an admin: %w", userID, organizationID, err)
 	}
 	return nil
 }

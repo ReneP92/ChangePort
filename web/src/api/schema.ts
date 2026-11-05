@@ -544,6 +544,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trial-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a trial
+         * @description For a signed-in user whose active organization, if any, has no Kafka cluster. The requester's email address is their verified primary address in Clerk, never the form's. A user may have one pending request, one trial ever, and must wait a week after a decline before asking again.
+         */
+        post: operations["requestTrial"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trial-requests/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in user's trial requests, newest first */
+        get: operations["listMyTrialRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/trial-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every trial request, newest first, for operators */
+        get: operations["listTrialRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/trial-requests/{trialRequestID}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a pending trial request, for operators
+         * @description Creates a Clerk organization named after the company, adds the requester to it as an admin, and creates a customer on the chosen profile, dev unless given, without deletion protection. Undoes all of it when a step fails or another operator decided first.
+         */
+        post: operations["approveTrialRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/trial-requests/{trialRequestID}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline a pending trial request, for operators
+         * @description The reason is shown to the requester.
+         */
+        post: operations["declineTrialRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/customers": {
         parameters: {
             query?: never;
@@ -1110,6 +1204,72 @@ export interface components {
         CustomerList: {
             customers: components["schemas"]["Customer"][];
         };
+        NewTrialRequest: {
+            /** @description The company, which names the customer once approved */
+            company: string;
+            /** @description The requester's role at the company */
+            role: string;
+            /** @description What they want Kafka for */
+            useCase: string;
+            throughput: components["schemas"]["TrialThroughput"];
+            retention: components["schemas"]["TrialRetention"];
+            /**
+             * Format: date
+             * @description The day they would like to start, if they say
+             */
+            preferredStart?: string;
+        };
+        /**
+         * @description Roughly how much they write at peak
+         * @enum {string}
+         */
+        TrialThroughput: "under-1-mbps" | "1-10-mbps" | "10-100-mbps" | "over-100-mbps";
+        /**
+         * @description Roughly how long they keep messages
+         * @enum {string}
+         */
+        TrialRetention: "up-to-1-day" | "up-to-7-days" | "up-to-30-days" | "over-30-days";
+        TrialRequest: {
+            id: string;
+            /** @description The requester's Clerk user ID */
+            userID: string;
+            /** @description The requester's verified email address */
+            email: string;
+            company: string;
+            role: string;
+            useCase: string;
+            throughput: components["schemas"]["TrialThroughput"];
+            retention: components["schemas"]["TrialRetention"];
+            /** Format: date */
+            preferredStart?: string;
+            /** @enum {string} */
+            phase: "Pending" | "Approved" | "Declined";
+            /**
+             * Format: date-time
+             * @description When an operator decided, once one has
+             */
+            decidedAt?: string;
+            /** @description Why the request was declined */
+            reason?: string;
+            /** @description The customer an approval created */
+            customerID?: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TrialRequestList: {
+            trialRequests: components["schemas"]["TrialRequest"][];
+        };
+        TrialApproval: {
+            /**
+             * @description The new customer's profile, dev unless given
+             * @enum {string}
+             */
+            profile?: "dev" | "dev-ha" | "production";
+        };
+        TrialDecline: {
+            /** @description Why, which the requester sees */
+            reason: string;
+        };
         NewCustomer: {
             /** @description The customer's name, which also names its Clerk organization */
             displayName: string;
@@ -1235,6 +1395,8 @@ export interface components {
         TopicName: string;
         /** @description The source's name, which prefixes its topics */
         SourceName: string;
+        /** @description The trial request's ID, such as tr-7f3k2q */
+        TrialRequestID: string;
         /** @description The customer ID, such as acme */
         CustomerID: string;
     };
@@ -2250,6 +2412,147 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    requestTrial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewTrialRequest"];
+            };
+        };
+        responses: {
+            /** @description The request, pending an operator's decision */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    listMyTrialRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialRequestList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    listTrialRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The requests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialRequestList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    approveTrialRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The trial request's ID, such as tr-7f3k2q */
+                trialRequestID: components["parameters"]["TrialRequestID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrialApproval"];
+            };
+        };
+        responses: {
+            /** @description The approved request, which names the new customer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    declineTrialRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The trial request's ID, such as tr-7f3k2q */
+                trialRequestID: components["parameters"]["TrialRequestID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrialDecline"];
+            };
+        };
+        responses: {
+            /** @description The declined request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["NotConfigured"];
         };
     };

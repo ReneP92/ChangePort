@@ -1,0 +1,181 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.23.0
+  name: trialrequests.changeport.io
+spec:
+  group: changeport.io
+  names:
+    kind: TrialRequest
+    listKind: TrialRequestList
+    plural: trialrequests
+    shortNames:
+    - trial
+    singular: trialrequest
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.company
+      name: Company
+      type: string
+    - jsonPath: .spec.email
+      name: Email
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.customer
+      name: Customer
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          TrialRequest is someone's request for a trial, which an operator approves,
+          creating a customer for them, or declines. Its name is the request's ID,
+          such as tr-7f3k2q.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              TrialRequestSpec is what someone asked for when they requested a trial.
+              It cannot change.
+            properties:
+              clerkUserID:
+                description: |-
+                  ClerkUserID is who asked, as Clerk knows them, taken from their
+                  session and never from the form.
+                maxLength: 63
+                pattern: ^user_[A-Za-z0-9]+$
+                type: string
+              company:
+                description: |-
+                  Company is the requester's company, which names the customer once the
+                  request is approved.
+                maxLength: 100
+                minLength: 1
+                type: string
+              email:
+                description: |-
+                  Email is the requester's verified primary email address, taken from
+                  Clerk and never from the form.
+                maxLength: 254
+                minLength: 3
+                type: string
+              preferredStart:
+                description: PreferredStart is the day they would like to start, if
+                  they said.
+                format: date
+                type: string
+              retention:
+                description: Retention is roughly how long they keep messages.
+                enum:
+                - up-to-1-day
+                - up-to-7-days
+                - up-to-30-days
+                - over-30-days
+                type: string
+              role:
+                description: Role is the requester's role at the company, such as
+                  "Staff engineer".
+                maxLength: 100
+                minLength: 1
+                type: string
+              throughput:
+                description: Throughput is roughly how much they write at peak.
+                enum:
+                - under-1-mbps
+                - 1-10-mbps
+                - 10-100-mbps
+                - over-100-mbps
+                type: string
+              useCase:
+                description: UseCase is what they want Kafka for, in their words.
+                maxLength: 2000
+                minLength: 1
+                type: string
+            required:
+            - clerkUserID
+            - company
+            - email
+            - retention
+            - role
+            - throughput
+            - useCase
+            type: object
+            x-kubernetes-validations:
+            - message: a trial request cannot change
+              rule: self == oldSelf
+          status:
+            description: TrialRequestStatus is the operators' decision. A decision
+              is final.
+            properties:
+              customer:
+                description: Customer is the ID of the customer an approval created.
+                maxLength: 30
+                type: string
+              decidedAt:
+                description: DecidedAt is when the operator decided.
+                format: date-time
+                type: string
+              decidedBy:
+                description: DecidedBy is the Clerk user ID of the operator who decided.
+                maxLength: 63
+                type: string
+              phase:
+                description: Phase is Pending until an operator approves or declines
+                  the request.
+                enum:
+                - Pending
+                - Approved
+                - Declined
+                type: string
+              reason:
+                description: Reason is why the request was declined, which the requester
+                  sees.
+                maxLength: 1000
+                minLength: 1
+                type: string
+            type: object
+            x-kubernetes-validations:
+            - message: a decision is final
+              rule: '!has(oldSelf.phase) || oldSelf.phase == ''Pending'' || (has(self.phase)
+                && self.phase == oldSelf.phase)'
+            - message: an approval names the customer, who decided and when
+              rule: '!has(self.phase) || self.phase != ''Approved'' || (has(self.customer)
+                && has(self.decidedBy) && has(self.decidedAt))'
+            - message: a decline gives the reason, who decided and when
+              rule: '!has(self.phase) || self.phase != ''Declined'' || (has(self.reason)
+                && has(self.decidedBy) && has(self.decidedAt))'
+        required:
+        - spec
+        type: object
+        x-kubernetes-validations:
+        - message: 'the name is the request ID: tr- and six lowercase letters or digits,
+            such as tr-7f3k2q'
+          rule: self.metadata.name.matches('^tr-[a-km-np-z2-9]{6}$')
+    served: true
+    storage: true
+    subresources:
+      status: {}

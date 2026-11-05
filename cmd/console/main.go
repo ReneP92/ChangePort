@@ -110,11 +110,12 @@ func run(ctx context.Context, args []string) error {
 		StaffOrganizationID: os.Getenv("CHANGEPORT_STAFF_ORG_ID"),
 		Origins:             splitList(os.Getenv("CHANGEPORT_CONSOLE_ORIGINS")),
 	}, console.Options{
-		Customers: console.KubeCustomers{Client: kube, Cache: customers},
-		Clusters:  console.KubeClusters{Client: kube, Kafka: kafka},
-		Metrics:   metricsClient,
-		Sources:   console.KubeSources{Client: kube},
-		Databases: cdc.Checker{Guard: cdc.Guard{AllowPrivate: *allowPrivateDatabases}},
+		Customers:     console.KubeCustomers{Client: kube, Cache: customers},
+		TrialRequests: console.KubeTrialRequests{Client: kube},
+		Clusters:      console.KubeClusters{Client: kube, Kafka: kafka},
+		Metrics:       metricsClient,
+		Sources:       console.KubeSources{Client: kube},
+		Databases:     cdc.Checker{Guard: cdc.Guard{AllowPrivate: *allowPrivateDatabases}},
 		Alerts: console.AlertmanagerAlerts{
 			URL: *alertmanagerURL, HTTP: &http.Client{Timeout: 10 * time.Second},
 		},

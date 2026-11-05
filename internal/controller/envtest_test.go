@@ -378,3 +378,99 @@ func TestCustomerValidation(t *testing.T) {
 		}
 	})
 }
+
+func TestTrialRequestValidation(t *testing.T) {
+	requireEnv(t)
+	c, err := client.New(testEnv, client.Options{Scheme: testScheme(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := func(name string) *v1alpha1.TrialRequest {
+		return &v1alpha1.TrialRequest{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Spec: v1alpha1.TrialRequestSpec{
+				ClerkUserID: "user_2abc", Email: "ada@example.com", Company: "Hooli", Role: "CTO", UseCase: "Orders",
+				Throughput: v1alpha1.ThroughputUnder1MBps, Retention: v1alpha1.RetentionUpTo7Days,
+			},
+		}
+	}
+	tests := []struct {
+		name    string
+		request func() *v1alpha1.TrialRequest
+		want    string
+	}{
+		{"a name without the prefix", func() *v1alpha1.TrialRequest { return valid("c-abcdef") }, "the name is the request ID"},
+		{"a name with letters that look alike", func() *v1alpha1.TrialRequest { return valid("tr-abcd1l") }, "the name is the request ID"},
+		{"a Clerk user ID that is not one", func() *v1alpha1.TrialRequest {
+			request := valid("tr-user22")
+			request.Spec.ClerkUserID = "org_2abc"
+			return request
+		}, "spec.clerkUserID"},
+		{"an unknown throughput", func() *v1alpha1.TrialRequest {
+			request := valid("tr-thru22")
+			request.Spec.Throughput = "lots"
+			return request
+		}, `spec.throughput: Unsupported value: "lots"`},
+		{"a use case over 2000 characters", func() *v1alpha1.TrialRequest {
+			request := valid("tr-size22")
+			request.Spec.UseCase = strings.Repeat("u", 2001)
+			return request
+		}, "spec.useCase"},
+		{"a preferred start that is no date", func() *v1alpha1.TrialRequest {
+			request := valid("tr-date22")
+			request.Spec.PreferredStart = "next week"
+			return request
+		}, "spec.preferredStart"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := c.Create(t.Context(), test.request())
+			if !apierrors.IsInvalid(err) || !strings.Contains(err.Error(), test.want) {
+				t.Errorf("Create() error = %v, want it invalid with %q", err, test.want)
+			}
+		})
+	}
+
+	request := valid("tr-rate22")
+	if err := c.Create(t.Context(), request); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = c.Delete(context.Background(), request) })
+	t.Run("a changed request", func(t *testing.T) {
+		changed := request.DeepCopy()
+		changed.Spec.Company = "Initech"
+		if err := c.Update(t.Context(), changed); !apierrors.IsInvalid(err) || !strings.Contains(err.Error(), "a trial request cannot change") {
+			t.Errorf("Update() error = %v, want the change refused", err)
+		}
+	})
+	setStatus := func(status v1alpha1.TrialRequestStatus) error {
+		latest := &v1alpha1.TrialRequest{}
+		if err := c.Get(t.Context(), client.ObjectKeyFromObject(request), latest); err != nil {
+			t.Fatal(err)
+		}
+		latest.Status = status
+		return c.Status().Update(t.Context(), latest)
+	}
+	decided := &metav1.Time{Time: time.Now()}
+	t.Run("an approval without its customer", func(t *testing.T) {
+		err := setStatus(v1alpha1.TrialRequestStatus{Phase: v1alpha1.TrialRequestApproved, DecidedBy: "user_6", DecidedAt: decided})
+		if !apierrors.IsInvalid(err) || !strings.Contains(err.Error(), "an approval names the customer") {
+			t.Errorf("UpdateStatus() error = %v, want the approval refused", err)
+		}
+	})
+	t.Run("a decline without a reason", func(t *testing.T) {
+		err := setStatus(v1alpha1.TrialRequestStatus{Phase: v1alpha1.TrialRequestDeclined, DecidedBy: "user_6", DecidedAt: decided})
+		if !apierrors.IsInvalid(err) || !strings.Contains(err.Error(), "a decline gives the reason") {
+			t.Errorf("UpdateStatus() error = %v, want the decline refused", err)
+		}
+	})
+	t.Run("a decision is final", func(t *testing.T) {
+		if err := setStatus(v1alpha1.TrialRequestStatus{Phase: v1alpha1.TrialRequestDeclined, DecidedBy: "user_6", DecidedAt: decided, Reason: "Not yet"}); err != nil {
+			t.Fatal(err)
+		}
+		err := setStatus(v1alpha1.TrialRequestStatus{Phase: v1alpha1.TrialRequestApproved, DecidedBy: "user_6", DecidedAt: decided, Customer: "c-abcdef"})
+		if !apierrors.IsInvalid(err) || !strings.Contains(err.Error(), "a decision is final") {
+			t.Errorf("UpdateStatus() error = %v, want the change of decision refused", err)
+		}
+	})
+}

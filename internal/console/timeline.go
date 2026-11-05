@@ -3,6 +3,7 @@ package console
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -31,13 +32,20 @@ type EventRecorder interface {
 	Record(events ...events.Event)
 }
 
-// Users names the console's users, for the timeline.
+// Users looks the console's users up: their names for the timeline, and
+// their email addresses for trial requests.
 type Users interface {
 	// Name returns the user's name, or their email address without one.
 	Name(ctx context.Context, userID string) (string, error)
+	// VerifiedEmail returns the user's primary email address, or
+	// ErrNoVerifiedEmail when they have none or have not verified it.
+	VerifiedEmail(ctx context.Context, userID string) (string, error)
 }
 
-// ClerkUsers names users through Clerk's Backend API.
+// ErrNoVerifiedEmail means a user has no verified primary email address.
+var ErrNoVerifiedEmail = errors.New("no verified primary email address")
+
+// ClerkUsers looks users up through Clerk's Backend API.
 type ClerkUsers struct {
 	users *user.Client
 }
@@ -65,6 +73,21 @@ func (c ClerkUsers) Name(ctx context.Context, userID string) (string, error) {
 		}
 	}
 	return ptr.Deref(u.Username, userID), nil
+}
+
+// VerifiedEmail implements Users.
+func (c ClerkUsers) VerifiedEmail(ctx context.Context, userID string) (string, error) {
+	u, err := c.users.Get(ctx, userID)
+	if err != nil {
+		return "", fmt.Errorf("get Clerk user %s: %w", userID, err)
+	}
+	for _, email := range u.EmailAddresses {
+		if u.PrimaryEmailAddressID != nil && email.ID == *u.PrimaryEmailAddressID &&
+			email.Verification != nil && email.Verification.Status == "verified" {
+			return email.EmailAddress, nil
+		}
+	}
+	return "", fmt.Errorf("user %s: %w", userID, ErrNoVerifiedEmail)
 }
 
 // userNames caches users' names for an hour, so that a burst of changes
