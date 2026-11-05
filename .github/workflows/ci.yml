@@ -60,6 +60,50 @@ jobs:
       - run: just tf-validate
       - run: just tf-test
 
+  # Plans each AWS account with a role that may only read, and lists the
+  # addresses of what would change: the log is public, so the details stay
+  # with `just tf-plan <account>`. An account is skipped until its role and
+  # inputs are set (terraform/README.md), as are pull requests from forks,
+  # which get neither.
+  terraform-plan:
+    name: Terraform plan (${{ matrix.account }})
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - account: management
+            key: MANAGEMENT
+          - account: dev
+            key: DEV
+          - account: prod
+            key: PROD
+    env:
+      ROLE_ARN: ${{ vars[format('TERRAFORM_PLAN_ROLE_ARN_{0}', matrix.key)] }}
+      TFVARS: ${{ secrets[format('TERRAFORM_TFVARS_{0}', matrix.key)] }}
+    steps:
+      - name: Skip without a role or inputs
+        if: env.ROLE_ARN == '' || env.TFVARS == ''
+        run: echo "::notice::No plan role or inputs for ${{ matrix.account }}; skipped."
+      - if: env.ROLE_ARN != '' && env.TFVARS != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: env.ROLE_ARN != '' && env.TFVARS != ''
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: 1.59.0
+      - if: env.ROLE_ARN != '' && env.TFVARS != ''
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: us-east-1
+      - if: env.ROLE_ARN != '' && env.TFVARS != ''
+        run: printf '%s\n' "$TFVARS" >"terraform/environments/${{ matrix.account }}/terraform.tfvars"
+      - if: env.ROLE_ARN != '' && env.TFVARS != ''
+        run: just tf-plan ${{ matrix.account }}
+
   shell:
     name: Shell scripts and text
     runs-on: ubuntu-26.04

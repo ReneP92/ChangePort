@@ -339,6 +339,21 @@ tf-test:
       terraform -chdir="$module" test
     done
 
+# Create an AWS account's Terraform state bucket and CI's plan role, and move the state into the bucket, once: management, dev or prod (management and prod need CONFIRM=<account>)
+[group('Terraform')]
+tf-bootstrap account:
+    hack/terraform.sh bootstrap {{ account }}
+
+# Plan an AWS account's Terraform: management, dev or prod
+[group('Terraform')]
+tf-plan account:
+    hack/terraform.sh plan {{ account }}
+
+# Apply an AWS account's Terraform: management, dev or prod (management and prod need CONFIRM=<account>)
+[group('Terraform')]
+tf-apply account:
+    hack/terraform.sh apply {{ account }}
+
 # Remove build output and downloaded tools
 [group('Housekeeping')]
 clean:

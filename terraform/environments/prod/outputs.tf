@@ -42,3 +42,8 @@ output "image_push_role_arn" {
   description = "The role the image workflow assumes: set it as the ECR_PUSH_ROLE_ARN repository variable on GitHub."
   value       = module.ecr.push_role_arn
 }
+
+output "terraform_plan_role_arn" {
+  description = "The role CI plans this account with: set it as the TERRAFORM_PLAN_ROLE_ARN_PROD repository variable on GitHub."
+  value       = module.github_oidc.plan_role_arn
+}

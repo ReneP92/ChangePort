@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars, which git ignores, and fill in. CI reads the same
+# file from the TERRAFORM_TFVARS_MANAGEMENT secret (terraform/README.md).
+
+accounts = {
+  # The existing account's current name and root email address.
+  dev = { name = "changeport-dev", email = "you+changeport-dev@example.com" }
+  # Created by the first apply; the address must not be used by any other
+  # AWS account.
+  prod = { name = "changeport-prod", email = "you+changeport-prod@example.com" }
+}
+dev_account_id = "123456789012"
+
+# Your user name in IAM Identity Center.
+administrators = ["you"]
+alert_emails   = ["you@example.com"]

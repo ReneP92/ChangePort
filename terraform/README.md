@@ -1,15 +1,23 @@
 # terraform
 
-Base infrastructure per environment: VPC, EKS, S3 and IAM. Each environment in
-`environments/` lives in its own AWS account and composes the modules in
-`modules/`. Nothing has been applied yet: that waits for the accounts and the
-state backend (#10).
+The AWS accounts and the base infrastructure of each environment. Every
+directory in `environments/` is one AWS account of the Organization and
+composes the modules in `modules/`:
+
+- `management`: the Organization, its guardrails, single sign-on and cost
+  alerts. No workload runs here.
+- `dev` and `prod`: VPC, EKS, S3 and IAM, and in prod the image registry.
+
+Nothing has been applied yet; [Setting up the accounts](#setting-up-the-accounts)
+lists the steps.
 
 Per-customer resources are not managed here; the Go provisioning service
 creates them through the Kubernetes API.
 
 ```bash
 just tf-fmt tf-validate tf-test
+just tf-plan dev                 # management, dev or prod
+just tf-apply dev                # management and prod need CONFIRM=<account>
 ```
 
 The recipes download the Terraform version that `hack/lib.sh` pins into
@@ -20,6 +28,120 @@ on amd64 and arm64; after changing a provider version, run
 `terraform providers lock -platform=linux_amd64 -platform=linux_arm64
 -platform=darwin_amd64 -platform=darwin_arm64` in each environment and module
 with tests.
+
+Each account's inputs, such as who administers it or where its EKS API may
+be reached from, are in `terraform.tfvars` next to its configuration, which
+git ignores; `terraform.tfvars.example` lists them. The recipes sign in with
+the AWS CLI profile `changeport-<account>` unless `AWS_PROFILE` is set, and
+refuse to run when the credentials belong to another account than the state
+bucket's.
+
+## Accounts (`environments/management`)
+
+The Organization has three accounts in us-east-1. The management account
+holds only billing, single sign-on and the guardrails; workloads run in dev
+and prod, and the design partner's cluster in prod from day one.
+
+- **Guardrails** (`modules/organization`): one service control policy holds
+  dev and prod (never the management account) to us-east-1 and global
+  services, keeps them in the Organization, and stops them from deleting,
+  stopping or changing trails. One CloudTrail trail records every account's
+  management events in every region into `changeport-management-cloudtrail`,
+  with log file validation; log files are kept for a year.
+- **Root users:** the member accounts have no root credentials. When one needs
+  its root user, for example to unlock a bucket policy that locks everyone
+  out, the management account opens a short root session in it
+  (`aws sts assume-root`). Only the management account's root user has a
+  password, with MFA.
+- **Sign-in** (`modules/identity-center`): people sign in through IAM
+  Identity Center; nobody has an IAM user or an access key. The group
+  `changeport-administrators` may use either permission set in every account:
+  `AdministratorAccess` for changes, and `ViewOnlyAccess`, which sees
+  resources and their configuration but no data in them. The EKS clusters
+  make the `AdministratorAccess` roles their administrators.
+- **Cost alerts** (`modules/cost-alerts`): each account has a monthly budget
+  (management $10, dev $300, prod $1,000 by default), which emails when the
+  forecast passes it and at 80% and 100% of what was spent. Cost Anomaly
+  Detection watches each account and emails a daily summary of anomalies
+  from $20.
+
+## State (`modules/state-backend`)
+
+Each account keeps its state in a bucket of its own,
+`changeport-<account>-terraform-state`: versioned, so a broken state can be
+rolled back for 90 days, encrypted, and refusing requests without TLS 1.2.
+Terraform locks the state with a lock file next to it (`use_lockfile`), so
+there is no DynamoDB table. `just tf-bootstrap <account>` creates the bucket
+with local state and moves the state into it, once per account.
+
+## Plans in CI (`modules/github-oidc`)
+
+Each account has a GitHub Actions OpenID Connect provider and a role,
+`changeport-<account>-terraform-plan`, that pull requests and pushes to main
+of `ReneP92/ChangePort` may assume, with no access key. The role reads with
+`ReadOnlyAccess` but is denied the data in the account: objects in buckets
+other than the state, secrets, parameters, decryption and logs. Plans run
+without the state lock, which a plan does not need, so the role writes
+nothing.
+
+The `Terraform plan` jobs in CI plan each account on every pull request and
+push to main. The log is public, so they print only the addresses of the
+resources that would change; `just tf-plan <account>` shows the details. An
+account's job is skipped until it has the repository variable
+`TERRAFORM_PLAN_ROLE_ARN_<ACCOUNT>` and the secret
+`TERRAFORM_TFVARS_<ACCOUNT>`, the contents of its `terraform.tfvars`.
+
+## Setting up the accounts
+
+Once, in this order. The console steps come first because Terraform needs
+the Organization and single sign-on before it can sign in.
+
+1. **Management account.** Sign up a new AWS account for management, turn on
+   MFA for its root user, and in AWS Organizations create the Organization.
+   Invite the existing dev account (Add an AWS account, Invite) and accept
+   the invitation in the dev account.
+2. **Single sign-on.** In IAM Identity Center, enable it for the
+   Organization in us-east-1 and create your user. Create a temporary
+   permission set `Bootstrap` with the `AdministratorAccess` policy and
+   assign it to your user in the management account. Open Cost Explorer in
+   Billing and Cost Management once, which turns it on for anomaly
+   detection.
+3. **Organization.** Set up the profile and apply, which imports the
+   Organization and the dev account and creates the prod account, the
+   guardrails, the trail, the permission sets and the cost alerts:
+
+   ```bash
+   aws configure sso --profile changeport-management   # with the Bootstrap permission set
+   cp terraform/environments/management/terraform.tfvars.example terraform/environments/management/terraform.tfvars   # and fill it in
+   CONFIRM=management just tf-bootstrap management
+   CONFIRM=management just tf-apply management
+   terraform -chdir=terraform/environments/management output account_ids
+   ```
+
+4. **Profiles.** Point `changeport-management` at the `AdministratorAccess`
+   permission set and add `changeport-dev` and `changeport-prod` the same way
+   with the account IDs above. Then delete the `Bootstrap` permission set.
+5. **Root users.** In the management account's IAM console, Root access
+   management, delete the dev account's root user credentials. Prod was
+   created without any.
+6. **dev and prod.** Fill in each `terraform.tfvars` and create the state
+   buckets and plan roles. Applying the rest brings up the environments
+   (#28, #31).
+
+   ```bash
+   just tf-bootstrap dev
+   CONFIRM=prod just tf-bootstrap prod
+   ```
+
+7. **CI.** Give each account's job its role and inputs:
+
+   ```bash
+   for account in management dev prod; do
+     key=$(echo "$account" | tr '[:lower:]' '[:upper:]')
+     gh variable set "TERRAFORM_PLAN_ROLE_ARN_$key" --body "$(terraform -chdir=terraform/environments/$account output -raw terraform_plan_role_arn)"
+     gh secret set "TERRAFORM_TFVARS_$key" <"terraform/environments/$account/terraform.tfvars"
+   done
+   ```
 
 ## Network (`modules/vpc`)
 
@@ -114,8 +236,10 @@ immutable tags and scan on push. Each repository keeps its newest 200 tagged
 images; untagged manifests, such as the per-architecture images of a
 multi-architecture image, are kept. Every account in the organization may
 pull (`aws:PrincipalOrgID`); only `changeport-prod-image-push` may push, and
-only GitHub Actions runs for pushes to main of `ReneP92/changeport` may assume
-it, through OpenID Connect, with no access key.
+only GitHub Actions runs for pushes to main of `ReneP92/ChangePort` may assume
+it, through the account's OpenID Connect provider (`modules/github-oidc`),
+with no access key. IAM compares the repository's name case-sensitively, so
+it is written as GitHub shows it.
 
 `.github/workflows/publish-images.yml` builds each image whose sources changed
 on main (`hack/changed-images.sh`) for amd64 and arm64, pushes it tagged with

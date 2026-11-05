@@ -32,3 +32,8 @@ output "kafka_broker_role_name" {
   description = "The brokers' role, the RoleName of eksTieredStorage in internal/provisioning/spec.go."
   value       = module.iam.kafka_broker_role_name
 }
+
+output "terraform_plan_role_arn" {
+  description = "The role CI plans this account with: set it as the TERRAFORM_PLAN_ROLE_ARN_DEV repository variable on GitHub."
+  value       = module.github_oidc.plan_role_arn
+}

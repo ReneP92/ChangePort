@@ -19,6 +19,10 @@
 *.tfstate
 *.tfstate.*
 *.tfplan
+# An account's inputs; terraform.tfvars.example lists them without values.
+terraform.tfvars
+# Written by hack/terraform.sh bootstrap while the state is still local.
+backend_override.tf
 crash.log
 
 # Local secrets, such as the Clerk keys for the console; .env.sample lists
