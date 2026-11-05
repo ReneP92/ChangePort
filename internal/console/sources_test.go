@@ -31,6 +31,14 @@ const consoleUser = "system:serviceaccount:changeport:changeport-console"
 // client of the cluster's admin and one of the console's service account.
 func startAPIServer(t *testing.T) (admin, console client.Client) {
 	t.Helper()
+	admin, console, _ = startAPIServerAsTheConsole(t)
+	return admin, console
+}
+
+// startAPIServerAsTheConsole is startAPIServer that also returns the
+// console's configuration, for clients other than its plain one.
+func startAPIServerAsTheConsole(t *testing.T) (admin, console client.Client, consoleConfig *rest.Config) {
+	t.Helper()
 	if os.Getenv("KUBEBUILDER_ASSETS") == "" {
 		if os.Getenv("CI") != "" {
 			t.Fatal("KUBEBUILDER_ASSETS is not set; run the tests with just test")
@@ -68,13 +76,13 @@ func startAPIServer(t *testing.T) (admin, console client.Client) {
 			}
 		}
 	}
-	consoleConfig := rest.CopyConfig(config)
+	consoleConfig = rest.CopyConfig(config)
 	consoleConfig.Impersonate = rest.ImpersonationConfig{UserName: consoleUser}
 	console, err = client.New(consoleConfig, client.Options{Scheme: scheme})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return admin, console
+	return admin, console, consoleConfig
 }
 
 // refusedByPolicy creates a Secret as the console, in a dry run, and
