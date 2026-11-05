@@ -55,10 +55,12 @@ start_load() {
         --producer-property enable.idempotence=true --producer-property retries=2147483647 \
         2>"/out/$TOPIC-producer.log"
       echo $? >"/out/$TOPIC-producer-exit"' >/dev/null
+  # The consumer replaces the shell, so that docker stop's SIGTERM reaches
+  # it, and it closes, committing what it consumed, as stop_load wants.
   # shellcheck disable=SC2016 # expanded by the container's shell
   docker run -d --name "$customer-consumer" "${KAFKA_CLIENT[@]}" -e TOPIC="$topic" -e BOOTSTRAP="$bootstrap" \
     --entrypoint bash "$KAFKA_IMAGE" -c '
-      /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP" --topic "$TOPIC" \
+      exec /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server "$BOOTSTRAP" --topic "$TOPIC" \
         --command-config /config/client.properties --group "$TOPIC-check" --from-beginning \
         >"/out/$TOPIC-consumed" 2>"/out/$TOPIC-consumer.log"' >/dev/null
   for _ in $(seq 60); do
@@ -69,7 +71,11 @@ start_load() {
 }
 
 # Stops the producer, waits until the consumer has read everything produced,
-# and checks that every message from 1 to the last arrived exactly once.
+# and checks that every message from 1 to the last arrived exactly once. The
+# consumer stops gracefully and must leave its group with nothing to consume:
+# killed before its next auto-commit (every 5 seconds), it would leave its
+# last messages uncommitted, and ConsumerGroupLagHigh would rightly fire for
+# the group 10 minutes later, while the alerting test wants quiet alerts.
 stop_load() {
   local topic=$1 produced exit_code
   touch "$work/out/stop-$topic"
@@ -88,6 +94,8 @@ stop_load() {
     sleep 1
   done
   # The producer has exited and removed itself by now.
+  docker stop "$customer-consumer" >/dev/null 2>&1 ||
+    die "the consumer on $topic stopped early; it said:"$'\n'"$(tail -20 "$work/out/$topic-consumer.log")"
   docker rm -f "$customer-producer" "$customer-consumer" >/dev/null 2>&1 || true
   local lines unique
   lines=$(consumed "$topic")
@@ -97,6 +105,12 @@ stop_load() {
     tail -20 "$work/out/$topic-consumer.log" >&2
     die "on $topic, $produced messages were produced, but $lines were consumed ($unique distinct)"
   fi
+  local offsets
+  offsets=$(kafka kafka-consumer-groups.sh --bootstrap-server "$bootstrap" --command-config /config/client.properties \
+    --describe --group "$topic-check" 2>&1) || die "could not describe consumer group $topic-check:"$'\n'"$offsets"
+  # Columns: group, topic, partition, current offset, log end offset, lag.
+  awk -v group="$topic-check" '$1 == group { rows++; if ($6 != "0") behind++ } END { exit !(rows && !behind) }' <<<"$offsets" ||
+    die "consumer group $topic-check stopped without committing all it consumed on $topic:"$'\n'"$offsets"
   log "All $produced messages on $topic arrived exactly once"
 }
 
