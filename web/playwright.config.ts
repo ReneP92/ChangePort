@@ -34,6 +34,10 @@ if (signedIn) {
           testMatch: "clerk/*.spec.ts",
           dependencies: ["clerk setup"],
           use: chrome,
+          // Every page loads through the console's API from the cluster on
+          // kind, which a busy CI runner answers in seconds per request; a
+          // page that waits on a few in turn outlasts the default 5 seconds.
+          expect: { timeout: 15_000 },
         },
   );
 }
