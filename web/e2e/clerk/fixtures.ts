@@ -24,7 +24,10 @@ export interface Fixtures {
     adminA: UserFixture;
     /** A member of customer B's organization. */
     memberB: UserFixture;
-    /** A member of the Changeport staff organization: an operator. */
+    /**
+     * The operator every run shares, a member of the Changeport staff
+     * organization (operatorEmail); the teardown keeps it.
+     */
     staff: UserFixture;
   };
   organizations: string[];
@@ -65,6 +68,13 @@ export const abandonedAfterMs = 60 * 60 * 1000;
 
 /** Test users are Clerk test addresses, which take the fixed code 424242. */
 export const testEmail = (run: string, role: string) => `${run}-${role}+clerk_test@example.com`;
+/**
+ * The operator every run shares. Clerk allows an organization 5 members, so
+ * an operator of its own per run would let only a few runs start at once,
+ * and the operators of runs that died would lock the rest out. Neither the
+ * teardown nor the janitor removes it; testEmailPattern does not match it.
+ */
+export const operatorEmail = "e2e-operator+clerk_test@example.com";
 export const testEmailPattern = /^e2e[a-z0-9]+-[a-z0-9-]+\+clerk_test@example\.com$/;
 export const testOrganizationPattern = /^E2E e2e[a-z0-9]+ [A-Z]$/;
 /** Labels the customers the tests create, by run. */
