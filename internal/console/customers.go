@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
@@ -38,9 +42,22 @@ var ErrCustomerExists = errors.New("the customer exists")
 var ErrNoSuchCustomer = errors.New("no such customer")
 
 // KubeCustomers reads, creates and deletes Customers through the Kubernetes
-// API.
+// API. Nearly every console request looks its customer up by organization,
+// so those lookups and the list of every customer come from Cache, a watch
+// of every Customer kept in memory, and never wait on the API server. A
+// single customer, which operators view and act on right after changing
+// it, is read fresh through Client, as are creations and deletions.
 type KubeCustomers struct {
 	Client client.Client
+	// Cache reads Customers; without one, reads go through Client.
+	Cache client.Reader
+}
+
+func (k KubeCustomers) reader() client.Reader {
+	if k.Cache != nil {
+		return k.Cache
+	}
+	return k.Client
 }
 
 var _ Customers = KubeCustomers{}
@@ -52,7 +69,7 @@ func (k KubeCustomers) ByOrganization(ctx context.Context, organizationID string
 		return nil, nil
 	}
 	var list v1alpha1.CustomerList
-	if err := k.Client.List(ctx, &list, client.MatchingLabels{v1alpha1.ClerkOrganizationLabel: organizationID}); err != nil {
+	if err := k.reader().List(ctx, &list, client.MatchingLabels{v1alpha1.ClerkOrganizationLabel: organizationID}); err != nil {
 		return nil, fmt.Errorf("list the customers of organization %s: %w", organizationID, err)
 	}
 	switch len(list.Items) {
@@ -69,7 +86,7 @@ func (k KubeCustomers) ByOrganization(ctx context.Context, organizationID string
 // List implements Customers.
 func (k KubeCustomers) List(ctx context.Context) ([]v1alpha1.Customer, error) {
 	var list v1alpha1.CustomerList
-	if err := k.Client.List(ctx, &list); err != nil {
+	if err := k.reader().List(ctx, &list); err != nil {
 		return nil, fmt.Errorf("list customers: %w", err)
 	}
 	return list.Items, nil
@@ -116,4 +133,35 @@ func (k KubeCustomers) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("delete customer %s: %w", id, err)
 	}
 	return nil
+}
+
+// syncTimeout bounds how long WatchCustomers waits for the first list.
+var syncTimeout = time.Minute
+
+// WatchCustomers watches every Customer and keeps them in memory, as
+// KubeCustomers' Cache, until ctx is done. It returns once it holds them
+// all.
+func WatchCustomers(ctx context.Context, config *rest.Config, scheme *runtime.Scheme) (cache.Cache, error) {
+	customers, err := cache.New(config, cache.Options{
+		Scheme: scheme,
+		// Only Customers: reading anything else from it is a bug, rather
+		// than a new watch the console's role does not allow.
+		ReaderFailOnMissingInformer: true,
+		DefaultTransform:            cache.TransformStripManagedFields(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create the customer cache: %w", err)
+	}
+	if _, err := customers.GetInformer(ctx, &v1alpha1.Customer{}); err != nil {
+		return nil, fmt.Errorf("watch customers: %w", err)
+	}
+	go func() { _ = customers.Start(ctx) }()
+	// A watch the API server refuses, such as without the role's watch
+	// verb, never syncs; the console then fails rather than hang.
+	syncing, cancel := context.WithTimeout(ctx, syncTimeout)
+	defer cancel()
+	if !customers.WaitForCacheSync(syncing) {
+		return nil, fmt.Errorf("the customer cache did not sync within %s; may the console watch customers?", syncTimeout)
+	}
+	return customers, nil
 }

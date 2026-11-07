@@ -42,8 +42,9 @@ for allowed in "-n $namespace get pods" "-n $namespace list pods"; do
   # shellcheck disable=SC2086 # the words are separate arguments
   [[ $(can_i $allowed) == yes ]] || die "the console may not $allowed"
 done
-# Customers, which it creates and deletes for operators but cannot change.
-for allowed in "get customers" "list customers" "create customers" "delete customers"; do
+# Customers, which it watches, and creates and deletes for operators, but
+# cannot change.
+for allowed in "get customers" "list customers" "watch customers" "create customers" "delete customers"; do
   # shellcheck disable=SC2086 # the words are separate arguments
   [[ $(can_i $allowed) == yes ]] || die "the console may not $allowed"
 done

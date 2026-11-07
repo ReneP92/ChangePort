@@ -4,10 +4,11 @@ metadata:
   name: changeport-console
   namespace: changeport
 ---
-# The console reads Customers, and creates and deletes them for operators;
-# the provisioning controller does the rest. It cannot change a Customer, so
-# it cannot turn deletion protection off. In each customer namespace the
-# template's Role lets it read the Secrets it needs, by name.
+# The console reads Customers, from a watch it keeps in memory, and creates
+# and deletes them for operators; the provisioning controller does the rest.
+# It cannot change a Customer, so it cannot turn deletion protection off. In
+# each customer namespace the template's Role lets it read the Secrets it
+# needs, by name.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -15,7 +16,7 @@ metadata:
 rules:
   - apiGroups: [changeport.io]
     resources: [customers]
-    verbs: [get, list, create, delete]
+    verbs: [get, list, watch, create, delete]
   # Customers' Postgres CDC sources, in their namespaces.
   - apiGroups: [changeport.io]
     resources: [postgressources]

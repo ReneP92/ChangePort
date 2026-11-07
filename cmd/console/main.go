@@ -76,9 +76,16 @@ func run(ctx context.Context, args []string) error {
 	if err := corev1.AddToScheme(scheme); err != nil {
 		return err
 	}
+	// client-go's default of 5 requests a second, in bursts of 10, would
+	// queue a busy console's requests behind each other for seconds.
+	config.QPS, config.Burst = 50, 100
 	kube, err := client.New(config, client.Options{Scheme: scheme})
 	if err != nil {
 		return fmt.Errorf("connect to the cluster: %w", err)
+	}
+	customers, err := console.WatchCustomers(ctx, config, scheme)
+	if err != nil {
+		return err
 	}
 
 	metricsClient, err := metrics.NewClient(*metricsURL)
@@ -103,7 +110,7 @@ func run(ctx context.Context, args []string) error {
 		StaffOrganizationID: os.Getenv("CHANGEPORT_STAFF_ORG_ID"),
 		Origins:             splitList(os.Getenv("CHANGEPORT_CONSOLE_ORIGINS")),
 	}, console.Options{
-		Customers: console.KubeCustomers{Client: kube},
+		Customers: console.KubeCustomers{Client: kube, Cache: customers},
 		Clusters:  console.KubeClusters{Client: kube, Kafka: kafka},
 		Metrics:   metricsClient,
 		Sources:   console.KubeSources{Client: kube},
