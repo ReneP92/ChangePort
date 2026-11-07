@@ -71,6 +71,7 @@ type Server struct {
 	auth          *authenticator
 	customers     Customers
 	organizations Organizations
+	trialRequests TrialRequests
 	clusters      Clusters
 	metrics       Metrics
 	sources       Sources
@@ -85,6 +86,8 @@ type Server struct {
 	events    Events
 	recorder  EventRecorder
 	userNames *userNames
+	// users looks users up; userNames caches its names.
+	users Users
 	// messages reads topics for their tails, tails counts the tails each
 	// customer runs, and registries are the customers' schema registries,
 	// which registryURL addresses in tests.
@@ -108,6 +111,8 @@ type Options struct {
 	// Organizations manages customers' Clerk organizations; the default
 	// calls Clerk's Backend API with the secret key.
 	Organizations Organizations
+	// TrialRequests keeps the requests for trials that operators decide on.
+	TrialRequests TrialRequests
 	// Clusters and Metrics read the customers' clusters and their metrics.
 	Clusters Clusters
 	Metrics  Metrics
@@ -127,8 +132,8 @@ type Options struct {
 	// make through the console for it (docs/timeline.md).
 	Events   Events
 	Recorder EventRecorder
-	// Users names users on the timeline; the default asks Clerk's Backend
-	// API with the secret key.
+	// Users looks users up, for the timeline and trial requests; the
+	// default asks Clerk's Backend API with the secret key.
 	Users Users
 	// Messages reads topics' messages for their tails (docs/console.md).
 	Messages Messages
@@ -155,6 +160,7 @@ func New(config Config, options Options) (*Server, error) {
 		config:        config,
 		customers:     options.Customers,
 		organizations: options.Organizations,
+		trialRequests: options.TrialRequests,
 		clusters:      options.Clusters,
 		metrics:       options.Metrics,
 		sources:       options.Sources,
@@ -190,6 +196,7 @@ func New(config Config, options Options) (*Server, error) {
 	if s.userNames.users == nil {
 		s.userNames.users = NewClerkUsers(config.SecretKey)
 	}
+	s.users = s.userNames.users
 	if s.organizations == nil {
 		// Invitations lead to the console's first origin.
 		s.organizations = NewClerkOrganizations(config.SecretKey, config.Origins[0])
@@ -499,39 +506,58 @@ func (s *Server) ProvisionCustomer(ctx context.Context, request api.ProvisionCus
 		return invalid("inviteEmail", "Enter an email address, such as ada@example.com, or leave it empty."), nil
 	}
 
-	organizationID, err := s.organizations.Create(ctx, displayName)
+	customer := &v1alpha1.Customer{
+		Spec: v1alpha1.CustomerSpec{
+			DisplayName:        displayName,
+			Profile:            string(body.Profile),
+			DeletionProtection: body.DeletionProtection,
+		},
+	}
+	_, err = s.provision(ctx, customer, func(organizationID string) error {
+		if email == "" {
+			return nil
+		}
+		return s.organizations.InviteAdmin(ctx, organizationID, email)
+	})
+	if errors.Is(err, ErrInvitationRefused) {
+		return invalid("inviteEmail", err.Error()), nil
+	}
 	if err != nil {
 		return nil, err
 	}
-	// Undoes the organization when the customer cannot be provisioned, even
-	// when the request is gone.
-	undo := func() {
-		if err := s.organizations.Delete(context.WithoutCancel(ctx), organizationID); err != nil {
+	s.audit(ctx, principal, customer.Name, "customer provisioned", "display_name", displayName, "profile", customer.Spec.Profile,
+		"customer_organization", customer.Spec.ClerkOrganizationID, "deletion_protection", customer.Spec.DeletionProtection, "invited", email != "")
+	return api.ProvisionCustomer201JSONResponse(toAPI(customer)), nil
+}
+
+// provision creates a Clerk organization named after the customer, lets
+// admit give it its first admin, and creates the customer with a new ID,
+// filling in customer's name and organization. When a step fails, it
+// deletes the organization again and returns the error. On success, it
+// returns undo, which deletes both the customer and the organization, for a
+// caller whose own later step fails.
+func (s *Server) provision(ctx context.Context, customer *v1alpha1.Customer, admit func(organizationID string) error) (undo func(), err error) {
+	organizationID, err := s.organizations.Create(ctx, customer.Spec.DisplayName)
+	if err != nil {
+		return nil, err
+	}
+	// Undoes even when the request is gone.
+	background := context.WithoutCancel(ctx)
+	deleteOrganization := func() {
+		if err := s.organizations.Delete(background, organizationID); err != nil {
 			s.logger.ErrorContext(ctx, "could not delete the organization of a failed provisioning", "organization", organizationID, "error", err)
 		}
 	}
-	if email != "" {
-		if err := s.organizations.InviteAdmin(ctx, organizationID, email); err != nil {
-			undo()
-			if errors.Is(err, ErrInvitationRefused) {
-				return invalid("inviteEmail", err.Error()), nil
-			}
-			return nil, err
-		}
+	if err := admit(organizationID); err != nil {
+		deleteOrganization()
+		return nil, err
 	}
-	customer := &v1alpha1.Customer{
-		Spec: v1alpha1.CustomerSpec{
-			DisplayName:         displayName,
-			Profile:             string(body.Profile),
-			ClerkOrganizationID: organizationID,
-			DeletionProtection:  body.DeletionProtection,
-		},
-	}
+	customer.Spec.ClerkOrganizationID = organizationID
 	// The controller keeps the label in sync; set now, the organization's
 	// members find their customer at once.
 	customer.Labels = map[string]string{v1alpha1.ClerkOrganizationLabel: organizationID}
 	for attempt := 0; ; attempt++ {
-		customer.Name, err = newCustomerID()
+		customer.Name, err = newID("c-")
 		if err == nil {
 			err = s.customers.Create(ctx, customer)
 		}
@@ -540,12 +566,15 @@ func (s *Server) ProvisionCustomer(ctx context.Context, request api.ProvisionCus
 		}
 	}
 	if err != nil {
-		undo()
+		deleteOrganization()
 		return nil, err
 	}
-	s.audit(ctx, principal, customer.Name, "customer provisioned", "display_name", displayName, "profile", customer.Spec.Profile,
-		"customer_organization", organizationID, "deletion_protection", customer.Spec.DeletionProtection, "invited", email != "")
-	return api.ProvisionCustomer201JSONResponse(toAPI(customer)), nil
+	return func() {
+		if err := s.customers.Delete(background, customer.Name); err != nil {
+			s.logger.ErrorContext(ctx, "could not delete the customer of a failed provisioning", "customer", customer.Name, "error", err)
+		}
+		deleteOrganization()
+	}, nil
 }
 
 // DeprovisionCustomer implements api.StrictServerInterface. The customer's
@@ -596,20 +625,21 @@ func validEmail(s string) bool {
 	return err == nil && address.Address == s && address.Name == ""
 }
 
-// customerIDAlphabet leaves out letters and digits that look alike, such as
-// l and 1, so that people can read IDs out.
-const customerIDAlphabet = "abcdefghijkmnpqrstuvwxyz23456789"
+// idAlphabet leaves out letters and digits that look alike, such as l and 1,
+// so that people can read IDs out.
+const idAlphabet = "abcdefghijkmnpqrstuvwxyz23456789"
 
-// newCustomerID returns a new opaque customer ID, such as c-7f3k2q: about a
-// billion possibilities, so that collisions are rare and retried.
-func newCustomerID() (string, error) {
+// newID returns a new opaque ID after prefix, such as c-7f3k2q for a
+// customer or tr-7f3k2q for a trial request: about a billion possibilities,
+// so that collisions are rare and retried.
+func newID(prefix string) (string, error) {
 	random := make([]byte, 6)
 	if _, err := rand.Read(random); err != nil {
 		return "", err
 	}
-	id := []byte("c-")
+	id := []byte(prefix)
 	for _, b := range random {
-		id = append(id, customerIDAlphabet[int(b)%len(customerIDAlphabet)])
+		id = append(id, idAlphabet[int(b)%len(idAlphabet)])
 	}
 	return string(id), nil
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for CheckResultStatus.
@@ -462,6 +463,96 @@ func (e TimelineEventKind) Valid() bool {
 	}
 }
 
+// Defines values for TrialApprovalProfile.
+const (
+	TrialApprovalProfileDev        TrialApprovalProfile = "dev"
+	TrialApprovalProfileDevHa      TrialApprovalProfile = "dev-ha"
+	TrialApprovalProfileProduction TrialApprovalProfile = "production"
+)
+
+// Valid indicates whether the value is a known member of the TrialApprovalProfile enum.
+func (e TrialApprovalProfile) Valid() bool {
+	switch e {
+	case TrialApprovalProfileDev:
+		return true
+	case TrialApprovalProfileDevHa:
+		return true
+	case TrialApprovalProfileProduction:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TrialRequestPhase.
+const (
+	TrialRequestPhaseApproved TrialRequestPhase = "Approved"
+	TrialRequestPhaseDeclined TrialRequestPhase = "Declined"
+	TrialRequestPhasePending  TrialRequestPhase = "Pending"
+)
+
+// Valid indicates whether the value is a known member of the TrialRequestPhase enum.
+func (e TrialRequestPhase) Valid() bool {
+	switch e {
+	case TrialRequestPhaseApproved:
+		return true
+	case TrialRequestPhaseDeclined:
+		return true
+	case TrialRequestPhasePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TrialRetention.
+const (
+	Over30Days TrialRetention = "over-30-days"
+	UpTo1Day   TrialRetention = "up-to-1-day"
+	UpTo30Days TrialRetention = "up-to-30-days"
+	UpTo7Days  TrialRetention = "up-to-7-days"
+)
+
+// Valid indicates whether the value is a known member of the TrialRetention enum.
+func (e TrialRetention) Valid() bool {
+	switch e {
+	case Over30Days:
+		return true
+	case UpTo1Day:
+		return true
+	case UpTo30Days:
+		return true
+	case UpTo7Days:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TrialThroughput.
+const (
+	N10100Mbps  TrialThroughput = "10-100-mbps"
+	N110Mbps    TrialThroughput = "1-10-mbps"
+	Over100Mbps TrialThroughput = "over-100-mbps"
+	Under1Mbps  TrialThroughput = "under-1-mbps"
+)
+
+// Valid indicates whether the value is a known member of the TrialThroughput enum.
+func (e TrialThroughput) Valid() bool {
+	switch e {
+	case N10100Mbps:
+		return true
+	case N110Mbps:
+		return true
+	case Over100Mbps:
+		return true
+	case Under1Mbps:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TailTopicParamsFrom.
 const (
 	Latest TailTopicParamsFrom = "latest"
@@ -752,6 +843,27 @@ type NewTopic struct {
 
 // NewTopicCleanupPolicy defines model for NewTopic.CleanupPolicy.
 type NewTopicCleanupPolicy string
+
+// NewTrialRequest defines model for NewTrialRequest.
+type NewTrialRequest struct {
+	// Company The company, which names the customer once approved
+	Company string `json:"company"`
+
+	// PreferredStart The day they would like to start, if they say
+	PreferredStart *openapi_types.Date `json:"preferredStart,omitempty"`
+
+	// Retention Roughly how long they keep messages
+	Retention TrialRetention `json:"retention"`
+
+	// Role The requester's role at the company
+	Role string `json:"role"`
+
+	// Throughput Roughly how much they write at peak
+	Throughput TrialThroughput `json:"throughput"`
+
+	// UseCase What they want Kafka for
+	UseCase string `json:"useCase"`
+}
 
 // PartitionRange defines model for PartitionRange.
 type PartitionRange struct {
@@ -1226,6 +1338,67 @@ type TopologyWrite struct {
 	Topic          string  `json:"topic"`
 }
 
+// TrialApproval defines model for TrialApproval.
+type TrialApproval struct {
+	// Profile The new customer's profile, dev unless given
+	Profile *TrialApprovalProfile `json:"profile,omitempty"`
+}
+
+// TrialApprovalProfile The new customer's profile, dev unless given
+type TrialApprovalProfile string
+
+// TrialDecline defines model for TrialDecline.
+type TrialDecline struct {
+	// Reason Why, which the requester sees
+	Reason string `json:"reason"`
+}
+
+// TrialRequest defines model for TrialRequest.
+type TrialRequest struct {
+	Company   string    `json:"company"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CustomerID The customer an approval created
+	CustomerID *string `json:"customerID,omitempty"`
+
+	// DecidedAt When an operator decided, once one has
+	DecidedAt *time.Time `json:"decidedAt,omitempty"`
+
+	// Email The requester's verified email address
+	Email          string              `json:"email"`
+	Id             string              `json:"id"`
+	Phase          TrialRequestPhase   `json:"phase"`
+	PreferredStart *openapi_types.Date `json:"preferredStart,omitempty"`
+
+	// Reason Why the request was declined
+	Reason *string `json:"reason,omitempty"`
+
+	// Retention Roughly how long they keep messages
+	Retention TrialRetention `json:"retention"`
+	Role      string         `json:"role"`
+
+	// Throughput Roughly how much they write at peak
+	Throughput TrialThroughput `json:"throughput"`
+	UseCase    string          `json:"useCase"`
+
+	// UserID The requester's Clerk user ID
+	UserID string `json:"userID"`
+}
+
+// TrialRequestPhase defines model for TrialRequest.Phase.
+type TrialRequestPhase string
+
+// TrialRequestList defines model for TrialRequestList.
+type TrialRequestList struct {
+	TrialRequests []TrialRequest `json:"trialRequests"`
+}
+
+// TrialRetention Roughly how long they keep messages
+type TrialRetention string
+
+// TrialThroughput Roughly how much they write at peak
+type TrialThroughput string
+
 // CustomerID defines model for CustomerID.
 type CustomerID = string
 
@@ -1237,6 +1410,9 @@ type SourceName = string
 
 // TopicName defines model for TopicName.
 type TopicName = string
+
+// TrialRequestID defines model for TrialRequestID.
+type TrialRequestID = string
 
 // BadRequest An error, after RFC 9457
 type BadRequest = Problem
@@ -1335,6 +1511,15 @@ type CreateTopicJSONRequestBody = NewTopic
 
 // ProvisionCustomerJSONRequestBody defines body for ProvisionCustomer for application/json ContentType.
 type ProvisionCustomerJSONRequestBody = NewCustomer
+
+// ApproveTrialRequestJSONRequestBody defines body for ApproveTrialRequest for application/json ContentType.
+type ApproveTrialRequestJSONRequestBody = TrialApproval
+
+// DeclineTrialRequestJSONRequestBody defines body for DeclineTrialRequest for application/json ContentType.
+type DeclineTrialRequestJSONRequestBody = TrialDecline
+
+// RequestTrialJSONRequestBody defines body for RequestTrial for application/json ContentType.
+type RequestTrialJSONRequestBody = NewTrialRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -1461,6 +1646,21 @@ type ServerInterface interface {
 	// GetOperatorCustomer One customer, for operators
 	// (GET /api/operator/customers/{customerID})
 	GetOperatorCustomer(w http.ResponseWriter, r *http.Request, customerID CustomerID)
+	// ListTrialRequests Every trial request, newest first, for operators
+	// (GET /api/operator/trial-requests)
+	ListTrialRequests(w http.ResponseWriter, r *http.Request)
+	// ApproveTrialRequest Approve a pending trial request, for operators
+	// (POST /api/operator/trial-requests/{trialRequestID}/approve)
+	ApproveTrialRequest(w http.ResponseWriter, r *http.Request, trialRequestID TrialRequestID)
+	// DeclineTrialRequest Decline a pending trial request, for operators
+	// (POST /api/operator/trial-requests/{trialRequestID}/decline)
+	DeclineTrialRequest(w http.ResponseWriter, r *http.Request, trialRequestID TrialRequestID)
+	// RequestTrial Request a trial
+	// (POST /api/trial-requests)
+	RequestTrial(w http.ResponseWriter, r *http.Request)
+	// ListMyTrialRequests The signed-in user's trial requests, newest first
+	// (GET /api/trial-requests/mine)
+	ListMyTrialRequests(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -2376,6 +2576,100 @@ func (siw *ServerInterfaceWrapper) GetOperatorCustomer(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListTrialRequests operation middleware
+func (siw *ServerInterfaceWrapper) ListTrialRequests(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTrialRequests(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveTrialRequest operation middleware
+func (siw *ServerInterfaceWrapper) ApproveTrialRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "trialRequestID" -------------
+	var trialRequestID TrialRequestID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "trialRequestID", r.PathValue("trialRequestID"), &trialRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "trialRequestID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveTrialRequest(w, r, trialRequestID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeclineTrialRequest operation middleware
+func (siw *ServerInterfaceWrapper) DeclineTrialRequest(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "trialRequestID" -------------
+	var trialRequestID TrialRequestID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "trialRequestID", r.PathValue("trialRequestID"), &trialRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "trialRequestID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeclineTrialRequest(w, r, trialRequestID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RequestTrial operation middleware
+func (siw *ServerInterfaceWrapper) RequestTrial(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RequestTrial(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMyTrialRequests operation middleware
+func (siw *ServerInterfaceWrapper) ListMyTrialRequests(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyTrialRequests(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -2533,6 +2827,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/events", wrapper.ListEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups/{group}/lag", wrapper.GetConsumerGroupLag)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups", wrapper.ListConsumerGroups)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/trial-requests", wrapper.RequestTrial)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/trial-requests/mine", wrapper.ListMyTrialRequests)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/trial-requests", wrapper.ListTrialRequests)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/trial-requests/{trialRequestID}/approve", wrapper.ApproveTrialRequest)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/trial-requests/{trialRequestID}/decline", wrapper.DeclineTrialRequest)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/customers", wrapper.ListCustomers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/customers", wrapper.ProvisionCustomer)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/operator/customers/{customerID}", wrapper.DeprovisionCustomer)
@@ -6149,6 +6448,438 @@ func (response GetOperatorCustomer503JSONResponse) VisitGetOperatorCustomerRespo
 	return err
 }
 
+type ListTrialRequestsRequestObject struct {
+}
+
+type ListTrialRequestsResponseObject interface {
+	VisitListTrialRequestsResponse(w http.ResponseWriter) error
+}
+
+type ListTrialRequests200JSONResponse TrialRequestList
+
+func (response ListTrialRequests200JSONResponse) VisitListTrialRequestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTrialRequests401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListTrialRequests401JSONResponse) VisitListTrialRequestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTrialRequests403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListTrialRequests403JSONResponse) VisitListTrialRequestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTrialRequests503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ListTrialRequests503JSONResponse) VisitListTrialRequestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveTrialRequestRequestObject struct {
+	TrialRequestID TrialRequestID `json:"trialRequestID"`
+	Body           *ApproveTrialRequestJSONRequestBody
+}
+
+type ApproveTrialRequestResponseObject interface {
+	VisitApproveTrialRequestResponse(w http.ResponseWriter) error
+}
+
+type ApproveTrialRequest200JSONResponse TrialRequest
+
+func (response ApproveTrialRequest200JSONResponse) VisitApproveTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveTrialRequest400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ApproveTrialRequest400JSONResponse) VisitApproveTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveTrialRequest401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ApproveTrialRequest401JSONResponse) VisitApproveTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveTrialRequest403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ApproveTrialRequest403JSONResponse) VisitApproveTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveTrialRequest404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ApproveTrialRequest404JSONResponse) VisitApproveTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveTrialRequest409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ApproveTrialRequest409JSONResponse) VisitApproveTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveTrialRequest503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ApproveTrialRequest503JSONResponse) VisitApproveTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineTrialRequestRequestObject struct {
+	TrialRequestID TrialRequestID `json:"trialRequestID"`
+	Body           *DeclineTrialRequestJSONRequestBody
+}
+
+type DeclineTrialRequestResponseObject interface {
+	VisitDeclineTrialRequestResponse(w http.ResponseWriter) error
+}
+
+type DeclineTrialRequest200JSONResponse TrialRequest
+
+func (response DeclineTrialRequest200JSONResponse) VisitDeclineTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineTrialRequest400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response DeclineTrialRequest400JSONResponse) VisitDeclineTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineTrialRequest401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response DeclineTrialRequest401JSONResponse) VisitDeclineTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineTrialRequest403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeclineTrialRequest403JSONResponse) VisitDeclineTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineTrialRequest404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeclineTrialRequest404JSONResponse) VisitDeclineTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineTrialRequest409JSONResponse struct{ ConflictJSONResponse }
+
+func (response DeclineTrialRequest409JSONResponse) VisitDeclineTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeclineTrialRequest503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response DeclineTrialRequest503JSONResponse) VisitDeclineTrialRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestTrialRequestObject struct {
+	Body *RequestTrialJSONRequestBody
+}
+
+type RequestTrialResponseObject interface {
+	VisitRequestTrialResponse(w http.ResponseWriter) error
+}
+
+type RequestTrial201JSONResponse TrialRequest
+
+func (response RequestTrial201JSONResponse) VisitRequestTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestTrial400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response RequestTrial400JSONResponse) VisitRequestTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestTrial401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RequestTrial401JSONResponse) VisitRequestTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestTrial403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RequestTrial403JSONResponse) VisitRequestTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestTrial409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RequestTrial409JSONResponse) VisitRequestTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestTrial429JSONResponse struct{ TooManyRequestsJSONResponse }
+
+func (response RequestTrial429JSONResponse) VisitRequestTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestTrial503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response RequestTrial503JSONResponse) VisitRequestTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyTrialRequestsRequestObject struct {
+}
+
+type ListMyTrialRequestsResponseObject interface {
+	VisitListMyTrialRequestsResponse(w http.ResponseWriter) error
+}
+
+type ListMyTrialRequests200JSONResponse TrialRequestList
+
+func (response ListMyTrialRequests200JSONResponse) VisitListMyTrialRequestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyTrialRequests401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListMyTrialRequests401JSONResponse) VisitListMyTrialRequestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyTrialRequests503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ListMyTrialRequests503JSONResponse) VisitListMyTrialRequestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// GetConfig What the web app needs before anyone signs in
@@ -6274,6 +7005,21 @@ type StrictServerInterface interface {
 	// GetOperatorCustomer One customer, for operators
 	// (GET /api/operator/customers/{customerID})
 	GetOperatorCustomer(ctx context.Context, request GetOperatorCustomerRequestObject) (GetOperatorCustomerResponseObject, error)
+	// ListTrialRequests Every trial request, newest first, for operators
+	// (GET /api/operator/trial-requests)
+	ListTrialRequests(ctx context.Context, request ListTrialRequestsRequestObject) (ListTrialRequestsResponseObject, error)
+	// ApproveTrialRequest Approve a pending trial request, for operators
+	// (POST /api/operator/trial-requests/{trialRequestID}/approve)
+	ApproveTrialRequest(ctx context.Context, request ApproveTrialRequestRequestObject) (ApproveTrialRequestResponseObject, error)
+	// DeclineTrialRequest Decline a pending trial request, for operators
+	// (POST /api/operator/trial-requests/{trialRequestID}/decline)
+	DeclineTrialRequest(ctx context.Context, request DeclineTrialRequestRequestObject) (DeclineTrialRequestResponseObject, error)
+	// RequestTrial Request a trial
+	// (POST /api/trial-requests)
+	RequestTrial(ctx context.Context, request RequestTrialRequestObject) (RequestTrialResponseObject, error)
+	// ListMyTrialRequests The signed-in user's trial requests, newest first
+	// (GET /api/trial-requests/mine)
+	ListMyTrialRequests(ctx context.Context, request ListMyTrialRequestsRequestObject) (ListMyTrialRequestsResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -7408,6 +8154,151 @@ func (sh *strictHandler) GetOperatorCustomer(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetOperatorCustomerResponseObject); ok {
 		if err := validResponse.VisitGetOperatorCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTrialRequests operation middleware
+func (sh *strictHandler) ListTrialRequests(w http.ResponseWriter, r *http.Request) {
+	var request ListTrialRequestsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTrialRequests(ctx, request.(ListTrialRequestsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTrialRequests")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTrialRequestsResponseObject); ok {
+		if err := validResponse.VisitListTrialRequestsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApproveTrialRequest operation middleware
+func (sh *strictHandler) ApproveTrialRequest(w http.ResponseWriter, r *http.Request, trialRequestID TrialRequestID) {
+	var request ApproveTrialRequestRequestObject
+
+	request.TrialRequestID = trialRequestID
+
+	var body ApproveTrialRequestJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApproveTrialRequest(ctx, request.(ApproveTrialRequestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApproveTrialRequest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApproveTrialRequestResponseObject); ok {
+		if err := validResponse.VisitApproveTrialRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeclineTrialRequest operation middleware
+func (sh *strictHandler) DeclineTrialRequest(w http.ResponseWriter, r *http.Request, trialRequestID TrialRequestID) {
+	var request DeclineTrialRequestRequestObject
+
+	request.TrialRequestID = trialRequestID
+
+	var body DeclineTrialRequestJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeclineTrialRequest(ctx, request.(DeclineTrialRequestRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeclineTrialRequest")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeclineTrialRequestResponseObject); ok {
+		if err := validResponse.VisitDeclineTrialRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RequestTrial operation middleware
+func (sh *strictHandler) RequestTrial(w http.ResponseWriter, r *http.Request) {
+	var request RequestTrialRequestObject
+
+	var body RequestTrialJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RequestTrial(ctx, request.(RequestTrialRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RequestTrial")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RequestTrialResponseObject); ok {
+		if err := validResponse.VisitRequestTrialResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMyTrialRequests operation middleware
+func (sh *strictHandler) ListMyTrialRequests(w http.ResponseWriter, r *http.Request) {
+	var request ListMyTrialRequestsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMyTrialRequests(ctx, request.(ListMyTrialRequestsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMyTrialRequests")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMyTrialRequestsResponseObject); ok {
+		if err := validResponse.VisitListMyTrialRequestsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

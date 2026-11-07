@@ -3,14 +3,15 @@
 # console will use it: from the changeport namespace, as the changeport-console
 # service account and Kafka user. The service account may read exactly the
 # Secrets the console needs in the customer's namespace, and its pods for the
-# brokers' health, and nothing else. It manages Postgres sources, and may
-# create their write-once password Secrets; it manages alert settings, and
-# may create their receivers' write-once Secrets. The admission policy
-# changeport-console-secrets holds both to their form; the console may create
-# no other Secret, and never read, change or delete one. Over the internal
-# mTLS listener, the console user may create, describe and delete topics and
-# list consumer groups, but neither produce nor consume, with or without a
-# consumer group. The tail user, which the console reads messages as for
+# brokers' health, and nothing else. It makes trial requests and decides
+# them through their status, but cannot change one. It manages Postgres
+# sources, and may create their write-once password Secrets; it manages
+# alert settings, and may create their receivers' write-once Secrets. The
+# admission policy changeport-console-secrets holds both to their form; the
+# console may create no other Secret, and never read, change or delete one.
+# Over the internal mTLS listener, the console user may create, describe and
+# delete topics and list consumer groups, but neither produce nor consume,
+# with or without a consumer group. The tail user, which the console reads messages as for
 # admins, reads a topic without a consumer group, and may neither produce nor
 # use a group.
 # Usage: hack/console-access-test.sh [customer-id] (default demo)
@@ -52,6 +53,19 @@ for denied in "update customers" "patch customers" "patch customers --subresourc
   "-n $namespace get secret/tiered-storage-credentials" "-n $namespace get secret/changeport-agent" \
   "-n $namespace list secrets" "-n $namespace create pods/exec" "-n $namespace get configmaps" \
   "-n $namespace delete pods" "-n kube-system list pods" "-n kube-system get secret/admin"; do
+  # shellcheck disable=SC2086 # the words are separate arguments
+  [[ $(can_i $denied) == no ]] || die "the console may $denied"
+done
+
+log "Console service account's access to trial requests"
+# Users make them and operators decide them through the status; a request
+# never changes once made.
+for allowed in "get trialrequests" "list trialrequests" "create trialrequests" "delete trialrequests" \
+  "update trialrequests --subresource=status"; do
+  # shellcheck disable=SC2086 # the words are separate arguments
+  [[ $(can_i $allowed) == yes ]] || die "the console may not $allowed"
+done
+for denied in "update trialrequests" "patch trialrequests" "patch trialrequests --subresource=status"; do
   # shellcheck disable=SC2086 # the words are separate arguments
   [[ $(can_i $denied) == no ]] || die "the console may $denied"
 done

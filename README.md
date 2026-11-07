@@ -93,7 +93,7 @@ for progress.
 | `cmd/console`, `internal/console` | The console: the API of `api/openapi.yaml` behind Clerk sign-in, serving the web app built into its image |
 | `cmd/provisioner` | Creates and removes customer Kafka clusters: a CLI, and the controller that reconciles `Customer` resources |
 | `api/openapi.yaml` | The console's API; `just generate` writes its Go server and TypeScript client from it |
-| `api/v1alpha1` | The `Customer` resource (`customers.changeport.io`); `just generate` writes its CRD into `deploy/base/provisioner` |
+| `api/v1alpha1` | Changeport's resources, such as `Customer` (`customers.changeport.io`) and `TrialRequest`; `just generate` writes their CRDs into `deploy/base/provisioner` |
 | `internal/controller` | The `Customer` controller, which provisions, reports status and deprovisions through a finalizer |
 | `internal/clusters` | The console's Kafka admin clients, one per customer cluster, connected on demand with certificates that follow Strimzi's renewals |
 | `internal/metrics` | The console's named VictoriaMetrics queries, which always select the customer's tenant |
@@ -313,6 +313,15 @@ for the controller; `render` and `credentials` work without it.
 kubectl get customers
 ```
 
+Trial requests are resources too: a cluster-scoped `TrialRequest`, named by
+its ID such as `tr-7f3k2q`, holds what someone asked for and, in its status,
+the operator's decision. A request never changes once made, and a decision is
+final.
+
+```bash
+kubectl get trialrequests
+```
+
 Deletion protection keeps a customer's data from going by mistake. The API
 server refuses deleting a protected `Customer` or its namespace, and
 `provisioner provision` protects new production customers unless told
@@ -429,6 +438,18 @@ takes the customer ID typed and is refused while deletion protection is on;
 the Clerk organization is kept, no longer linked to a cluster. The console
 may create and delete Customers but not change them, so it cannot turn
 deletion protection off.
+
+Signed-in users whose organization has no cluster request a trial through
+`POST /api/trial-requests` with their company, role, use case and rough
+throughput and retention; their email address is their verified one in
+Clerk. A user has one pending request at a time and one trial ever, and
+waits a week after a decline. Operators list the requests and approve or
+decline them (`/api/operator/trial-requests`). Approving provisions a
+customer as above, named after the company, on the dev profile unless the
+operator picks another and without deletion protection, with the requester
+added to its organization as an admin at once; a decline gives the reason
+the requester sees. Both are audited. The screens for them come with
+[#136](https://github.com/ReneP92/changeport/issues/136).
 
 Applications on your machine connect to a customer's cluster with the
 `client.properties` the console hands out, unchanged, as they would to

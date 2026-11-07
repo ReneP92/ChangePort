@@ -163,6 +163,26 @@ describes. Operators can print the same file:
 provisioner credentials -customer c-7f3k2q -platform eks-prod
 ```
 
+### Trial requests
+
+Someone who signed up requests a trial in the console, which keeps it as a
+`TrialRequest`. Pending requests are the ones without a phase or with
+`Pending`:
+
+```bash
+kubectl get trialrequests
+kubectl get trialrequest tr-7f3k2q -o yaml   # company, role, use case, throughput, retention
+```
+
+Operators approve or decline them through the console's API (the screens
+come with #136). Approving creates the Clerk organization, makes the
+requester its admin and creates the customer on the dev profile unless
+another is given, without deletion protection; when a step fails, or another
+operator decided first, it undoes everything and answers so. The request's
+status then names the customer. A decline needs a reason, which the
+requester sees; they may ask again a week later. Every decision is in the
+audit log (`trial request approved`, `trial request declined`).
+
 ## Deletion protection
 
 A customer with deletion protection (`spec.deletionProtection` on its
