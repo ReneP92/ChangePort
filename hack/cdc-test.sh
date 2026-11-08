@@ -53,6 +53,9 @@ registry() {
 }
 kafka() { docker run "${KAFKA_CLIENT[@]}" --entrypoint "/opt/kafka/bin/$1" "$KAFKA_IMAGE" --bootstrap-server "$bootstrap" "${@:2}"; }
 cleanup() {
+  # A failure keeps what the source said before it goes.
+  # shellcheck disable=SC2181 # the exit status of the script, on EXIT
+  (($? == 0)) || keep_source_diagnostics "$namespace" "$source_name"
   kubectl -n "$namespace" delete postgressource "$source_name" --ignore-not-found --timeout=3m >/dev/null 2>&1 || true
   cdcsql -step cleanup -tables "$all_tables" | pg >/dev/null 2>&1 || true
   pg -c "DROP TABLE IF EXISTS $invoices" >/dev/null 2>&1 || true

@@ -14,6 +14,9 @@
 # The kind overlay with the locally built images, written by hack/lib.sh
 /deploy/overlays/kind-local/
 
+# What hack/diagnostics.sh and failed CDC tests keep for CI to upload
+/diagnostics/
+
 # Terraform
 .terraform/
 *.tfstate

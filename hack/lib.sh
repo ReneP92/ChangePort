@@ -269,6 +269,19 @@ terraform() {
   TF_PLUGIN_CACHE_DIR="$BIN_DIR/terraform-plugins" "$TERRAFORM_BIN" "$@"
 }
 
+# Keeps what a Postgres source and its Connect worker said, in
+# diagnostics/<source>, which CI uploads with what hack/diagnostics.sh
+# collects: a failed CDC test calls it before its clean-up deletes the
+# source, and with it the worker and its logs.
+keep_source_diagnostics() {
+  local namespace=$1 source=$2 out="$ROOT/diagnostics/$2"
+  mkdir -p "$out"
+  kubectl -n "$namespace" get postgressource "$source" -o yaml >"$out/source.yaml" 2>&1 || true
+  kubectl -n "$namespace" get kafkaconnect,kafkaconnector -o yaml >"$out/connect.yaml" 2>&1 || true
+  kubectl -n "$namespace" logs -l strimzi.io/kind=KafkaConnect --tail=-1 --prefix >"$out/connect.log" 2>&1 || true
+  log "Kept source $source and its Connect worker's logs in diagnostics/$source"
+}
+
 # Downloads every upstream file pinned in deploy/upstream-files.txt.
 fetch_upstream_files() {
   local sha path url
