@@ -79,9 +79,14 @@ test("a visitor signs up, requests a trial, an operator approves, and the visito
   });
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(`Trial-${fixtures.run}-password`);
+  // Clerk refuses a code typed before it has sent one.
+  const codeSent = page.waitForResponse(
+    (response) => response.url().includes("/prepare_verification") && response.ok(),
+  );
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page.getByText("Verify your email")).toBeVisible({ timeout: 20_000 });
-  await page.keyboard.type("424242");
+  await codeSent;
+  await page.getByRole("textbox", { name: "Enter verification code" }).pressSequentially("424242");
   // Signed up once the trial page asks for the request.
   await expect(page.getByRole("heading", { name: "Request a trial" })).toBeVisible({
     timeout: 20_000,
