@@ -6,6 +6,7 @@ import {
   readFixtures,
   runLabel,
   testCustomers,
+  testTrialRequests,
 } from "./fixtures";
 
 // Removes this run's users, organizations and customers, but not the
@@ -35,6 +36,12 @@ teardown("remove this run's users, organizations and customers", async () => {
   for (const c of testCustomers()) {
     if (c.spec.displayName.startsWith(prefix)) {
       kubectl(["delete", "customer", c.metadata.name, "--wait=false", "--ignore-not-found"]);
+    }
+  }
+  // The trial requests the tests made, for companies named the same way.
+  for (const r of testTrialRequests()) {
+    if (r.spec.company.startsWith(prefix)) {
+      kubectl(["delete", "trialrequest", r.metadata.name, "--wait=false", "--ignore-not-found"]);
     }
   }
 });

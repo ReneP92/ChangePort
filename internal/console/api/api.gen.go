@@ -1365,8 +1365,11 @@ type TrialRequest struct {
 	DecidedAt *time.Time `json:"decidedAt,omitempty"`
 
 	// Email The requester's verified email address
-	Email          string              `json:"email"`
-	Id             string              `json:"id"`
+	Email string `json:"email"`
+	Id    string `json:"id"`
+
+	// OrganizationID The customer's Clerk organization, which the requester is an admin of
+	OrganizationID *string             `json:"organizationID,omitempty"`
 	Phase          TrialRequestPhase   `json:"phase"`
 	PreferredStart *openapi_types.Date `json:"preferredStart,omitempty"`
 

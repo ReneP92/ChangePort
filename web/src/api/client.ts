@@ -38,6 +38,11 @@ export type TailMessage = components["schemas"]["TailMessage"];
 export type Topology = components["schemas"]["Topology"];
 export type TailPayload = components["schemas"]["TailPayload"];
 export type TailSkipped = components["schemas"]["TailSkipped"];
+export type TrialRequest = components["schemas"]["TrialRequest"];
+export type NewTrialRequest = components["schemas"]["NewTrialRequest"];
+export type TrialThroughput = components["schemas"]["TrialThroughput"];
+export type TrialRetention = components["schemas"]["TrialRetention"];
+export type TrialApproval = components["schemas"]["TrialApproval"];
 
 /** An error the console's API answered, with its problem description. */
 export class ApiError extends Error {

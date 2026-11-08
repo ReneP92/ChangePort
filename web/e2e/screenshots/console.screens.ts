@@ -41,6 +41,13 @@ async function shot(page: Page, name: string): Promise<void> {
       timeout: 20_000,
     });
   }
+  // Images, such as the logos of Clerk's sign-in buttons, load late.
+  await page.waitForFunction(() => {
+    const { document } = globalThis as unknown as {
+      document: { images: ArrayLike<{ complete: boolean }> };
+    };
+    return Array.from(document.images).every((image) => image.complete);
+  });
   const dialog = (await page.getByRole("dialog").count()) > 0;
   const size = page.viewportSize();
   for (const [device, viewport] of devices) {

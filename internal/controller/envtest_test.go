@@ -468,7 +468,7 @@ func TestTrialRequestValidation(t *testing.T) {
 		if err := setStatus(v1alpha1.TrialRequestStatus{Phase: v1alpha1.TrialRequestDeclined, DecidedBy: "user_6", DecidedAt: decided, Reason: "Not yet"}); err != nil {
 			t.Fatal(err)
 		}
-		err := setStatus(v1alpha1.TrialRequestStatus{Phase: v1alpha1.TrialRequestApproved, DecidedBy: "user_6", DecidedAt: decided, Customer: "c-abcdef"})
+		err := setStatus(v1alpha1.TrialRequestStatus{Phase: v1alpha1.TrialRequestApproved, DecidedBy: "user_6", DecidedAt: decided, Customer: "c-abcdef", OrganizationID: "org_2abc"})
 		if !apierrors.IsInvalid(err) || !strings.Contains(err.Error(), "a decision is final") {
 			t.Errorf("UpdateStatus() error = %v, want the change of decision refused", err)
 		}

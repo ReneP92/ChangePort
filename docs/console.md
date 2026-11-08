@@ -102,6 +102,36 @@ to them, an unknown page, and an organization without a cluster.
 
 ![No cluster](screenshots/09-no-cluster-desktop.png)
 
+## Trials
+
+Someone new signs up at `/trial`, which shows Clerk's sign-up; sign-in links
+to it.
+
+![Signing up for a trial](screenshots/32-trial-sign-up-desktop.png)
+
+Signed in without an organization, or in one without a cluster, home points
+to the trial.
+
+![No organization](screenshots/33-no-organization-desktop.png)
+
+The request: the company, which names the cluster's organization, the
+requester's role, what they want Kafka for, rough peak throughput and
+retention, and when they would like to start. The form checks what the
+console's API checks before sending.
+
+![Requesting a trial](screenshots/34-trial-request-desktop.png)
+
+![What is missing](screenshots/35-trial-request-problems-desktop.png)
+
+The request waits for an operator, and the page moves on by itself once
+they decide. Approved, it switches the requester to their new organization,
+whose admin they are, and opens its cluster as it gets ready. Declined, it
+shows the operator's reason and when they may ask again, a week later.
+
+![A pending request](screenshots/36-trial-pending-desktop.png)
+
+![A declined request](screenshots/41-trial-declined-desktop.png)
+
 ## Alerts
 
 Alerts about Acme's own applications (see [alerts.md](alerts.md)), under
@@ -197,6 +227,20 @@ Deprovisioning takes the customer ID typed; the Clerk organization is kept.
 ![Deprovisioning](screenshots/15-operator-deprovision-desktop.png)
 
 ![A customer being deleted](screenshots/16-operator-customer-deleting-desktop.png)
+
+Trial requests, the pending ones first, with a count of them in the
+navigation. Approving creates the organization, makes the requester its
+admin and provisions the cluster, on dev unless the operator picks another
+profile and without deletion protection; declining needs a reason, which the
+requester sees.
+
+![Trial requests](screenshots/37-operator-trial-requests-desktop.png)
+
+![Approving a trial](screenshots/38-operator-trial-approve-desktop.png)
+
+![Declining a trial](screenshots/39-operator-trial-decline-desktop.png)
+
+![Decided requests](screenshots/40-operator-trial-decided-desktop.png)
 
 ## Still to design
 

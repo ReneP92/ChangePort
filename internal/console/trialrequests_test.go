@@ -59,7 +59,7 @@ func TestKubeTrialRequestsAsTheConsole(t *testing.T) {
 		t.Fatal(err)
 	}
 	stale.Status = v1alpha1.TrialRequestStatus{
-		Phase: v1alpha1.TrialRequestApproved, DecidedBy: "user_2op", DecidedAt: &metav1.Time{Time: time.Now()}, Customer: "c-abcdef",
+		Phase: v1alpha1.TrialRequestApproved, DecidedBy: "user_2op", DecidedAt: &metav1.Time{Time: time.Now()}, Customer: "c-abcdef", OrganizationID: "org_2abc",
 	}
 	if err := requests.Decide(ctx, stale); !errors.Is(err, ErrTrialRequestChanged) {
 		t.Errorf("deciding a request decided meanwhile = %v, want ErrTrialRequestChanged", err)

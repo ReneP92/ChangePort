@@ -10,6 +10,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
 	"github.com/ReneP92/changeport/internal/console/api"
@@ -295,7 +296,11 @@ func TestOperatorsApproveTrialRequests(t *testing.T) {
 	if f.organizations.names["org_new1"] != "Initech" || strings.Join(f.organizations.admins, ",") != "org_new1/user_8" || len(f.organizations.invited) != 0 {
 		t.Errorf("organizations %v, admins %v, invited %v; want Initech with user_8 as its admin, uninvited", f.organizations.names, f.organizations.admins, f.organizations.invited)
 	}
-	if stored := f.trialRequests.requests["tr-pend22"]; stored.Status.DecidedBy != "user_6" || stored.Status.Customer != customer.Name {
+	if ptr.Deref(approved.OrganizationID, "") != "org_new1" {
+		t.Errorf("the approved request names organization %v, want org_new1, so the requester can switch to it", approved.OrganizationID)
+	}
+	if stored := f.trialRequests.requests["tr-pend22"]; stored.Status.DecidedBy != "user_6" || stored.Status.Customer != customer.Name ||
+		stored.Status.OrganizationID != "org_new1" {
 		t.Errorf("the stored decision = %+v", stored.Status)
 	}
 	if !strings.Contains(f.log.String(), `"msg":"trial request approved","audit":true,"tenant":"`+customer.Name+`","user":"user_6"`) {

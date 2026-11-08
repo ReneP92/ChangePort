@@ -11,12 +11,14 @@ import {
   type NewCustomer,
   type NewSource,
   type NewTopic,
+  type NewTrialRequest,
   type ReceiverKind,
   type SetupSQLRequest,
   type SourceChange,
   type SourceCheckRequest,
   type SourceSQLRequest,
   type ThroughputRange,
+  type TrialApproval,
 } from "@/api/client";
 import { readEvents } from "@/lib/sse";
 
@@ -123,6 +125,77 @@ export function useDeprovisionCustomer() {
       }
     },
     onSuccess: () => queries.invalidateQueries({ queryKey: ["operator", "customers"] }),
+  });
+}
+
+/**
+ * The signed-in user's trial requests, newest first, refreshed while one
+ * waits for an operator's decision.
+ */
+export function useMyTrialRequests() {
+  const api = useApi();
+  return useQuery({
+    queryKey: ["trial-requests", "mine"],
+    queryFn: async () => unwrap(await api.GET("/api/trial-requests/mine")).trialRequests,
+    refetchInterval: (query) =>
+      query.state.data?.some((request) => request.phase === "Pending") ? 5_000 : false,
+  });
+}
+
+/** Requests a trial, then refreshes the user's requests. */
+export function useRequestTrial() {
+  const api = useApi();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async (request: NewTrialRequest) =>
+      unwrap(await api.POST("/api/trial-requests", { body: request })),
+    onSuccess: () => queries.invalidateQueries({ queryKey: ["trial-requests", "mine"] }),
+  });
+}
+
+/** Every trial request, newest first, for operators. */
+export function useTrialRequests() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["operator", "trial-requests", organization],
+    queryFn: async () => unwrap(await api.GET("/api/operator/trial-requests")).trialRequests,
+    refetchInterval: 10_000,
+  });
+}
+
+/**
+ * Approves a pending trial request, which provisions the requester's
+ * customer, then refreshes the requests and the customers.
+ */
+export function useApproveTrialRequest() {
+  const api = useApi();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, approval }: { id: string; approval: TrialApproval }) =>
+      unwrap(
+        await api.POST("/api/operator/trial-requests/{trialRequestID}/approve", {
+          params: { path: { trialRequestID: id } },
+          body: approval,
+        }),
+      ),
+    onSuccess: () => queries.invalidateQueries({ queryKey: ["operator"] }),
+  });
+}
+
+/** Declines a pending trial request with a reason, then refreshes them. */
+export function useDeclineTrialRequest() {
+  const api = useApi();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) =>
+      unwrap(
+        await api.POST("/api/operator/trial-requests/{trialRequestID}/decline", {
+          params: { path: { trialRequestID: id } },
+          body: { reason },
+        }),
+      ),
+    onSuccess: () => queries.invalidateQueries({ queryKey: ["operator", "trial-requests"] }),
   });
 }
 
