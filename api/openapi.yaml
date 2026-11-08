@@ -1125,6 +1125,42 @@ paths:
           $ref: "#/components/responses/Conflict"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/operator/customers/{customerID}/trial:
+    patch:
+      operationId: changeTrial
+      summary: Extend a customer's trial, or convert the customer, for operators
+      description: >-
+        Only for a customer on a trial. Extending moves the trial's end, to at
+        least an hour and at most 90 days from now; converting ends the trial,
+        so that the customer stays. The customer's other settings cannot
+        change this way.
+      parameters:
+        - $ref: "#/components/parameters/CustomerID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrialChange"
+      responses:
+        "200":
+          description: The customer, with its trial changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
 components:
   securitySchemes:
     clerk:
@@ -2314,6 +2350,26 @@ components:
           description: Why, which the requester sees
           minLength: 1
           maxLength: 1000
+    CustomerTrial:
+      type: object
+      description: A trial, which ends on its own unless an operator extends it or converts the customer
+      required: [endsAt]
+      properties:
+        endsAt:
+          type: string
+          format: date-time
+          description: When the trial ends and the customer is deprovisioned; it is warned three days before
+    TrialChange:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [extend, convert]
+        endsAt:
+          type: string
+          format: date-time
+          description: The trial's new end, to extend it
     NewCustomer:
       type: object
       required: [displayName, profile, deletionProtection]
@@ -2364,6 +2420,8 @@ components:
         deleting:
           type: boolean
           description: Whether the customer is being deleted
+        trial:
+          $ref: "#/components/schemas/CustomerTrial"
         createdAt:
           type: string
           format: date-time

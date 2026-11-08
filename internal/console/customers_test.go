@@ -1,6 +1,8 @@
 package console
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -9,6 +11,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -161,3 +164,72 @@ func TestWatchCustomersFailsWithoutAccess(t *testing.T) {
 type roundTripper func(*http.Request) (*http.Response, error)
 
 func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// TestConsoleChangesOnlyTrials patches Customers as the console's service
+// account: it may extend a trial and convert a customer, and the admission
+// policy changeport-console-customers refuses every other change.
+func TestConsoleChangesOnlyTrials(t *testing.T) {
+	admin, consoleClient, _ := startAPIServerAsTheConsole(t)
+	ctx := t.Context()
+	end := metav1.NewTime(time.Now().Add(14 * 24 * time.Hour).Truncate(time.Second))
+	for _, customer := range []*v1alpha1.Customer{
+		{
+			ObjectMeta: metav1.ObjectMeta{Name: "acme", Finalizers: []string{v1alpha1.Finalizer}},
+			Spec:       v1alpha1.CustomerSpec{DisplayName: "Acme", Profile: "dev", Trial: &v1alpha1.CustomerTrial{EndsAt: end}},
+		},
+		{ObjectMeta: metav1.ObjectMeta{Name: "globex"}, Spec: v1alpha1.CustomerSpec{DisplayName: "Globex", Profile: "dev"}},
+	} {
+		if err := admin.Create(ctx, customer); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// refused patches a customer as the console, in a dry run, until the
+	// API server has loaded the policy and refuses it.
+	refused := func(name, patch string) error {
+		t.Helper()
+		deadline := time.Now().Add(15 * time.Second)
+		for {
+			err := consoleClient.Patch(ctx, &v1alpha1.Customer{ObjectMeta: metav1.ObjectMeta{Name: name}},
+				client.RawPatch(types.MergePatchType, []byte(patch)), client.DryRunAll)
+			if err != nil && strings.Contains(err.Error(), "changeport-console-customers") {
+				return nil
+			}
+			if time.Now().After(deadline) {
+				return fmt.Errorf("not refused by the policy: %w", err)
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+	for what, change := range map[string]struct{ name, patch string }{
+		"turning deletion protection on": {"acme", `{"spec":{"trial":null,"deletionProtection":true}}`},
+		"renaming":                       {"acme", `{"spec":{"displayName":"Not Acme"}}`},
+		"removing the finalizer":         {"acme", `{"metadata":{"finalizers":null}}`},
+		"labelling":                      {"acme", `{"metadata":{"labels":{"changeport.io/clerk-organization":"org_2evil"}}}`},
+		"putting a customer on a trial":  {"globex", `{"spec":{"trial":{"endsAt":"2030-01-01T00:00:00Z"}}}`},
+	} {
+		if err := refused(change.name, change.patch); err != nil {
+			t.Errorf("%s: %v", what, err)
+		}
+	}
+
+	customers := KubeCustomers{Client: consoleClient}
+	acme, err := customers.Get(ctx, "acme")
+	if err != nil || acme == nil {
+		t.Fatalf("Get(acme) = %v, %v", acme, err)
+	}
+	stale := acme.DeepCopy()
+	extended := metav1.NewTime(end.Add(7 * 24 * time.Hour))
+	if err := customers.SetTrial(ctx, acme, &v1alpha1.CustomerTrial{EndsAt: extended}); err != nil {
+		t.Fatalf("extending the trial: %v", err)
+	}
+	if err := customers.SetTrial(ctx, stale, nil); !errors.Is(err, ErrCustomerChanged) {
+		t.Errorf("converting a customer read before the extension = %v, want ErrCustomerChanged", err)
+	}
+	if err := customers.SetTrial(ctx, acme, nil); err != nil {
+		t.Fatalf("converting: %v", err)
+	}
+	converted, err := customers.Get(ctx, "acme")
+	if err != nil || converted.Spec.Trial != nil || len(converted.Finalizers) != 1 {
+		t.Errorf("the converted customer = %+v, %v; want no trial and its finalizer", converted, err)
+	}
+}

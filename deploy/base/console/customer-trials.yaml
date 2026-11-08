@@ -1,0 +1,47 @@
+# The console may patch Customers (deploy/base/console/console.yaml) only to
+# extend a trial or convert a customer, for operators: this policy holds
+# every change it makes to a Customer to the trial of a customer on a trial.
+# It can never turn deletion protection on or off, rename, move or resize a
+# customer, or touch its metadata, such as the finalizer that deprovisions
+# its cluster. A new field of CustomerSpec belongs in the comparison below.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: changeport-console-customers
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [changeport.io]
+        apiVersions: ["*"]
+        operations: [UPDATE]
+        resources: [customers]
+  matchConditions:
+    - name: the-console
+      expression: request.userInfo.username == 'system:serviceaccount:changeport:changeport-console'
+  validations:
+    - expression: has(oldObject.spec.trial)
+      message: the console may only change the trial of a customer on a trial
+      reason: Forbidden
+    - expression: >-
+        object.spec.displayName == oldObject.spec.displayName &&
+        object.spec.profile == oldObject.spec.profile &&
+        object.spec.?clerkOrganizationID == oldObject.spec.?clerkOrganizationID &&
+        object.spec.?deletionProtection == oldObject.spec.?deletionProtection
+      message: the console may only change a customer's trial, to extend it or convert the customer
+      reason: Forbidden
+    - expression: >-
+        object.metadata.?labels == oldObject.metadata.?labels &&
+        object.metadata.?annotations == oldObject.metadata.?annotations &&
+        object.metadata.?finalizers == oldObject.metadata.?finalizers &&
+        object.metadata.?ownerReferences == oldObject.metadata.?ownerReferences
+      message: the console may not change a customer's metadata
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: changeport-console-customers
+spec:
+  policyName: changeport-console-customers
+  validationActions: [Deny]

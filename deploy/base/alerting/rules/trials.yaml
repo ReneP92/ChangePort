@@ -1,0 +1,18 @@
+# Alerting rules for trials, which end on their own (docs/runbook.md,
+# Trials).
+groups:
+  - name: trials
+    rules:
+      # A trial ends in under two days and nobody has extended it or
+      # converted the customer; at its end the customer is deprovisioned.
+      # The customer was warned three days before.
+      - alert: TrialEndingUndecided
+        expr: changeport_customer_trial_ends_timestamp_seconds - time() < 2 * 86400
+        for: 5m
+        labels:
+          severity: warn
+          audience: operator
+        annotations:
+          summary: "The trial of {{ $labels.tenant }} ends in under two days without a decision"
+          description: "At its end the customer is deprovisioned. Extend the trial or convert the customer in the operator console."
+          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-trial-is-ending

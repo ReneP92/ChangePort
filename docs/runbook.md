@@ -28,6 +28,7 @@ it and runs in the namespace `customer-c-7f3k2q`, with brokers
 - [Partitions are not in sync](#partitions-are-not-in-sync)
 - [No active controller](#no-active-controller)
 - [A customer is not ready](#a-customer-is-not-ready)
+- [A trial is ending](#a-trial-is-ending)
 - [A broker's volume fills up](#a-brokers-volume-fills-up)
 - [Tiered storage falls behind](#tiered-storage-falls-behind)
 - [The Kafka agent is not reconciling](#the-kafka-agent-is-not-reconciling)
@@ -51,6 +52,7 @@ customer (`tenant`), its cluster and the environment, and links its section:
 | `KafkaNoActiveController` | page | [No active controller](#no-active-controller) |
 | `KafkaBrokersDown` | page | [A broker is down](#a-broker-is-down) |
 | `CustomerNotReady` | page | [A customer is not ready](#a-customer-is-not-ready) |
+| `TrialEndingUndecided` | warn | [A trial is ending](#a-trial-is-ending) |
 | `KafkaUnderReplicatedPartitions` | warn | [Partitions are not in sync](#partitions-are-not-in-sync) |
 | `KafkaVolumeNearlyFull` | warn | [A broker's volume fills up](#a-brokers-volume-fills-up) |
 | `TieredStorageCopyErrors`, `TieredStorageCopyLagGrowing` | warn | [Tiered storage falls behind](#tiered-storage-falls-behind) |
@@ -183,6 +185,25 @@ status then names the customer. A decline needs a reason, which the
 requester sees; they may ask again a week later. Every decision is in the
 audit log (`trial request approved`, `trial request declined`).
 
+### Trials
+
+An approved request's customer is on a 14-day trial: its Customer's
+`spec.trial.endsAt` says when it ends, and `kubectl get customers` shows it
+under Trial ends. Three days before the end, the provisioning controller
+sets the Customer's `TrialEnding` condition to True and records the end it
+warned the customer about (`status.trialWarnedFor`), once per end. At the
+end, the controller deletes the Customer, which deprovisions it as
+[Deprovisioning a customer](#deprovisioning-a-customer) describes, and keeps
+its data for the usual 30 days.
+
+Operators extend a trial, to a new end at most 90 days away, or convert the
+customer, which ends its trial so that it stays, on the customer's page in
+the operator console. Both are in the audit log (`trial extended`, `trial
+converted`). A trial cannot have deletion protection; turn it on after
+converting, if the customer needs it. The console may change nothing of a
+Customer but its trial: the admission policy
+`deploy/base/console/customer-trials.yaml` refuses the rest.
+
 ## Deletion protection
 
 A customer with deletion protection (`spec.deletionProtection` on its
@@ -194,8 +215,9 @@ console refuse deprovisioning it. New production customers are protected by
 default, from the console and from `provisioner provision`.
 
 Protection is turned on and off with the provisioner CLI only; the console
-can create and delete customers but not change them. Turning it off takes
-the customer ID typed again:
+can create and delete customers, and change only their trials. A customer on
+a trial cannot be protected until it is converted. Turning protection off
+takes the customer ID typed again:
 
 ```bash
 provisioner protect -customer c-7f3k2q
@@ -526,6 +548,17 @@ operator console shows it ([Where to look](#where-to-look)):
   operator pod.
 - `AgentPending`: [The Kafka agent is not reconciling](#the-kafka-agent-is-not-reconciling).
 - `ProvisioningFailed` or `InvalidSpec`: the provisioner's logs.
+
+## A trial is ending
+
+Alert: `TrialEndingUndecided`.
+
+The customer's trial ends in under two days, and nobody has extended it or
+converted the customer; the customer was warned when three days were left.
+At the end the provisioning controller deletes the Customer, which
+deprovisions its cluster ([Trials](#trials)). Decide on the customer's page
+in the operator console: extend the trial, or convert the customer. If it
+should end, let it; the alert stops with the Customer.
 
 ## A broker's volume fills up
 

@@ -4,10 +4,15 @@ import { useOperatorCustomer } from "@/api/queries";
 import { CustomerSummary } from "@/components/CustomerSummary";
 import { Notice } from "@/components/Notice";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDay, trialLeft } from "@/lib/trials";
 import { DeprovisionDialog } from "@/pages/operator/DeprovisionDialog";
 import { OperatorsOnly } from "@/pages/operator/OperatorCustomers";
+import { ConvertTrialDialog, ExtendTrialDialog } from "@/pages/operator/TrialChangeDialogs";
 
-/** One customer, for operators: its cluster's progress, and deprovisioning. */
+/**
+ * One customer, for operators: its cluster's progress, its trial if it is
+ * on one, and deprovisioning.
+ */
 export function OperatorCustomer() {
   return (
     <OperatorsOnly>
@@ -51,6 +56,24 @@ function CustomerPage() {
     <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
       {back}
       <CustomerSummary customer={c} />
+      {c.trial && !c.deleting && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <h2>Trial</h2>
+            </CardTitle>
+            <CardDescription>
+              Ends on {formatDay(new Date(c.trial.endsAt))}, in {trialLeft(c.trial.endsAt)}. At its
+              end the customer is deprovisioned, unless the trial is extended or the customer
+              converted.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <ExtendTrialDialog customer={c} trial={c.trial} />
+            <ConvertTrialDialog customer={c} />
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>

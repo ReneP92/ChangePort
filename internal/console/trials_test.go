@@ -293,6 +293,9 @@ func TestOperatorsApproveTrialRequests(t *testing.T) {
 		customer.Spec.ClerkOrganizationID != "org_new1" || customer.Labels[v1alpha1.ClerkOrganizationLabel] != "org_new1" {
 		t.Errorf("the trial's customer = %+v, want Initech on dev without deletion protection in org_new1", customer)
 	}
+	if customer.Spec.Trial == nil || time.Until(customer.Spec.Trial.EndsAt.Time) < trialLength-time.Minute || time.Until(customer.Spec.Trial.EndsAt.Time) > trialLength {
+		t.Errorf("the trial's customer has trial %+v, want one that ends in 14 days", customer.Spec.Trial)
+	}
 	if f.organizations.names["org_new1"] != "Initech" || strings.Join(f.organizations.admins, ",") != "org_new1/user_8" || len(f.organizations.invited) != 0 {
 		t.Errorf("organizations %v, admins %v, invited %v; want Initech with user_8 as its admin, uninvited", f.organizations.names, f.organizations.admins, f.organizations.invited)
 	}
@@ -396,5 +399,78 @@ func TestOperatorsDeclineTrialRequests(t *testing.T) {
 	}
 	if len(f.organizations.created) != 0 || len(f.customers.customers) != 2 {
 		t.Errorf("declines provisioned something: organizations %v", f.organizations.created)
+	}
+}
+
+func TestOperatorsExtendAndConvertTrials(t *testing.T) {
+	f := newFixture(t)
+	staff := f.signer.token(t, session{user: "user_6", org: staffOrg, role: "member"})
+	end := time.Now().Add(5 * 24 * time.Hour).Truncate(time.Second)
+	acme, _ := f.customers.Get(t.Context(), "acme")
+	acme.Spec.Trial = &v1alpha1.CustomerTrial{EndsAt: metav1.NewTime(end)}
+	change := func(id, body string) (int, string) {
+		return send(t, f.handler, http.MethodPatch, "/api/operator/customers/"+id+"/trial", staff, body)
+	}
+	at := func(when time.Time) string {
+		return `{"action":"extend","endsAt":"` + when.UTC().Format(time.RFC3339) + `"}`
+	}
+
+	admin := f.signer.token(t, session{user: "user_3", org: "org_acme", role: "admin"})
+	if status, _ := send(t, f.handler, http.MethodPatch, "/api/operator/customers/acme/trial", admin, `{"action":"convert"}`); status != 403 {
+		t.Errorf("a customer's admin changing its trial = %d, want 403", status)
+	}
+	for name, body := range map[string]string{
+		"no end":          `{"action":"extend"}`,
+		"an end too soon": at(time.Now().Add(10 * time.Minute)),
+		"an end too late": at(time.Now().Add(100 * 24 * time.Hour)),
+	} {
+		if status, response := change("acme", body); status != 400 || !strings.Contains(response, `"field":"endsAt"`) {
+			t.Errorf("extending with %s = %d %s, want 400 on endsAt", name, status, response)
+		}
+	}
+	if status, response := change("acme", `{"action":"shorten"}`); status != 400 || !strings.Contains(response, `"field":"action"`) {
+		t.Errorf("an unknown action = %d %s, want 400 on action", status, response)
+	}
+	if status, _ := change("nobody", `{"action":"convert"}`); status != 404 {
+		t.Errorf("changing the trial of an unknown customer = %d, want 404", status)
+	}
+	if status, response := change("globex", `{"action":"convert"}`); status != 409 || !strings.Contains(response, "Not on a trial") {
+		t.Errorf("converting a customer not on a trial = %d %s, want 409", status, response)
+	}
+
+	extended := time.Now().Add(20 * 24 * time.Hour).Truncate(time.Second)
+	status, body := change("acme", at(extended))
+	if status != 200 || !strings.Contains(body, `"trial":{"endsAt":"`+extended.UTC().Format(time.RFC3339)+`"}`) {
+		t.Fatalf("extending = %d %s, want 200 with the new end", status, body)
+	}
+	if acme, _ := f.customers.Get(t.Context(), "acme"); !acme.Spec.Trial.EndsAt.Time.Equal(extended) {
+		t.Errorf("the stored trial ends at %s, want %s", acme.Spec.Trial.EndsAt, extended)
+	}
+	if !strings.Contains(f.log.String(), `"msg":"trial extended","audit":true,"tenant":"acme","user":"user_6"`) {
+		t.Errorf("no audit line for the extension in %s", f.log.String())
+	}
+
+	f.customers.changed = true
+	if status, response := change("acme", `{"action":"convert"}`); status != 409 || !strings.Contains(response, "Changed meanwhile") {
+		t.Errorf("converting a customer that changed meanwhile = %d %s, want 409", status, response)
+	}
+	f.customers.changed = false
+	status, body = change("acme", `{"action":"convert"}`)
+	if status != 200 || strings.Contains(body, `"trial"`) {
+		t.Fatalf("converting = %d %s, want 200 without a trial", status, body)
+	}
+	if acme, _ := f.customers.Get(t.Context(), "acme"); acme.Spec.Trial != nil {
+		t.Errorf("the converted customer still has trial %+v", acme.Spec.Trial)
+	}
+	if !strings.Contains(f.log.String(), `"msg":"trial converted","audit":true,"tenant":"acme","user":"user_6"`) {
+		t.Errorf("no audit line for the conversion in %s", f.log.String())
+	}
+
+	// A customer being deprovisioned keeps its trial as it is.
+	acme, _ = f.customers.Get(t.Context(), "acme")
+	acme.Spec.Trial = &v1alpha1.CustomerTrial{EndsAt: metav1.NewTime(end)}
+	acme.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+	if status, response := change("acme", `{"action":"convert"}`); status != 409 || !strings.Contains(response, "Being deleted") {
+		t.Errorf("converting a customer being deleted = %d %s, want 409", status, response)
 	}
 }

@@ -33,6 +33,10 @@ type Customers interface {
 	// Delete deletes a customer, whose cluster the provisioning controller
 	// then deletes, or returns ErrNoSuchCustomer.
 	Delete(ctx context.Context, id string) error
+	// SetTrial sets or, with nil, removes the trial of the customer as read,
+	// filling in the result, or returns ErrCustomerChanged when it changed
+	// meanwhile.
+	SetTrial(ctx context.Context, customer *v1alpha1.Customer, trial *v1alpha1.CustomerTrial) error
 }
 
 // ErrCustomerExists means a customer of that ID exists already.
@@ -40,6 +44,9 @@ var ErrCustomerExists = errors.New("the customer exists")
 
 // ErrNoSuchCustomer means there is no customer of that ID.
 var ErrNoSuchCustomer = errors.New("no such customer")
+
+// ErrCustomerChanged means a customer changed, or went, since it was read.
+var ErrCustomerChanged = errors.New("the customer changed")
 
 // KubeCustomers reads, creates and deletes Customers through the Kubernetes
 // API. Nearly every console request looks its customer up by organization,
@@ -131,6 +138,21 @@ func (k KubeCustomers) Delete(ctx context.Context, id string) error {
 	}
 	if err != nil {
 		return fmt.Errorf("delete customer %s: %w", id, err)
+	}
+	return nil
+}
+
+// SetTrial implements Customers, with a patch of the trial alone, which the
+// admission policy changeport-console-customers holds the console to.
+func (k KubeCustomers) SetTrial(ctx context.Context, customer *v1alpha1.Customer, trial *v1alpha1.CustomerTrial) error {
+	original := customer.DeepCopy()
+	customer.Spec.Trial = trial
+	err := k.Client.Patch(ctx, customer, client.MergeFromWithOptions(original, client.MergeFromWithOptimisticLock{}))
+	if apierrors.IsConflict(err) || apierrors.IsNotFound(err) {
+		return fmt.Errorf("customer %s: %w", customer.Name, ErrCustomerChanged)
+	}
+	if err != nil {
+		return fmt.Errorf("set the trial of customer %s: %w", customer.Name, err)
 	}
 	return nil
 }

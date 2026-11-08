@@ -55,6 +55,15 @@ type CustomerReconciler struct {
 	// ResyncInterval is how often a ready cluster is converged to the
 	// template again, which repairs changes made by hand.
 	ResyncInterval time.Duration
+	// Now is the time, for trials; tests replace it.
+	Now func() time.Time
+}
+
+func (r *CustomerReconciler) now() time.Time {
+	if r.Now != nil {
+		return r.Now()
+	}
+	return time.Now()
 }
 
 // SetupWithManager registers the reconciler with mgr. A change to a
@@ -116,6 +125,9 @@ func (r *CustomerReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 	if !customer.DeletionTimestamp.IsZero() {
 		return r.deprovision(ctx, &customer)
 	}
+	if trial := customer.Spec.Trial; trial != nil && !r.now().Before(trial.EndsAt.Time) {
+		return ctrl.Result{}, r.endTrial(ctx, &customer)
+	}
 	spec, err := r.spec(&customer)
 	if err != nil {
 		// Only a change to the Customer can fix it, which triggers a new
@@ -169,6 +181,7 @@ func (r *CustomerReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 		cdcReady.Status, cdcReady.Reason = metav1.ConditionFalse, v1alpha1.ReasonPending
 	}
 	setCondition(status, customer.Generation, cdcReady)
+	untilTrial, onTrial := r.trial(&customer, status)
 	markProvisioned(status)
 	if err := r.updateStatus(ctx, &customer, status); err != nil {
 		return ctrl.Result{}, err
@@ -178,10 +191,74 @@ func (r *CustomerReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 	recordAlertThresholds(customer.Name, settings)
+	requeue := r.ResyncInterval
 	if !progress.Ready() || !progress.CDC.Ready {
-		return ctrl.Result{RequeueAfter: r.PollInterval}, nil
+		requeue = r.PollInterval
 	}
-	return ctrl.Result{RequeueAfter: r.ResyncInterval}, nil
+	if onTrial {
+		// A trial's warning and end come on time, not with the next resync.
+		requeue = min(requeue, max(untilTrial, time.Second))
+	}
+	return ctrl.Result{RequeueAfter: requeue}, nil
+}
+
+// trial sets the TrialEnding condition of a customer on a trial, removes it
+// from one that is not, and returns how long until the trial next needs
+// looking at: its warning, then its end. From three days before the end,
+// the customer is warned, once per end: TrialWarnedFor records the end it
+// was warned about, so that a trial extended past the warning is warned
+// about again.
+func (r *CustomerReconciler) trial(customer *v1alpha1.Customer, status *v1alpha1.CustomerStatus) (time.Duration, bool) {
+	trial := customer.Spec.Trial
+	if trial == nil {
+		meta.RemoveStatusCondition(&status.Conditions, v1alpha1.ConditionTrialEnding)
+		status.TrialWarnedFor = nil
+		return 0, false
+	}
+	now, end := r.now(), trial.EndsAt.Time
+	warning := end.Add(-v1alpha1.TrialWarning)
+	condition := metav1.Condition{
+		Type: v1alpha1.ConditionTrialEnding, Status: metav1.ConditionFalse, Reason: v1alpha1.ReasonTrialRunning,
+		Message: "The trial ends on " + formatEnd(end),
+	}
+	if now.Before(warning) {
+		setCondition(status, customer.Generation, condition)
+		return warning.Sub(now), true
+	}
+	condition.Status, condition.Reason = metav1.ConditionTrue, v1alpha1.ReasonTrialEnding
+	condition.Message = "The trial ends on " + formatEnd(end) + "; the customer was warned"
+	setCondition(status, customer.Generation, condition)
+	if status.TrialWarnedFor == nil || !status.TrialWarnedFor.Equal(&trial.EndsAt) {
+		status.TrialWarnedFor = trial.EndsAt.DeepCopy()
+	}
+	return end.Sub(now), true
+}
+
+// endTrial records that a customer's trial has ended and deletes the
+// Customer, whose cluster then goes as any deleted customer's does, through
+// the finalizer. The deletion only goes ahead for the Customer as read, so a
+// trial extended or converted meanwhile is kept.
+func (r *CustomerReconciler) endTrial(ctx context.Context, customer *v1alpha1.Customer) error {
+	status := customer.Status.DeepCopy()
+	setCondition(status, customer.Generation, metav1.Condition{
+		Type: v1alpha1.ConditionTrialEnding, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonTrialEnded,
+		Message: "The trial ended on " + formatEnd(customer.Spec.Trial.EndsAt.Time) + "; the customer is deprovisioned",
+	})
+	if err := r.updateStatus(ctx, customer, status); err != nil {
+		return err
+	}
+	ctrl.LoggerFrom(ctx).Info("The trial ended; deleting the customer", "endsAt", customer.Spec.Trial.EndsAt.Time)
+	err := r.Client.Delete(ctx, customer, client.Preconditions{UID: &customer.UID, ResourceVersion: &customer.ResourceVersion})
+	if err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("delete the customer of an ended trial: %w", err)
+	}
+	return nil
+}
+
+// formatEnd is a trial's end as conditions say it, such as 2026-11-22 09:00
+// UTC.
+func formatEnd(end time.Time) string {
+	return end.UTC().Format("2006-01-02 15:04 UTC")
 }
 
 // alertSettings returns the customer's alert settings, or the defaults.

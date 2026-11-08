@@ -66,7 +66,7 @@ func startAPIServerAsTheConsole(t *testing.T) (admin, console client.Client, con
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range []string{"console.yaml", "write-once-secrets.yaml"} {
+	for _, file := range []string{"console.yaml", "write-once-secrets.yaml", "customer-trials.yaml"} {
 		for _, object := range manifests(t, filepath.Join(root, "deploy", "base", "console", file)) {
 			switch object.GetKind() {
 			case "ClusterRole", "ClusterRoleBinding", "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding":

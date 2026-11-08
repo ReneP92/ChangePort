@@ -5,9 +5,10 @@ import { clerkClient, kubectl, readFixtures, testEmail } from "../clerk/fixtures
 
 // Captures the screens of trial requests, on a desktop and a phone, into
 // CHANGEPORT_SCREENSHOTS_DIR (just ui-screenshots): sign-up, the request
-// form, a pending and a declined request, and the operator's review. Two
-// visitors ask, Initech and Hooli; the operator looks at approving Initech
-// and declines Hooli. Everything it creates goes again at the end.
+// form, a pending and a declined request, the operator's review, and a trial
+// as its customer and operators see it. Two visitors ask, Initech and Hooli;
+// the operator declines Hooli and approves Initech. Everything it creates goes
+// again at the end, the teardown removing Initech's customer.
 
 const out = process.env.CHANGEPORT_SCREENSHOTS_DIR ?? "";
 const devices = [
@@ -50,6 +51,9 @@ test.beforeAll(() => {
 });
 
 test.afterAll(async () => {
+  // Removing the users of an approved trial, an organization's admins,
+  // takes Clerk a while.
+  test.setTimeout(2 * 60_000);
   const clerkAPI = clerkClient();
   for (const id of visitors) {
     kubectl(["delete", "trialrequests", "-l", `changeport.io/clerk-user=${id}`, "--wait=false"]);
@@ -84,6 +88,7 @@ async function fillIn(page: Page, company: string, useCase: string): Promise<voi
 }
 
 test("the screens of trial requests", async ({ browser }) => {
+  // Approving creates a cluster, which takes a minute or two.
   test.setTimeout(10 * 60_000);
 
   // Signed out, /trial shows Clerk's sign-up.
@@ -158,4 +163,32 @@ test("the screens of trial requests", async ({ browser }) => {
     hooli.getByRole("main").getByRole("heading", { name: "Your request was declined" }),
   ).toBeVisible({ timeout: 20_000 });
   await shot(hooli, "41-trial-declined");
+
+  // The operator approves Initech, which lands in its new cluster, on a
+  // 14-day trial.
+  await item("I").getByRole("button", { name: "Approve" }).click();
+  await operator.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
+  await expect(operator.getByRole("dialog")).toBeHidden({ timeout: 30_000 });
+  await expect(initech.getByRole("status").filter({ hasText: /Trial: / })).toBeVisible({
+    timeout: 30_000,
+  });
+  await shot(initech, "42-customer-trial");
+
+  // Operators see the trial among the customers and on the customer's page,
+  // where they extend it or convert the customer.
+  await operator.goto("/operator");
+  const customer = operator.getByRole("link", { name: `E2E ${fixtures.run} I` });
+  await expect(customer).toBeVisible({ timeout: 20_000 });
+  await shot(operator, "43-operator-customers-trial");
+  await customer.click();
+  await expect(operator.getByRole("heading", { name: "Trial" })).toBeVisible();
+  await shot(operator, "44-operator-customer-trial");
+  await operator.getByRole("button", { name: "Extend trial" }).click();
+  await expect(operator.getByRole("dialog")).toBeVisible();
+  await shot(operator, "45-operator-trial-extend");
+  await operator.keyboard.press("Escape");
+  await operator.getByRole("button", { name: "Convert" }).click();
+  await expect(operator.getByRole("dialog")).toBeVisible();
+  await shot(operator, "46-operator-trial-convert");
+  await operator.keyboard.press("Escape");
 });

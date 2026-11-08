@@ -3,6 +3,7 @@ import { Navigate } from "react-router";
 import { ApiError, type Customer } from "@/api/client";
 import { useCustomer, useLiveAlerts, useMe } from "@/api/queries";
 import { CustomerSummary } from "@/components/CustomerSummary";
+import { TrialNotice } from "@/components/TrialNotice";
 import { Notice } from "@/components/Notice";
 
 /**
@@ -49,12 +50,22 @@ function ReadyCustomer({
       </Notice>
     );
   }
+  // Every page of a customer on a trial says when it ends.
+  const trial = customer.data.trial && <TrialNotice trial={customer.data.trial} />;
   if (!customer.data.ready) {
     return (
-      <main className="mx-auto max-w-5xl p-6">
-        <CustomerSummary customer={customer.data} />
-      </main>
+      <>
+        {trial}
+        <main className="mx-auto max-w-5xl p-6">
+          <CustomerSummary customer={customer.data} />
+        </main>
+      </>
     );
   }
-  return children(customer.data, admin);
+  return (
+    <>
+      {trial}
+      {children(customer.data, admin)}
+    </>
+  );
 }

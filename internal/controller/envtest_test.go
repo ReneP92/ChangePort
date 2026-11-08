@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -356,6 +357,12 @@ func TestCustomerValidation(t *testing.T) {
 			customer.Spec.ClerkOrganizationID = "user_2abc"
 			return customer
 		}, "spec.clerkOrganizationID"},
+		{"a trial with deletion protection", func() *v1alpha1.Customer {
+			customer := valid("protected-trial")
+			customer.Spec.DeletionProtection = true
+			customer.Spec.Trial = &v1alpha1.CustomerTrial{EndsAt: metav1.Now()}
+			return customer
+		}, "a trial cannot have deletion protection"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -473,4 +480,103 @@ func TestTrialRequestValidation(t *testing.T) {
 			t.Errorf("UpdateStatus() error = %v, want the change of decision refused", err)
 		}
 	})
+}
+
+// trialReason waits until the Customer's TrialEnding condition has reason.
+func trialReason(t *testing.T, c client.Client, name, reason string) *v1alpha1.Customer {
+	t.Helper()
+	var customer v1alpha1.Customer
+	eventually(t, "TrialEnding reason "+reason, func() (bool, string) {
+		if err := c.Get(t.Context(), types.NamespacedName{Name: name}, &customer); err != nil {
+			return false, err.Error()
+		}
+		ending := meta.FindStatusCondition(customer.Status.Conditions, v1alpha1.ConditionTrialEnding)
+		if ending == nil {
+			return false, "no TrialEnding condition"
+		}
+		return ending.Reason == reason, fmt.Sprintf("%s %s: %s", ending.Status, ending.Reason, ending.Message)
+	})
+	return &customer
+}
+
+// TestTrialLifecycle runs trials that end within seconds against the API
+// server, on the controller's own clock: the warning comes three days before
+// the end, the end deletes the Customer, which is deprovisioned as usual, and
+// an extended or converted trial stays.
+func TestTrialLifecycle(t *testing.T) {
+	c := startController(t)
+	run := lifecycleRuns.Add(1)
+	create := func(name string, endsIn time.Duration) *v1alpha1.Customer {
+		t.Helper()
+		customer := &v1alpha1.Customer{
+			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%d", name, run)},
+			Spec: v1alpha1.CustomerSpec{
+				DisplayName: "Trial", Profile: "dev",
+				Trial: &v1alpha1.CustomerTrial{EndsAt: metav1.NewTime(time.Now().Add(endsIn))},
+			},
+		}
+		if err := c.Create(t.Context(), customer); err != nil {
+			t.Fatal(err)
+		}
+		return customer
+	}
+	setTrial := func(name string, trial *v1alpha1.CustomerTrial) {
+		t.Helper()
+		patch, err := json.Marshal(map[string]any{"spec": map[string]any{"trial": trial}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := c.Patch(t.Context(), &v1alpha1.Customer{ObjectMeta: metav1.ObjectMeta{Name: name}}, client.RawPatch(types.MergePatchType, patch)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A trial three days and three seconds from its end runs, and is warned
+	// about on time, three seconds later.
+	warned := create("trial-warned", v1alpha1.TrialWarning+3*time.Second)
+	trialReason(t, c, warned.Name, v1alpha1.ReasonTrialRunning)
+	ending := trialReason(t, c, warned.Name, v1alpha1.ReasonTrialEnding)
+	if ending.Status.TrialWarnedFor == nil || !ending.Status.TrialWarnedFor.Equal(&warned.Spec.Trial.EndsAt) {
+		t.Errorf("warned for %v, want %s", ending.Status.TrialWarnedFor, warned.Spec.Trial.EndsAt)
+	}
+	if transition := meta.FindStatusCondition(ending.Status.Conditions, v1alpha1.ConditionTrialEnding).LastTransitionTime; transition.Add(time.Second).Before(warned.Spec.Trial.EndsAt.Add(-v1alpha1.TrialWarning)) {
+		t.Errorf("warned at %s, before the warning at %s", transition, warned.Spec.Trial.EndsAt.Add(-v1alpha1.TrialWarning))
+	}
+	// Converted, it is no trial any more.
+	setTrial(warned.Name, nil)
+	eventually(t, "the converted customer has no TrialEnding condition", func() (bool, string) {
+		customer := &v1alpha1.Customer{}
+		if err := c.Get(t.Context(), types.NamespacedName{Name: warned.Name}, customer); err != nil {
+			return false, err.Error()
+		}
+		return meta.FindStatusCondition(customer.Status.Conditions, v1alpha1.ConditionTrialEnding) == nil && customer.Status.TrialWarnedFor == nil,
+			fmt.Sprintf("conditions %v", customer.Status.Conditions)
+	})
+
+	// A trial three seconds from its end is deleted at its end, and its
+	// cluster deprovisioned.
+	ended := create("trial-ended", 3*time.Second)
+	trialReason(t, c, ended.Name, v1alpha1.ReasonTrialEnding)
+	deprovisioning := readyReason(t, c, ended.Name, v1alpha1.ReasonDeprovisioning)
+	if deprovisioning.DeletionTimestamp == nil || deprovisioning.DeletionTimestamp.Before(&ended.Spec.Trial.EndsAt) {
+		t.Errorf("deleted at %v, before the trial's end at %s", deprovisioning.DeletionTimestamp, ended.Spec.Trial.EndsAt)
+	}
+	if reason := meta.FindStatusCondition(deprovisioning.Status.Conditions, v1alpha1.ConditionTrialEnding).Reason; reason != v1alpha1.ReasonTrialEnded {
+		t.Errorf("TrialEnding reason %s, want TrialEnded", reason)
+	}
+	finalizeNamespace(t, "customer-"+ended.Name)
+	eventually(t, "the ended trial's Customer is gone", func() (bool, string) {
+		err := c.Get(t.Context(), types.NamespacedName{Name: ended.Name}, &v1alpha1.Customer{})
+		return apierrors.IsNotFound(err), fmt.Sprintf("get: %v", err)
+	})
+
+	// A trial extended before its end stays past the old end.
+	extended := create("trial-extended", 3*time.Second)
+	trialReason(t, c, extended.Name, v1alpha1.ReasonTrialEnding)
+	setTrial(extended.Name, &v1alpha1.CustomerTrial{EndsAt: metav1.NewTime(time.Now().Add(10 * 24 * time.Hour))})
+	trialReason(t, c, extended.Name, v1alpha1.ReasonTrialRunning)
+	time.Sleep(time.Until(extended.Spec.Trial.EndsAt.Time) + 2*time.Second)
+	if kept := trialReason(t, c, extended.Name, v1alpha1.ReasonTrialRunning); kept.DeletionTimestamp != nil {
+		t.Error("the extended trial's Customer was deleted at its old end")
+	}
 }

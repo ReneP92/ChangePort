@@ -484,6 +484,24 @@ func (e TrialApprovalProfile) Valid() bool {
 	}
 }
 
+// Defines values for TrialChangeAction.
+const (
+	Convert TrialChangeAction = "convert"
+	Extend  TrialChangeAction = "extend"
+)
+
+// Valid indicates whether the value is a known member of the TrialChangeAction enum.
+func (e TrialChangeAction) Valid() bool {
+	switch e {
+	case Convert:
+		return true
+	case Extend:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TrialRequestPhase.
 const (
 	TrialRequestPhaseApproved TrialRequestPhase = "Approved"
@@ -746,6 +764,9 @@ type Customer struct {
 
 	// Status The Ready condition, which says what the cluster waits for
 	Status Status `json:"status"`
+
+	// Trial A trial, which ends on its own unless an operator extends it or converts the customer
+	Trial *CustomerTrial `json:"trial,omitempty"`
 }
 
 // CustomerProfile defines model for Customer.Profile.
@@ -754,6 +775,12 @@ type CustomerProfile string
 // CustomerList defines model for CustomerList.
 type CustomerList struct {
 	Customers []Customer `json:"customers"`
+}
+
+// CustomerTrial A trial, which ends on its own unless an operator extends it or converts the customer
+type CustomerTrial struct {
+	// EndsAt When the trial ends and the customer is deprovisioned; it is warned three days before
+	EndsAt time.Time `json:"endsAt"`
 }
 
 // EventList defines model for EventList.
@@ -1347,6 +1374,17 @@ type TrialApproval struct {
 // TrialApprovalProfile The new customer's profile, dev unless given
 type TrialApprovalProfile string
 
+// TrialChange defines model for TrialChange.
+type TrialChange struct {
+	Action TrialChangeAction `json:"action"`
+
+	// EndsAt The trial's new end, to extend it
+	EndsAt *time.Time `json:"endsAt,omitempty"`
+}
+
+// TrialChangeAction defines model for TrialChange.Action.
+type TrialChangeAction string
+
 // TrialDecline defines model for TrialDecline.
 type TrialDecline struct {
 	// Reason Why, which the requester sees
@@ -1515,6 +1553,9 @@ type CreateTopicJSONRequestBody = NewTopic
 // ProvisionCustomerJSONRequestBody defines body for ProvisionCustomer for application/json ContentType.
 type ProvisionCustomerJSONRequestBody = NewCustomer
 
+// ChangeTrialJSONRequestBody defines body for ChangeTrial for application/json ContentType.
+type ChangeTrialJSONRequestBody = TrialChange
+
 // ApproveTrialRequestJSONRequestBody defines body for ApproveTrialRequest for application/json ContentType.
 type ApproveTrialRequestJSONRequestBody = TrialApproval
 
@@ -1649,6 +1690,9 @@ type ServerInterface interface {
 	// GetOperatorCustomer One customer, for operators
 	// (GET /api/operator/customers/{customerID})
 	GetOperatorCustomer(w http.ResponseWriter, r *http.Request, customerID CustomerID)
+	// ChangeTrial Extend a customer's trial, or convert the customer, for operators
+	// (PATCH /api/operator/customers/{customerID}/trial)
+	ChangeTrial(w http.ResponseWriter, r *http.Request, customerID CustomerID)
 	// ListTrialRequests Every trial request, newest first, for operators
 	// (GET /api/operator/trial-requests)
 	ListTrialRequests(w http.ResponseWriter, r *http.Request)
@@ -2579,6 +2623,32 @@ func (siw *ServerInterfaceWrapper) GetOperatorCustomer(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ChangeTrial operation middleware
+func (siw *ServerInterfaceWrapper) ChangeTrial(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "customerID" -------------
+	var customerID CustomerID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "customerID", r.PathValue("customerID"), &customerID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "customerID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeTrial(w, r, customerID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTrialRequests operation middleware
 func (siw *ServerInterfaceWrapper) ListTrialRequests(w http.ResponseWriter, r *http.Request) {
 
@@ -2839,6 +2909,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/customers", wrapper.ProvisionCustomer)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/operator/customers/{customerID}", wrapper.DeprovisionCustomer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/customers/{customerID}", wrapper.GetOperatorCustomer)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/operator/customers/{customerID}/trial", wrapper.ChangeTrial)
 
 	return m
 }
@@ -6451,6 +6522,113 @@ func (response GetOperatorCustomer503JSONResponse) VisitGetOperatorCustomerRespo
 	return err
 }
 
+type ChangeTrialRequestObject struct {
+	CustomerID CustomerID `json:"customerID"`
+	Body       *ChangeTrialJSONRequestBody
+}
+
+type ChangeTrialResponseObject interface {
+	VisitChangeTrialResponse(w http.ResponseWriter) error
+}
+
+type ChangeTrial200JSONResponse Customer
+
+func (response ChangeTrial200JSONResponse) VisitChangeTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTrial400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ChangeTrial400JSONResponse) VisitChangeTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTrial401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ChangeTrial401JSONResponse) VisitChangeTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTrial403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ChangeTrial403JSONResponse) VisitChangeTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTrial404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ChangeTrial404JSONResponse) VisitChangeTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTrial409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ChangeTrial409JSONResponse) VisitChangeTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTrial503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ChangeTrial503JSONResponse) VisitChangeTrialResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTrialRequestsRequestObject struct {
 }
 
@@ -7008,6 +7186,9 @@ type StrictServerInterface interface {
 	// GetOperatorCustomer One customer, for operators
 	// (GET /api/operator/customers/{customerID})
 	GetOperatorCustomer(ctx context.Context, request GetOperatorCustomerRequestObject) (GetOperatorCustomerResponseObject, error)
+	// ChangeTrial Extend a customer's trial, or convert the customer, for operators
+	// (PATCH /api/operator/customers/{customerID}/trial)
+	ChangeTrial(ctx context.Context, request ChangeTrialRequestObject) (ChangeTrialResponseObject, error)
 	// ListTrialRequests Every trial request, newest first, for operators
 	// (GET /api/operator/trial-requests)
 	ListTrialRequests(ctx context.Context, request ListTrialRequestsRequestObject) (ListTrialRequestsResponseObject, error)
@@ -8157,6 +8338,39 @@ func (sh *strictHandler) GetOperatorCustomer(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetOperatorCustomerResponseObject); ok {
 		if err := validResponse.VisitGetOperatorCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeTrial operation middleware
+func (sh *strictHandler) ChangeTrial(w http.ResponseWriter, r *http.Request, customerID CustomerID) {
+	var request ChangeTrialRequestObject
+
+	request.CustomerID = customerID
+
+	var body ChangeTrialJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeTrial(ctx, request.(ChangeTrialRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeTrial")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeTrialResponseObject); ok {
+		if err := validResponse.VisitChangeTrialResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
