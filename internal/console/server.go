@@ -693,6 +693,9 @@ func toAPI(c *v1alpha1.Customer) api.Customer {
 	if c.DeletionTimestamp != nil {
 		out.Deleting = ptr.To(true)
 	}
+	if c.Spec.Trial != nil {
+		out.Trial = &api.CustomerTrial{EndsAt: c.Spec.Trial.EndsAt.UTC()}
+	}
 	for _, conditionType := range conditionTypes {
 		condition := meta.FindStatusCondition(c.Status.Conditions, conditionType)
 		if condition == nil {

@@ -109,15 +109,46 @@ test("a visitor signs up, requests a trial, an operator approves, and the visito
     .getByRole("region", { name: "Decided" })
     .getByRole("listitem", { name: new RegExp(`^${company}, tr-`) });
   await expect(decided.getByText(/^Approved/).first()).toBeVisible();
-  await expect(decided.getByRole("link", { name: /^c-/ })).toBeVisible();
-  await operator.context.close();
+  const customerLink = decided.getByRole("link", { name: /^c-/ });
+  await expect(customerLink).toBeVisible();
 
-  // The visitor's page moves on by itself, into their new organization.
+  // The visitor's page moves on by itself, into their new organization,
+  // and their cluster is on a 14-day trial.
   await expect(page.getByRole("main").getByText(company).first()).toBeVisible({ timeout: 30_000 });
   await expect(page).toHaveURL(/\/$/);
+  const trialNotice = page.getByRole("status").filter({ hasText: /Trial: / });
+  await expect(trialNotice).toContainText("14 days left");
   await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible({
     timeout: 4 * 60_000,
   });
+
+  // The operator extends the trial by a month, which the visitor sees, and
+  // then converts the customer, whose cluster stays.
+  await customerLink.click();
+  const trialCard = operator.page
+    .locator("[data-slot=card]")
+    .filter({ has: operator.page.getByRole("heading", { name: "Trial" }) });
+  await expect(trialCard).toContainText("in 14 days");
+  await trialCard.getByRole("button", { name: "Extend trial" }).click();
+  const extend = operator.page.getByRole("dialog", { name: `Extend ${company}'s trial` });
+  const inThirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const day = [
+    inThirtyDays.getFullYear(),
+    String(inThirtyDays.getMonth() + 1).padStart(2, "0"),
+    String(inThirtyDays.getDate()).padStart(2, "0"),
+  ].join("-");
+  await extend.getByLabel("New end").fill(day);
+  await extend.getByRole("button", { name: "Extend" }).click();
+  await expect(extend).toBeHidden();
+  await expect(trialCard).toContainText("in 30 days");
+  await expect(trialNotice).toContainText("30 days left", { timeout: 20_000 });
+  await trialCard.getByRole("button", { name: "Convert" }).click();
+  const convert = operator.page.getByRole("dialog", { name: `Convert ${company}?` });
+  await convert.getByRole("button", { name: "Convert" }).click();
+  await expect(convert).toBeHidden();
+  await expect(trialCard).toHaveCount(0);
+  await expect(trialNotice).toHaveCount(0, { timeout: 20_000 });
+  await operator.context.close();
 });
 
 test("a declined visitor sees the reason", async ({ page, browser }) => {
@@ -155,4 +186,29 @@ test("a declined visitor sees the reason", async ({ page, browser }) => {
   await expect(main.getByText(reason)).toBeVisible();
   await expect(main.getByText(/You may ask again from/)).toBeVisible();
   await expect(main.getByRole("button", { name: "Request a trial" })).toHaveCount(0);
+});
+
+test("a trial that ends deprovisions its customer", async () => {
+  // Deprovisioning on kind takes about a minute.
+  test.setTimeout(4 * 60_000);
+  const id = `${fixtures.run}-x`;
+  const endsAt = new Date(Date.now() + 20_000).toISOString().replace(/\.\d+Z$/, "Z");
+  kubectl(
+    ["apply", "--server-side", "--field-manager=changeport-e2e", "-f", "-"],
+    JSON.stringify({
+      apiVersion: "changeport.io/v1alpha1",
+      kind: "Customer",
+      metadata: { name: id },
+      spec: { displayName: `E2E ${fixtures.run} X`, profile: "dev", trial: { endsAt } },
+    }),
+  );
+  const get = (output: string) =>
+    kubectl(["get", "customer", id, "--ignore-not-found", "-o", output]).trim();
+  const trialReason = () => get('jsonpath={.status.conditions[?(@.type=="TrialEnding")].reason}');
+
+  // Twenty seconds out, the customer is within its warning; at the end, the
+  // provisioning controller deletes the Customer, which deprovisions it.
+  await expect.poll(trialReason, { timeout: 20_000 }).toBe("TrialEnding");
+  await expect.poll(trialReason, { timeout: 60_000 }).toBe("TrialEnded");
+  await expect.poll(() => get("name"), { timeout: 3 * 60_000, intervals: [2_000] }).toBe("");
 });

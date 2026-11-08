@@ -52,6 +52,8 @@ type fakeCustomers struct {
 	collisions int
 	// deleted lists the customers deleted, by ID.
 	deleted []string
+	// changed makes every trial change fail as if the customer had changed.
+	changed bool
 }
 
 func newFakeCustomers() *fakeCustomers {
@@ -105,6 +107,16 @@ func (f *fakeCustomers) Create(_ context.Context, customer *v1alpha1.Customer) e
 	customer.Generation = 1
 	customer.CreationTimestamp = metav1.NewTime(time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC))
 	f.customers = append(f.customers, *customer.DeepCopy())
+	return nil
+}
+
+func (f *fakeCustomers) SetTrial(_ context.Context, customer *v1alpha1.Customer, trial *v1alpha1.CustomerTrial) error {
+	stored, _ := f.Get(context.Background(), customer.Name)
+	if stored == nil || f.changed {
+		return ErrCustomerChanged
+	}
+	stored.Spec.Trial = trial.DeepCopy()
+	customer.Spec.Trial = trial.DeepCopy()
 	return nil
 }
 

@@ -132,6 +132,12 @@ shows the operator's reason and when they may ask again, a week later.
 
 ![A declined request](screenshots/41-trial-declined-desktop.png)
 
+An approved customer is on a 14-day trial, which every page of its console
+counts down under the header; in the last three days it warns that the
+cluster then goes.
+
+![A customer on a trial](screenshots/42-customer-trial-desktop.png)
+
 ## Alerts
 
 Alerts about Acme's own applications (see [alerts.md](alerts.md)), under
@@ -241,6 +247,19 @@ requester sees.
 ![Declining a trial](screenshots/39-operator-trial-decline-desktop.png)
 
 ![Decided requests](screenshots/40-operator-trial-decided-desktop.png)
+
+The customers table shows when each trial ends. On a customer's page,
+operators extend its trial, to a new end at most 90 days away, or convert
+the customer, which ends its trial so that its cluster stays. At its end, a
+trial's customer is deprovisioned.
+
+![Customers on trials](screenshots/43-operator-customers-trial-desktop.png)
+
+![A customer's trial](screenshots/44-operator-customer-trial-desktop.png)
+
+![Extending a trial](screenshots/45-operator-trial-extend-desktop.png)
+
+![Converting a customer](screenshots/46-operator-trial-convert-desktop.png)
 
 ## Still to design
 

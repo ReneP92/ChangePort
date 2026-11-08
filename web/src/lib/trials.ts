@@ -130,3 +130,43 @@ export function formatDay(day: string | Date): string {
     year: "numeric",
   });
 }
+
+const dayMs = 24 * 60 * 60 * 1000;
+
+/**
+ * How long before a trial ends its customer is warned, as the provisioning
+ * controller does it (TrialWarning in api/v1alpha1).
+ */
+const trialWarningMs = 3 * dayMs;
+
+/** How long a trial has left, as people say it, such as 12 days. */
+export function trialLeft(endsAt: string, now: Date = new Date()): string {
+  const days = Math.ceil((Date.parse(endsAt) - now.getTime()) / dayMs);
+  if (days <= 0) {
+    return "under a day";
+  }
+  return days === 1 ? "1 day" : `${String(days)} days`;
+}
+
+/** Whether a trial is within its warning, three days before it ends. */
+export function trialEnding(endsAt: string, now: Date = new Date()): boolean {
+  return Date.parse(endsAt) - now.getTime() <= trialWarningMs;
+}
+
+/** The day, as an input of type date writes it, days after day. */
+export function addDays(day: string, days: number): string {
+  const date = new Date(`${day}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  return localToday(date);
+}
+
+/**
+ * The instant a trial extended to day ends: on that day, at the time of day
+ * the trial ends now.
+ */
+export function endOn(day: string, currentEnd: string): string {
+  const end = new Date(currentEnd);
+  const date = new Date(`${day}T00:00:00`);
+  date.setHours(end.getHours(), end.getMinutes(), 0, 0);
+  return date.toISOString();
+}

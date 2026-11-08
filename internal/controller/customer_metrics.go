@@ -12,8 +12,8 @@ import (
 
 // The metrics of the customers' clusters, by tenant, which the Customer
 // controller exports and the alerts of deploy/base/alerting watch
-// (docs/metrics-labels.md): a cluster that is not ready, and how many
-// brokers a ready one should have.
+// (docs/metrics-labels.md): a cluster that is not ready, how many brokers a
+// ready one should have, and when a trial ends.
 var (
 	customerReady = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "changeport_customer_ready",
@@ -31,10 +31,14 @@ var (
 		Name: "changeport_customer_provisioned_timestamp_seconds",
 		Help: "When a customer's cluster first became Ready, in seconds since the epoch; absent before.",
 	}, []string{"tenant"})
+	customerTrialEnds = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "changeport_customer_trial_ends_timestamp_seconds",
+		Help: "When a customer's trial ends, in seconds since the epoch; absent for a customer not on a trial.",
+	}, []string{"tenant"})
 )
 
 func init() {
-	metrics.Registry.MustRegister(customerReady, customerBrokers, customerProvisioned, alertThreshold)
+	metrics.Registry.MustRegister(customerReady, customerBrokers, customerProvisioned, customerTrialEnds, alertThreshold)
 }
 
 // recordCustomer records a Customer's status.
@@ -54,6 +58,11 @@ func recordCustomer(customer *v1alpha1.Customer, status *v1alpha1.CustomerStatus
 	} else {
 		customerProvisioned.DeleteLabelValues(tenant)
 	}
+	if trial := customer.Spec.Trial; trial != nil {
+		customerTrialEnds.WithLabelValues(tenant).Set(float64(trial.EndsAt.Unix()))
+	} else {
+		customerTrialEnds.DeleteLabelValues(tenant)
+	}
 }
 
 // forgetCustomerMetrics removes a deprovisioned customer's series: a cluster
@@ -62,6 +71,7 @@ func forgetCustomerMetrics(tenant string) {
 	customerReady.DeleteLabelValues(tenant)
 	customerBrokers.DeletePartialMatch(prometheus.Labels{"tenant": tenant})
 	customerProvisioned.DeleteLabelValues(tenant)
+	customerTrialEnds.DeleteLabelValues(tenant)
 	alertThreshold.DeletePartialMatch(prometheus.Labels{"tenant": tenant})
 }
 

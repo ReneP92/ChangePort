@@ -33,6 +33,12 @@ const (
 	// trialProfile is the profile of an approved trial unless the operator
 	// picks another.
 	trialProfile = "dev"
+	// trialLength is how long an approved trial lasts, unless an operator
+	// extends it or converts the customer.
+	trialLength = 14 * 24 * time.Hour
+	// The furthest and nearest an operator may move a trial's end.
+	maxTrialExtension = 90 * 24 * time.Hour
+	minTrialRemaining = time.Hour
 )
 
 var trialRequestIDPattern = regexp.MustCompile(`^tr-[a-km-np-z2-9]{6}$`)
@@ -252,7 +258,11 @@ func (s *Server) ApproveTrialRequest(ctx context.Context, request api.ApproveTri
 	}
 
 	// Trials never have deletion protection: they end on their own.
-	customer := &v1alpha1.Customer{Spec: v1alpha1.CustomerSpec{DisplayName: trial.Spec.Company, Profile: profile}}
+	customer := &v1alpha1.Customer{Spec: v1alpha1.CustomerSpec{
+		DisplayName: trial.Spec.Company,
+		Profile:     profile,
+		Trial:       &v1alpha1.CustomerTrial{EndsAt: metav1.NewTime(time.Now().Add(trialLength).Truncate(time.Second))},
+	}}
 	undo, err := s.provision(ctx, customer, func(organizationID string) error {
 		return s.organizations.AddAdmin(ctx, organizationID, trial.Spec.ClerkUserID)
 	})
@@ -274,7 +284,7 @@ func (s *Server) ApproveTrialRequest(ctx context.Context, request api.ApproveTri
 		return nil, err
 	}
 	s.audit(ctx, principal, customer.Name, "trial request approved", "trial_request", trial.Name, "requester", trial.Spec.ClerkUserID,
-		"profile", profile, "customer_organization", customer.Spec.ClerkOrganizationID)
+		"profile", profile, "customer_organization", customer.Spec.ClerkOrganizationID, "trial_ends_at", customer.Spec.Trial.EndsAt.UTC())
 	return api.ApproveTrialRequest200JSONResponse(toAPITrialRequest(trial)), nil
 }
 
@@ -382,4 +392,59 @@ func toAPITrialRequest(request *v1alpha1.TrialRequest) api.TrialRequest {
 		out.OrganizationID = ptr.To(request.Status.OrganizationID)
 	}
 	return out
+}
+
+// ChangeTrial implements api.StrictServerInterface: it extends a customer's
+// trial to a new end, or converts the customer, ending its trial.
+func (s *Server) ChangeTrial(ctx context.Context, request api.ChangeTrialRequestObject) (api.ChangeTrialResponseObject, error) {
+	principal, err := mustPrincipal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !s.operator(principal) {
+		return api.ChangeTrial403JSONResponse{ForbiddenJSONResponse: api.ForbiddenJSONResponse(operatorsOnly)}, nil
+	}
+	body := request.Body
+	var trial *v1alpha1.CustomerTrial
+	switch body.Action {
+	case api.Extend:
+		now := time.Now()
+		if body.EndsAt == nil || body.EndsAt.Before(now.Add(minTrialRemaining)) || body.EndsAt.After(now.Add(maxTrialExtension)) {
+			p := problem(http.StatusBadRequest, "Invalid trial end", "Choose a new end at least an hour and at most 90 days from now.")
+			p.Field = ptr.To("endsAt")
+			return api.ChangeTrial400JSONResponse{BadRequestJSONResponse: api.BadRequestJSONResponse(p)}, nil
+		}
+		trial = &v1alpha1.CustomerTrial{EndsAt: metav1.NewTime(body.EndsAt.Truncate(time.Second))}
+	case api.Convert:
+	default:
+		p := problem(http.StatusBadRequest, "Invalid trial change", "Choose extend or convert.")
+		p.Field = ptr.To("action")
+		return api.ChangeTrial400JSONResponse{BadRequestJSONResponse: api.BadRequestJSONResponse(p)}, nil
+	}
+	customer, err := s.customers.Get(ctx, request.CustomerID)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case customer == nil:
+		return api.ChangeTrial404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(noSuchCustomer(request.CustomerID))}, nil
+	case customer.DeletionTimestamp != nil:
+		return api.ChangeTrial409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(problem(http.StatusConflict,
+			"Being deleted", fmt.Sprintf("Customer %s is being deprovisioned; its trial can no longer change.", customer.Name)))}, nil
+	case customer.Spec.Trial == nil:
+		return api.ChangeTrial409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(problem(http.StatusConflict,
+			"Not on a trial", fmt.Sprintf("Customer %s is not on a trial.", customer.Name)))}, nil
+	}
+	if err := s.customers.SetTrial(ctx, customer, trial); errors.Is(err, ErrCustomerChanged) {
+		return api.ChangeTrial409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(problem(http.StatusConflict,
+			"Changed meanwhile", fmt.Sprintf("Customer %s changed while you decided; nothing was changed. Reload it.", customer.Name)))}, nil
+	} else if err != nil {
+		return nil, err
+	}
+	if trial == nil {
+		s.audit(ctx, principal, customer.Name, "trial converted")
+	} else {
+		s.audit(ctx, principal, customer.Name, "trial extended", "trial_ends_at", trial.EndsAt.UTC())
+	}
+	return api.ChangeTrial200JSONResponse(toAPI(customer)), nil
 }

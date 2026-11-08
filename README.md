@@ -300,12 +300,14 @@ go run ./cmd/provisioner render -customer acme -profile production -platform eks
 
 Customers are Kubernetes resources: a cluster-scoped `Customer`, named by
 the customer ID, with a display name, a profile, an optional Clerk
-organization and deletion protection. The provisioning controller
+organization, deletion protection, and the end of its trial if it is on one.
+The provisioning controller
 (`provisioner controller`, in the `changeport` namespace) turns each one into
 its cluster. It applies the template in order without blocking, reports how
 far the cluster is in the conditions `CertificateIssued`, `KafkaReady`,
 `UsersReady`, `AgentAvailable` and `Ready`, and on deletion removes the
-cluster before the `Customer` goes, unless deletion protection is on.
+cluster before the `Customer` goes, unless deletion protection is on. A
+trial's customer gets `TrialEnding` too, and is deleted when its trial ends.
 `just provision` and `just deprovision` create and delete Customers and wait
 for the controller; `render` and `credentials` work without it.
 
@@ -443,8 +445,8 @@ admin if asked, and creates a Customer with a new opaque ID such as
 `c-7f3k2q`, whose page then follows the cluster getting ready. Deprovisioning
 takes the customer ID typed and is refused while deletion protection is on;
 the Clerk organization is kept, no longer linked to a cluster. The console
-may create and delete Customers but not change them, so it cannot turn
-deletion protection off.
+may create and delete Customers, and change only their trials, so it cannot
+turn deletion protection off.
 
 Someone new signs up at <http://localhost:8088/trial> and requests a trial
 with their company, role, use case and rough throughput and retention
@@ -456,7 +458,12 @@ Approving provisions a customer as above, named after the company, on the
 dev profile unless the operator picks another and without deletion
 protection, with the requester added to its organization as an admin at
 once, and the requester's page then opens their cluster; a decline gives the
-reason the requester sees. Both are audited.
+reason the requester sees. Both are audited. The approved customer is on a
+14-day trial (`spec.trial`): three days before the end the provisioning
+controller warns it (the `TrialEnding` condition), and at the end deletes
+the Customer, which deprovisions it as usual. Operators extend a trial or
+convert the customer on its page; the console may change nothing else of a
+Customer, which an admission policy enforces.
 [docs/console.md](docs/console.md#trials) shows the screens.
 
 Applications on your machine connect to a customer's cluster with the

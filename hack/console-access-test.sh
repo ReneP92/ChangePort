@@ -3,7 +3,8 @@
 # console will use it: from the changeport namespace, as the changeport-console
 # service account and Kafka user. The service account may read exactly the
 # Secrets the console needs in the customer's namespace, and its pods for the
-# brokers' health, and nothing else. It makes trial requests and decides
+# brokers' health, and nothing else. It changes Customers only to extend a
+# trial or convert a customer. It makes trial requests and decides
 # them through their status, but cannot change one. It manages Postgres
 # sources, and may create their write-once password Secrets; it manages
 # alert settings, and may create their receivers' write-once Secrets. The
@@ -43,19 +44,28 @@ for allowed in "-n $namespace get pods" "-n $namespace list pods"; do
   # shellcheck disable=SC2086 # the words are separate arguments
   [[ $(can_i $allowed) == yes ]] || die "the console may not $allowed"
 done
-# Customers, which it watches, and creates and deletes for operators, but
-# cannot change.
-for allowed in "get customers" "list customers" "watch customers" "create customers" "delete customers"; do
+# Customers, which it watches, and creates and deletes for operators; it may
+# patch them, which the admission policy changeport-console-customers holds
+# to extending a trial or converting a customer.
+for allowed in "get customers" "list customers" "watch customers" "create customers" "patch customers" "delete customers"; do
   # shellcheck disable=SC2086 # the words are separate arguments
   [[ $(can_i $allowed) == yes ]] || die "the console may not $allowed"
 done
-for denied in "update customers" "patch customers" "patch customers --subresource=status" "delete namespaces" \
+for denied in "update customers" "patch customers --subresource=status" "delete namespaces" \
   "-n $namespace get secret/tiered-storage-credentials" "-n $namespace get secret/changeport-agent" \
   "-n $namespace list secrets" "-n $namespace create pods/exec" "-n $namespace get configmaps" \
   "-n $namespace delete pods" "-n kube-system list pods" "-n kube-system get secret/admin"; do
   # shellcheck disable=SC2086 # the words are separate arguments
   [[ $(can_i $denied) == no ]] || die "the console may $denied"
 done
+
+# Patching a customer as the console, in a server-side dry run, which the
+# admission policy checks; prints the API server's answer.
+patch_customer_as_console() {
+  kubectl patch customer "$customer" --as "$console" --type=merge --dry-run=server -o name -p "$1" 2>&1 || true
+}
+answer=$(patch_customer_as_console '{"spec":{"deletionProtection":true}}')
+[[ $answer == *changeport-console-customers* ]] || die "the console could turn on deletion protection of customer $customer: $answer"
 
 log "Console service account's access to trial requests"
 # Users make them and operators decide them through the status; a request

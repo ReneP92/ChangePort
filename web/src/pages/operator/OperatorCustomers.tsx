@@ -4,6 +4,7 @@ import type { Customer } from "@/api/client";
 import { useCustomers, useMe } from "@/api/queries";
 import { StatusBadge } from "@/components/CustomerSummary";
 import { parts } from "@/lib/parts";
+import { formatDay, trialEnding, trialLeft } from "@/lib/trials";
 import { Notice } from "@/components/Notice";
 import { ProvisionCustomerDialog } from "@/pages/operator/ProvisionCustomerDialog";
 
@@ -58,6 +59,7 @@ function CustomerTable() {
               <tr>
                 <th className="py-2 font-medium">Customer</th>
                 <th className="py-2 font-medium">Profile</th>
+                <th className="py-2 font-medium">Trial</th>
                 <th className="py-2 font-medium">Progress</th>
                 <th className="py-2 font-medium">Status</th>
               </tr>
@@ -78,6 +80,9 @@ function CustomerTable() {
                     </div>
                   </td>
                   <td className="py-3 whitespace-nowrap">{customer.profile}</td>
+                  <td className="py-3 whitespace-nowrap">
+                    <TrialCell customer={customer} />
+                  </td>
                   <td className="py-3">
                     <ConditionDots customer={customer} />
                   </td>
@@ -97,6 +102,20 @@ function CustomerTable() {
         </div>
       )}
     </main>
+  );
+}
+
+/** When a customer's trial ends, in its last three days as a warning. */
+function TrialCell({ customer }: { customer: Customer }) {
+  if (!customer.trial) {
+    return <span className="text-muted-foreground">No trial</span>;
+  }
+  const { endsAt } = customer.trial;
+  return (
+    <span className={trialEnding(endsAt) ? "font-medium text-destructive" : undefined}>
+      {trialLeft(endsAt)} left
+      <span className="block text-muted-foreground">until {formatDay(new Date(endsAt))}</span>
+    </span>
   );
 }
 

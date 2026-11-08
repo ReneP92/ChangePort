@@ -27,6 +27,9 @@ spec:
     - jsonPath: .status.conditions[?(@.type=="Ready")].reason
       name: Reason
       type: string
+    - jsonPath: .spec.trial.endsAt
+      name: Trial ends
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -57,7 +60,9 @@ spec:
           metadata:
             type: object
           spec:
-            description: CustomerSpec is what Changeport runs for a customer.
+            description: |-
+              CustomerSpec is what Changeport runs for a customer. A customer on a trial
+              cannot have deletion protection: its trial ends on its own.
             properties:
               clerkOrganizationID:
                 description: |-
@@ -91,10 +96,27 @@ spec:
                 x-kubernetes-validations:
                 - message: the profile cannot change
                   rule: self == oldSelf
+              trial:
+                description: Trial, when set, is the customer's trial, which ends
+                  on its own.
+                properties:
+                  endsAt:
+                    description: |-
+                      EndsAt is when the trial ends: the provisioning controller then
+                      deletes the Customer, which deprovisions its cluster.
+                    format: date-time
+                    type: string
+                required:
+                - endsAt
+                type: object
             required:
             - displayName
             - profile
             type: object
+            x-kubernetes-validations:
+            - message: a trial cannot have deletion protection; convert the customer
+                first
+              rule: '!has(self.trial) || !has(self.deletionProtection) || !self.deletionProtection'
           status:
             description: CustomerStatus is how far the customer's Kafka cluster is.
             properties:
@@ -106,7 +128,7 @@ spec:
               conditions:
                 description: |-
                   Conditions are CertificateIssued, KafkaReady, UsersReady,
-                  AgentAvailable and Ready, and CDCReady.
+                  AgentAvailable and Ready, CDCReady, and TrialEnding for a trial.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -176,6 +198,12 @@ spec:
                   ProvisionedAt is when the cluster first became Ready. Alerts about a
                   cluster that is down wait for it, so that a cluster still being created
                   raises none.
+                format: date-time
+                type: string
+              trialWarnedFor:
+                description: |-
+                  TrialWarnedFor is the end of the trial its customer was warned about,
+                  once per end: a trial extended past the warning is warned about again.
                 format: date-time
                 type: string
             type: object

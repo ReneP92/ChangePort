@@ -18,9 +18,11 @@ kind: ClusterRole
 metadata:
   name: changeport-provisioner
 rules:
+  # Delete: a trial that ends deletes its Customer, which deprovisions it
+  # (docs/runbook.md, Trials); a trial never has deletion protection.
   - apiGroups: [changeport.io]
     resources: [customers]
-    verbs: [get, list, watch, patch, update]
+    verbs: [get, list, watch, patch, update, delete]
   - apiGroups: [changeport.io]
     resources: [customers/status]
     verbs: [get, patch, update]

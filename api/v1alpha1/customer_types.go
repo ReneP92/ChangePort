@@ -1,6 +1,8 @@
 package v1alpha1
 
 import (
+	"time"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -36,6 +38,12 @@ const (
 	// registry of the customer's Postgres CDC sources run, or when the
 	// customer has none. Ready does not include it.
 	ConditionCDCReady = "CDCReady"
+
+	// ConditionTrialEnding is set on a customer on a trial only: False while
+	// the trial runs, True from three days before it ends, when the customer
+	// is warned. At the end, the provisioning controller deletes the
+	// Customer.
+	ConditionTrialEnding = "TrialEnding"
 )
 
 // The reasons of a Customer's conditions.
@@ -64,9 +72,28 @@ const (
 	// ReasonDeprovisioning means the cluster of a deleted Customer is being
 	// deleted.
 	ReasonDeprovisioning = "Deprovisioning"
+
+	// TrialEnding's reasons: the trial runs, ends within three days, or has
+	// ended and the Customer is being deleted.
+	ReasonTrialRunning = "TrialRunning"
+	ReasonTrialEnding  = "TrialEnding"
+	ReasonTrialEnded   = "TrialEnded"
 )
 
-// CustomerSpec is what Changeport runs for a customer.
+// TrialWarning is how long before a trial ends its customer is warned.
+const TrialWarning = 3 * 24 * time.Hour
+
+// CustomerTrial is a trial, which ends on its own unless an operator
+// extends it or converts the customer.
+type CustomerTrial struct {
+	// EndsAt is when the trial ends: the provisioning controller then
+	// deletes the Customer, which deprovisions its cluster.
+	EndsAt metav1.Time `json:"endsAt"`
+}
+
+// CustomerSpec is what Changeport runs for a customer. A customer on a trial
+// cannot have deletion protection: its trial ends on its own.
+// +kubebuilder:validation:XValidation:rule="!has(self.trial) || !has(self.deletionProtection) || !self.deletionProtection",message="a trial cannot have deletion protection; convert the customer first"
 type CustomerSpec struct {
 	// DisplayName is the customer's name as people know it, such as "Acme
 	// Corp".
@@ -92,6 +119,10 @@ type CustomerSpec struct {
 	// protection is turned off.
 	// +optional
 	DeletionProtection bool `json:"deletionProtection,omitempty"`
+
+	// Trial, when set, is the customer's trial, which ends on its own.
+	// +optional
+	Trial *CustomerTrial `json:"trial,omitempty"`
 }
 
 // CustomerStatus is how far the customer's Kafka cluster is.
@@ -113,11 +144,16 @@ type CustomerStatus struct {
 	ProvisionedAt *metav1.Time `json:"provisionedAt,omitempty"`
 
 	// Conditions are CertificateIssued, KafkaReady, UsersReady,
-	// AgentAvailable and Ready, and CDCReady.
+	// AgentAvailable and Ready, CDCReady, and TrialEnding for a trial.
 	// +listType=map
 	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// TrialWarnedFor is the end of the trial its customer was warned about,
+	// once per end: a trial extended past the warning is warned about again.
+	// +optional
+	TrialWarnedFor *metav1.Time `json:"trialWarnedFor,omitempty"`
 }
 
 // Customer is a customer of Changeport and their dedicated Kafka cluster.
@@ -132,6 +168,7 @@ type CustomerStatus struct {
 // +kubebuilder:printcolumn:name="Profile",type=string,JSONPath=`.spec.profile`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].reason`
+// +kubebuilder:printcolumn:name="Trial ends",type=string,JSONPath=`.spec.trial.endsAt`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 // +kubebuilder:validation:XValidation:rule="size(self.metadata.name) <= 30 && self.metadata.name.matches('^[a-z]([-a-z0-9]*[a-z0-9])?$')",message="the name is the customer ID: at most 30 lowercase letters, digits and dashes, starting with a letter and ending with a letter or digit"
 type Customer struct {

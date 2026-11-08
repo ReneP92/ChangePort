@@ -43,6 +43,8 @@ export type NewTrialRequest = components["schemas"]["NewTrialRequest"];
 export type TrialThroughput = components["schemas"]["TrialThroughput"];
 export type TrialRetention = components["schemas"]["TrialRetention"];
 export type TrialApproval = components["schemas"]["TrialApproval"];
+export type TrialChange = components["schemas"]["TrialChange"];
+export type CustomerTrial = components["schemas"]["CustomerTrial"];
 
 /** An error the console's API answered, with its problem description. */
 export class ApiError extends Error {

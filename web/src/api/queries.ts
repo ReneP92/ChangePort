@@ -19,6 +19,7 @@ import {
   type SourceSQLRequest,
   type ThroughputRange,
   type TrialApproval,
+  type TrialChange,
 } from "@/api/client";
 import { readEvents } from "@/lib/sse";
 
@@ -107,6 +108,22 @@ export function useProvisionCustomer() {
   return useMutation({
     mutationFn: async (customer: NewCustomer) =>
       unwrap(await api.POST("/api/operator/customers", { body: customer })),
+    onSuccess: () => queries.invalidateQueries({ queryKey: ["operator", "customers"] }),
+  });
+}
+
+/** Extends a customer's trial or converts the customer, then refreshes. */
+export function useChangeTrial() {
+  const api = useApi();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, change }: { id: string; change: TrialChange }) =>
+      unwrap(
+        await api.PATCH("/api/operator/customers/{customerID}/trial", {
+          params: { path: { customerID: id } },
+          body: change,
+        }),
+      ),
     onSuccess: () => queries.invalidateQueries({ queryKey: ["operator", "customers"] }),
   });
 }
