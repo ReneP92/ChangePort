@@ -44,6 +44,9 @@ wait_phase() {
 slot_column() { pg -c "SELECT $1 FROM pg_replication_slots WHERE slot_name = '$slot'"; }
 kafka() { docker run "${KAFKA_CLIENT[@]}" --entrypoint "/opt/kafka/bin/$1" "$KAFKA_IMAGE" --bootstrap-server "$bootstrap" "${@:2}"; }
 cleanup() {
+  # A failure keeps what the source said before it goes.
+  # shellcheck disable=SC2181 # the exit status of the script, on EXIT
+  (($? == 0)) || keep_source_diagnostics "$namespace" "$source_name"
   # The stand-in database keeps a 1 GB limit, as the setup guide recommends.
   pg -c "ALTER SYSTEM SET max_slot_wal_keep_size = '1GB'" -c "SELECT pg_reload_conf()" >/dev/null 2>&1 || true
   pg -c "DROP TABLE IF EXISTS wal_filler_$id" >/dev/null 2>&1 || true
