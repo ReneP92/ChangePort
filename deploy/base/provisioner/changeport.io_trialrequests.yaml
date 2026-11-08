@@ -143,6 +143,13 @@ spec:
                 description: DecidedBy is the Clerk user ID of the operator who decided.
                 maxLength: 63
                 type: string
+              organizationID:
+                description: |-
+                  OrganizationID is the customer's Clerk organization, which the
+                  requester was made an admin of, so the console can switch them to it.
+                maxLength: 63
+                pattern: ^org_[A-Za-z0-9]+$
+                type: string
               phase:
                 description: Phase is Pending until an operator approves or declines
                   the request.
@@ -162,9 +169,10 @@ spec:
             - message: a decision is final
               rule: '!has(oldSelf.phase) || oldSelf.phase == ''Pending'' || (has(self.phase)
                 && self.phase == oldSelf.phase)'
-            - message: an approval names the customer, who decided and when
+            - message: an approval names the customer, its organization, who decided
+                and when
               rule: '!has(self.phase) || self.phase != ''Approved'' || (has(self.customer)
-                && has(self.decidedBy) && has(self.decidedAt))'
+                && has(self.organizationID) && has(self.decidedBy) && has(self.decidedAt))'
             - message: a decline gives the reason, who decided and when
               rule: '!has(self.phase) || self.phase != ''Declined'' || (has(self.reason)
                 && has(self.decidedBy) && has(self.decidedAt))'

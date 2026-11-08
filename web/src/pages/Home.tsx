@@ -1,5 +1,5 @@
 import { OrganizationSwitcher } from "@clerk/react";
-import { Navigate } from "react-router";
+import { Link, Navigate } from "react-router";
 import { useMe } from "@/api/queries";
 import { Notice } from "@/components/Notice";
 import { CustomerArea } from "@/pages/CustomerArea";
@@ -30,6 +30,7 @@ export function Home() {
               switch to it.
             </p>
             <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/" />
+            <TrialLink />
           </main>
         );
       }
@@ -41,9 +42,22 @@ export function Home() {
             colleague for an invitation.
           </p>
           <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/" />
+          <TrialLink />
         </main>
       );
   }
+}
+
+/** Where someone without a cluster yet asks for one. */
+function TrialLink() {
+  return (
+    <p className="mt-4 border-t pt-4 text-muted-foreground">
+      New to Changeport?{" "}
+      <Link to="/trial" className="font-medium text-foreground underline underline-offset-4">
+        Request a trial
+      </Link>
+    </p>
+  );
 }
 
 function CustomerHome() {

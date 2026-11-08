@@ -123,3 +123,17 @@ export function testCustomers(): {
       testOrganizationPattern.test(c.spec.displayName),
   );
 }
+
+/** Every trial request a test user made, the users' addresses being test addresses. */
+export function testTrialRequests(): {
+  metadata: { name: string; creationTimestamp: string };
+  spec: { email: string; company: string };
+}[] {
+  const requests = JSON.parse(kubectl(["get", "trialrequests", "-o", "json"])) as {
+    items: {
+      metadata: { name: string; creationTimestamp: string };
+      spec: { email: string; company: string };
+    }[];
+  };
+  return requests.items.filter((r) => testEmailPattern.test(r.spec.email));
+}

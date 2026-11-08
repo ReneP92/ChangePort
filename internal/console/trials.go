@@ -260,10 +260,11 @@ func (s *Server) ApproveTrialRequest(ctx context.Context, request api.ApproveTri
 		return nil, err
 	}
 	trial.Status = v1alpha1.TrialRequestStatus{
-		Phase:     v1alpha1.TrialRequestApproved,
-		DecidedBy: principal.UserID,
-		DecidedAt: ptr.To(metav1.Now()),
-		Customer:  customer.Name,
+		Phase:          v1alpha1.TrialRequestApproved,
+		DecidedBy:      principal.UserID,
+		DecidedAt:      ptr.To(metav1.Now()),
+		Customer:       customer.Name,
+		OrganizationID: customer.Spec.ClerkOrganizationID,
 	}
 	if err := s.trialRequests.Decide(ctx, trial); err != nil {
 		undo()
@@ -376,6 +377,9 @@ func toAPITrialRequest(request *v1alpha1.TrialRequest) api.TrialRequest {
 	}
 	if request.Status.Customer != "" {
 		out.CustomerID = ptr.To(request.Status.Customer)
+	}
+	if request.Status.OrganizationID != "" {
+		out.OrganizationID = ptr.To(request.Status.OrganizationID)
 	}
 	return out
 }

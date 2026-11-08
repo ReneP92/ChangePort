@@ -1253,6 +1253,8 @@ export interface components {
             reason?: string;
             /** @description The customer an approval created */
             customerID?: string;
+            /** @description The customer's Clerk organization, which the requester is an admin of */
+            organizationID?: string;
             /** Format: date-time */
             createdAt: string;
         };

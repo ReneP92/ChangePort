@@ -76,7 +76,7 @@ type TrialRequestSpec struct {
 
 // TrialRequestStatus is the operators' decision. A decision is final.
 // +kubebuilder:validation:XValidation:rule="!has(oldSelf.phase) || oldSelf.phase == 'Pending' || (has(self.phase) && self.phase == oldSelf.phase)",message="a decision is final"
-// +kubebuilder:validation:XValidation:rule="!has(self.phase) || self.phase != 'Approved' || (has(self.customer) && has(self.decidedBy) && has(self.decidedAt))",message="an approval names the customer, who decided and when"
+// +kubebuilder:validation:XValidation:rule="!has(self.phase) || self.phase != 'Approved' || (has(self.customer) && has(self.organizationID) && has(self.decidedBy) && has(self.decidedAt))",message="an approval names the customer, its organization, who decided and when"
 // +kubebuilder:validation:XValidation:rule="!has(self.phase) || self.phase != 'Declined' || (has(self.reason) && has(self.decidedBy) && has(self.decidedAt))",message="a decline gives the reason, who decided and when"
 type TrialRequestStatus struct {
 	// Phase is Pending until an operator approves or declines the request.
@@ -103,6 +103,13 @@ type TrialRequestStatus struct {
 	// +kubebuilder:validation:MaxLength=30
 	// +optional
 	Customer string `json:"customer,omitempty"`
+
+	// OrganizationID is the customer's Clerk organization, which the
+	// requester was made an admin of, so the console can switch them to it.
+	// +kubebuilder:validation:MaxLength=63
+	// +kubebuilder:validation:Pattern=`^org_[A-Za-z0-9]+$`
+	// +optional
+	OrganizationID string `json:"organizationID,omitempty"`
 }
 
 // TrialRequest is someone's request for a trial, which an operator approves,

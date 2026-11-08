@@ -17,15 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-
-type Profile = NewCustomer["profile"];
-
-/** The profiles, as operators choose among them. */
-const profiles: { name: Profile; description: string }[] = [
-  { name: "dev", description: "One broker, for trying Kafka out" },
-  { name: "dev-ha", description: "Three brokers in three zones, small" },
-  { name: "production", description: "Three brokers in three zones, sized for production" },
-];
+import { profiles, type Profile } from "@/lib/profiles";
 
 /**
  * A button that opens the dialog to provision a customer: a new Clerk

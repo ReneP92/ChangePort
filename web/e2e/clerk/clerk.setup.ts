@@ -13,6 +13,7 @@ import {
   testEmailPattern,
   testCustomers,
   testOrganizationPattern,
+  testTrialRequests,
   writeFixtures,
   type CustomerFixture,
   type Fixtures,
@@ -140,9 +141,9 @@ async function sharedOperator(): Promise<UserFixture> {
 }
 
 /**
- * The janitor: removes the test users, organizations and customers of runs
- * that started over an hour ago and never cleaned up, so that a crashed run
- * costs nothing for long. Younger ones may belong to a run in progress.
+ * The janitor: removes the test users, organizations, customers and trial
+ * requests of runs that started over an hour ago and never cleaned up, so
+ * that a crashed run costs nothing for long. Younger ones may belong to a run in progress.
  */
 async function removeAbandoned(): Promise<void> {
   const clerk = clerkClient();
@@ -168,6 +169,11 @@ async function removeAbandoned(): Promise<void> {
   for (const c of testCustomers()) {
     if (Date.parse(c.metadata.creationTimestamp) < cutoff) {
       kubectl(["delete", "customer", c.metadata.name, "--wait=false"]);
+    }
+  }
+  for (const r of testTrialRequests()) {
+    if (Date.parse(r.metadata.creationTimestamp) < cutoff) {
+      kubectl(["delete", "trialrequest", r.metadata.name, "--wait=false", "--ignore-not-found"]);
     }
   }
 }

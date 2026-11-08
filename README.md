@@ -361,11 +361,18 @@ cp .env.sample .env  # then fill it in
 just console-config
 ```
 
-In the Clerk dashboard, turn off **Allow user-created organizations**
-(Organizations, Settings), in every instance: organizations are customers,
-which only operators create, in the operator console. Otherwise Clerk offers
-every user to create one in the organization switcher. The signed-in tests
-check it.
+In the Clerk dashboard (Organizations, Settings), in every instance:
+
+- Turn off **Allow user-created organizations**: organizations are
+  customers, which only operators create, in the operator console or by
+  approving a trial request. Otherwise Clerk offers every user to create one
+  in the organization switcher.
+- Make membership optional (turn off **Membership required**): someone who
+  signs up at `/trial` has no organization until an operator approves their
+  request, and with membership required Clerk stops them at "You must belong
+  to an organization" before they reach the console.
+
+Sign-up stays open. The signed-in tests check all three.
 
 With the keys there, `just dev-up` also sets up two test users of your own,
 which Clerk's development instances verify with the code 424242:
@@ -439,17 +446,18 @@ the Clerk organization is kept, no longer linked to a cluster. The console
 may create and delete Customers but not change them, so it cannot turn
 deletion protection off.
 
-Signed-in users whose organization has no cluster request a trial through
-`POST /api/trial-requests` with their company, role, use case and rough
-throughput and retention; their email address is their verified one in
+Someone new signs up at <http://localhost:8088/trial> and requests a trial
+with their company, role, use case and rough throughput and retention
+(`POST /api/trial-requests`); their email address is their verified one in
 Clerk. A user has one pending request at a time and one trial ever, and
-waits a week after a decline. Operators list the requests and approve or
-decline them (`/api/operator/trial-requests`). Approving provisions a
-customer as above, named after the company, on the dev profile unless the
-operator picks another and without deletion protection, with the requester
-added to its organization as an admin at once; a decline gives the reason
-the requester sees. Both are audited. The screens for them come with
-[#136](https://github.com/ReneP92/changeport/issues/136).
+waits a week after a decline. Operators see the requests under Trial
+requests and approve or decline them (`/api/operator/trial-requests`).
+Approving provisions a customer as above, named after the company, on the
+dev profile unless the operator picks another and without deletion
+protection, with the requester added to its organization as an admin at
+once, and the requester's page then opens their cluster; a decline gives the
+reason the requester sees. Both are audited.
+[docs/console.md](docs/console.md#trials) shows the screens.
 
 Applications on your machine connect to a customer's cluster with the
 `client.properties` the console hands out, unchanged, as they would to
