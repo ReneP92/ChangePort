@@ -1,6 +1,9 @@
 # Where Alertmanager sends alerts on kind, instead of PagerDuty and Slack: a
 # webhook that prints each alert of each notification as a line of JSON, with
-# the receiver it came to (page, warn or watchdog). Read it with
+# the receiver it came to (page, warn or watchdog). Notifications arrive at
+# once and are handled on threads of their own, so each line is written
+# whole under a lock; print writes the line and its newline apart, and two
+# alerts could otherwise share a line. Read it with
 # kubectl -n metrics logs deploy/alert-receiver; hack/alerting-test.sh does.
 apiVersion: v1
 kind: ConfigMap
@@ -11,13 +14,20 @@ data:
   receiver.py: |
     import http.server
     import json
+    import sys
+    import threading
+
+    lines = threading.Lock()
 
 
     class Receiver(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
             notification = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             for alert in notification.get("alerts", []):
-                print(json.dumps({"receiver": self.path.strip("/"), "status": alert["status"], "labels": alert["labels"]}), flush=True)
+                line = json.dumps({"receiver": self.path.strip("/"), "status": alert["status"], "labels": alert["labels"]})
+                with lines:
+                    sys.stdout.write(line + "\n")
+                    sys.stdout.flush()
             self.send_response(200)
             self.end_headers()
 
