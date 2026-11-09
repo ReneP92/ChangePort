@@ -291,10 +291,12 @@ func TestLagCollectorCapsSeries(t *testing.T) {
 	}
 }
 
-// TestLagCollectorKeepsTheLastValueWhenLookupsFail covers transient lookup
+// TestLagCollectorCarriesLagForwardWhenLookupsFail covers transient lookup
 // errors, for example while a topic switches to tiered storage: a failed
-// anchor must not read as "no message since", which would overstate the lag.
-func TestLagCollectorKeepsTheLastValueWhenLookupsFail(t *testing.T) {
+// anchor must not read as "no message since", which would overstate the lag,
+// and a group that consumed nothing since must not look less behind than it
+// is.
+func TestLagCollectorCarriesLagForwardWhenLookupsFail(t *testing.T) {
 	admin := newFakeLagAdmin()
 	admin.anchorErr = kerr.OffsetNotAvailable
 	c := newTestLagCollector(admin)
@@ -309,18 +311,40 @@ func TestLagCollectorKeepsTheLastValueWhenLookupsFail(t *testing.T) {
 	if err := c.Measure(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	admin.anchorErr = kerr.OffsetNotAvailable
+	// 30 seconds later the lookups fail, billing has consumed nothing, and
+	// 20 more messages arrived on orders.
+	start := testNow
+	c.Now = func() time.Time { return start.Add(30 * time.Second) }
+	admin.anchorErr = kerr.RequestTimedOut
+	admin.ends["orders"][0] += 20
+	if err := c.Measure(t.Context()); !errors.Is(err, kerr.RequestTimedOut) {
+		t.Fatalf("Measure() = %v, want the lookup error", err)
+	}
+	want := `
+# HELP changeport_consumergroup_lag_messages Messages the consumer group has not consumed yet, summed over the topic's partitions.
+# TYPE changeport_consumergroup_lag_messages gauge
+changeport_consumergroup_lag_messages{consumer_group="billing",topic="orders"} 230
+changeport_consumergroup_lag_messages{consumer_group="shipping",topic="payments"} 0
+# HELP changeport_consumergroup_lag_seconds Age of the oldest message the consumer group has not consumed yet, the highest over the topic's partitions.
+# TYPE changeport_consumergroup_lag_seconds gauge
+changeport_consumergroup_lag_seconds{consumer_group="billing",topic="orders"} 210
+changeport_consumergroup_lag_seconds{consumer_group="shipping",topic="payments"} 0
+`
+	if err := testutil.CollectAndCompare(c, strings.NewReader(want),
+		"changeport_consumergroup_lag_messages", "changeport_consumergroup_lag_seconds"); err != nil {
+		t.Errorf("a group that consumed nothing must carry its lag forward: %v", err)
+	}
+
+	// Another 30 seconds on, billing has consumed some: its last measurement
+	// stays, as the lookups that would place its new offset still fail.
+	c.Now = func() time.Time { return start.Add(time.Minute) }
+	admin.committed["billing"]["orders"][0] += 100
 	if err := c.Measure(t.Context()); err == nil {
 		t.Fatal("Measure() = nil, want the lookup error")
 	}
-	want := `
-# HELP changeport_consumergroup_lag_seconds Age of the oldest message the consumer group has not consumed yet, the highest over the topic's partitions.
-# TYPE changeport_consumergroup_lag_seconds gauge
-changeport_consumergroup_lag_seconds{consumer_group="billing",topic="orders"} 180
-changeport_consumergroup_lag_seconds{consumer_group="shipping",topic="payments"} 0
-`
-	if err := testutil.CollectAndCompare(c, strings.NewReader(want), "changeport_consumergroup_lag_seconds"); err != nil {
-		t.Errorf("after failed lookups the last measurement must stay: %v", err)
+	if err := testutil.CollectAndCompare(c, strings.NewReader(want),
+		"changeport_consumergroup_lag_messages", "changeport_consumergroup_lag_seconds"); err != nil {
+		t.Errorf("a group that moved must keep its last measurement: %v", err)
 	}
 }
 
