@@ -27,6 +27,7 @@ import (
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
 	"github.com/ReneP92/changeport/internal/cdc"
+	"github.com/ReneP92/changeport/internal/mail"
 	"github.com/ReneP92/changeport/internal/provisioning"
 )
 
@@ -57,6 +58,20 @@ type CustomerReconciler struct {
 	ResyncInterval time.Duration
 	// Now is the time, for trials; tests replace it.
 	Now func() time.Time
+	// Mail sends a trial's contact the warning and the end of its trial
+	// (internal/mail); without it, nobody is emailed. ConsoleURL is where
+	// the emails' links lead.
+	Mail       Mail
+	ConsoleURL string
+	// Reader reads a Customer fresh from the API server before a trial's
+	// email, as Client's cache can lag behind the status that records it
+	// was sent; without one, Client reads.
+	Reader client.Reader
+}
+
+// Mail sends email (internal/mail).
+type Mail interface {
+	Send(ctx context.Context, template mail.Template, to []string, data any) error
 }
 
 func (r *CustomerReconciler) now() time.Time {
@@ -182,6 +197,19 @@ func (r *CustomerReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	setCondition(status, customer.Generation, cdcReady)
 	untilTrial, onTrial := r.trial(&customer, status)
+	// The warning goes out before it is recorded, so that a send that fails
+	// is tried again rather than lost.
+	if warned := status.TrialWarnedFor; warned != nil && (customer.Status.TrialWarnedFor == nil || !customer.Status.TrialWarnedFor.Equal(warned)) {
+		fresh, err := r.fresh(ctx, &customer)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if fresh.Status.TrialWarnedFor == nil || !fresh.Status.TrialWarnedFor.Equal(warned) {
+			if err := r.mailTrial(ctx, &customer, mail.TrialEnding); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	}
 	markProvisioned(status)
 	if err := r.updateStatus(ctx, &customer, status); err != nil {
 		return ctrl.Result{}, err
@@ -239,6 +267,16 @@ func (r *CustomerReconciler) trial(customer *v1alpha1.Customer, status *v1alpha1
 // the finalizer. The deletion only goes ahead for the Customer as read, so a
 // trial extended or converted meanwhile is kept.
 func (r *CustomerReconciler) endTrial(ctx context.Context, customer *v1alpha1.Customer) error {
+	// The contact hears once, before the end is recorded.
+	fresh, err := r.fresh(ctx, customer)
+	if err != nil {
+		return err
+	}
+	if ending := meta.FindStatusCondition(fresh.Status.Conditions, v1alpha1.ConditionTrialEnding); ending == nil || ending.Reason != v1alpha1.ReasonTrialEnded {
+		if err := r.mailTrial(ctx, customer, mail.TrialEnded); err != nil {
+			return err
+		}
+	}
 	status := customer.Status.DeepCopy()
 	setCondition(status, customer.Generation, metav1.Condition{
 		Type: v1alpha1.ConditionTrialEnding, Status: metav1.ConditionTrue, Reason: v1alpha1.ReasonTrialEnded,
@@ -248,11 +286,39 @@ func (r *CustomerReconciler) endTrial(ctx context.Context, customer *v1alpha1.Cu
 		return err
 	}
 	ctrl.LoggerFrom(ctx).Info("The trial ended; deleting the customer", "endsAt", customer.Spec.Trial.EndsAt.Time)
-	err := r.Client.Delete(ctx, customer, client.Preconditions{UID: &customer.UID, ResourceVersion: &customer.ResourceVersion})
+	err = r.Client.Delete(ctx, customer, client.Preconditions{UID: &customer.UID, ResourceVersion: &customer.ResourceVersion})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("delete the customer of an ended trial: %w", err)
 	}
 	return nil
+}
+
+// fresh reads customer from the API server rather than the cache, whose
+// status may not have caught up with the reconciler's last update: a trial's
+// email is sent only when the status does not record it yet.
+func (r *CustomerReconciler) fresh(ctx context.Context, customer *v1alpha1.Customer) (*v1alpha1.Customer, error) {
+	reader := r.Reader
+	if reader == nil {
+		reader = r.Client
+	}
+	var fresh v1alpha1.Customer
+	if err := reader.Get(ctx, client.ObjectKeyFromObject(customer), &fresh); err != nil {
+		return nil, fmt.Errorf("read the customer before its trial's email: %w", err)
+	}
+	return &fresh, nil
+}
+
+// mailTrial emails a trial's contact about it, if it has one.
+func (r *CustomerReconciler) mailTrial(ctx context.Context, customer *v1alpha1.Customer, template mail.Template) error {
+	trial := customer.Spec.Trial
+	if r.Mail == nil || trial == nil || trial.Contact == "" {
+		return nil
+	}
+	return r.Mail.Send(ctx, template, []string{trial.Contact}, mail.Trial{
+		Company: customer.Spec.DisplayName,
+		EndsAt:  mail.FormatTime(trial.EndsAt.Time),
+		Link:    strings.TrimSuffix(r.ConsoleURL, "/") + "/",
+	})
 }
 
 // formatEnd is a trial's end as conditions say it, such as 2026-11-22 09:00

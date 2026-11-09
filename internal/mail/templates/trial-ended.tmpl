@@ -1,0 +1,15 @@
+{{define "trial-ended-subject"}}Your Changeport trial has ended{{end}}
+
+{{define "trial-ended-text"}}
+Hello,
+
+Your trial for {{.Company}} ended on {{.EndsAt}}, and your Kafka cluster is being deleted.
+
+Thank you for trying Changeport. To continue, reply to this email.
+{{end}}
+
+{{define "trial-ended-html"}}
+<p>Hello,</p>
+<p>Your trial for {{.Company}} ended on {{.EndsAt}}, and your Kafka cluster is being deleted.</p>
+<p>Thank you for trying Changeport. To continue, reply to this email.</p>
+{{end}}

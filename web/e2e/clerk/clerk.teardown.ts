@@ -23,6 +23,20 @@ teardown("remove this run's users, organizations and customers", async () => {
   for (const organization of fixtures.organizations) {
     await clerk.organizations.deleteOrganization(organization);
   }
+  // A test that failed may have left its customer protected, which would
+  // refuse the deletion.
+  for (const name of kubectl([
+    "get",
+    "customers",
+    "-l",
+    `${runLabel}=${fixtures.run}`,
+    "-o",
+    "name",
+  ])
+    .split("\n")
+    .filter(Boolean)) {
+    kubectl(["patch", name, "--type=merge", "-p", '{"spec":{"deletionProtection":false}}']);
+  }
   kubectl(["delete", "customers", "-l", `${runLabel}=${fixtures.run}`, "--wait=false"]);
   // What the tests provisioned through the operator console is named like
   // the run's organizations, though not labelled.

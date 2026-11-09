@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -35,6 +36,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
+	"github.com/ReneP92/changeport/internal/mail"
 	"github.com/ReneP92/changeport/internal/provisioning"
 )
 
@@ -106,6 +108,13 @@ func testScheme(t *testing.T) *runtime.Scheme {
 // against the API server until the test ends, and returns a client.
 func startController(t *testing.T) client.Client {
 	t.Helper()
+	return startControllerWithMail(t, nil)
+}
+
+// startControllerWithMail is startController whose controller emails
+// trials' contacts through mail.
+func startControllerWithMail(t *testing.T, mail Mail) client.Client {
+	t.Helper()
 	requireEnv(t)
 	scheme := testScheme(t)
 	mgr, err := ctrl.NewManager(testEnv, ctrl.Options{
@@ -128,6 +137,8 @@ func startController(t *testing.T) client.Client {
 		Platform:       provisioning.KindPlatform,
 		PollInterval:   100 * time.Millisecond,
 		ResyncInterval: time.Minute,
+		Mail:           mail,
+		Reader:         mgr.GetAPIReader(),
 	}
 	if err := reconciler.SetupWithManager(mgr); err != nil {
 		t.Fatal(err)
@@ -504,7 +515,8 @@ func trialReason(t *testing.T, c client.Client, name, reason string) *v1alpha1.C
 // the end, the end deletes the Customer, which is deprovisioned as usual, and
 // an extended or converted trial stays.
 func TestTrialLifecycle(t *testing.T) {
-	c := startController(t)
+	sent := &recordedMail{}
+	c := startControllerWithMail(t, sent)
 	run := lifecycleRuns.Add(1)
 	create := func(name string, endsIn time.Duration) *v1alpha1.Customer {
 		t.Helper()
@@ -512,7 +524,7 @@ func TestTrialLifecycle(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("%s-%d", name, run)},
 			Spec: v1alpha1.CustomerSpec{
 				DisplayName: "Trial", Profile: "dev",
-				Trial: &v1alpha1.CustomerTrial{EndsAt: metav1.NewTime(time.Now().Add(endsIn))},
+				Trial: &v1alpha1.CustomerTrial{EndsAt: metav1.NewTime(time.Now().Add(endsIn)), Contact: name + "@example.com"},
 			},
 		}
 		if err := c.Create(t.Context(), customer); err != nil {
@@ -569,6 +581,14 @@ func TestTrialLifecycle(t *testing.T) {
 		err := c.Get(t.Context(), types.NamespacedName{Name: ended.Name}, &v1alpha1.Customer{})
 		return apierrors.IsNotFound(err), fmt.Sprintf("get: %v", err)
 	})
+	// Each contact heard once of each, though the controller reconciled the
+	// Customers many times, its cache behind its own status updates.
+	if got := sent.to("trial-warned@example.com"); strings.Join(got, ",") != "trial-ending" {
+		t.Errorf("the warned trial's contact got %v, want the warning once", got)
+	}
+	if got := sent.to("trial-ended@example.com"); strings.Join(got, ",") != "trial-ending,trial-ended" {
+		t.Errorf("the ended trial's contact got %v, want the warning and the end once each", got)
+	}
 
 	// A trial extended before its end stays past the old end.
 	extended := create("trial-extended", 3*time.Second)
@@ -579,4 +599,28 @@ func TestTrialLifecycle(t *testing.T) {
 	if kept := trialReason(t, c, extended.Name, v1alpha1.ReasonTrialRunning); kept.DeletionTimestamp != nil {
 		t.Error("the extended trial's Customer was deleted at its old end")
 	}
+}
+
+// recordedMail records the email the controller sends, by recipient.
+type recordedMail struct {
+	mu   sync.Mutex
+	sent map[string][]string
+}
+
+func (m *recordedMail) Send(_ context.Context, template mail.Template, to []string, _ any) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.sent == nil {
+		m.sent = map[string][]string{}
+	}
+	for _, address := range to {
+		m.sent[address] = append(m.sent[address], string(template))
+	}
+	return nil
+}
+
+func (m *recordedMail) to(address string) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.sent[address]...)
 }

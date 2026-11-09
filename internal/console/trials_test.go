@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
 	"github.com/ReneP92/changeport/internal/console/api"
+	email "github.com/ReneP92/changeport/internal/mail"
 )
 
 // fakeTrialRequests holds tr-pend22, Initech's pending request by user_8.
@@ -109,6 +111,27 @@ func (f *fakeTrialRequests) Decide(_ context.Context, request *v1alpha1.TrialReq
 	stored.Status = request.Status
 	stored.ResourceVersion += "1"
 	request.ResourceVersion = stored.ResourceVersion
+	return nil
+}
+
+// fakeMail records the email the console sends, and fails while fail is
+// set.
+type fakeMail struct {
+	sent []sentMail
+	fail bool
+}
+
+type sentMail struct {
+	template email.Template
+	to       []string
+	data     any
+}
+
+func (f *fakeMail) Send(_ context.Context, template email.Template, to []string, data any) error {
+	if f.fail {
+		return errors.New("the mail server is down")
+	}
+	f.sent = append(f.sent, sentMail{template, to, data})
 	return nil
 }
 
@@ -472,5 +495,77 @@ func TestOperatorsExtendAndConvertTrials(t *testing.T) {
 	acme.DeletionTimestamp = &metav1.Time{Time: time.Now()}
 	if status, response := change("acme", `{"action":"convert"}`); status != 409 || !strings.Contains(response, "Being deleted") {
 		t.Errorf("converting a customer being deleted = %d %s, want 409", status, response)
+	}
+}
+
+func TestTrialsEmailOperatorsAndRequesters(t *testing.T) {
+	f := newFixture(t)
+	user := f.signer.token(t, session{user: "user_1"})
+	staff := f.signer.token(t, session{user: "user_6", org: staffOrg, role: "member"})
+
+	// A new request goes to the operators.
+	status, body := send(t, f.handler, http.MethodPost, "/api/trial-requests", user, trialBody)
+	if status != 201 {
+		t.Fatalf("POST = %d %s", status, body)
+	}
+	var requested api.TrialRequest
+	if err := json.Unmarshal([]byte(body), &requested); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.mail.sent) != 1 || f.mail.sent[0].template != email.TrialRequested || strings.Join(f.mail.sent[0].to, ",") != "ops@changeport.test" {
+		t.Fatalf("sent %+v, want the request to the operators", f.mail.sent)
+	}
+	if got := f.mail.sent[0].data.(email.TrialRequest); got.ID != requested.Id || got.Company != "Hooli" || got.Email != "user_1@example.com" ||
+		got.Throughput != "Under 1 MB/s" || got.Retention != "Up to a week" || got.Start != "As soon as possible" || got.Link != origin+"/operator/trials" {
+		t.Errorf("the operators' email says %+v", got)
+	}
+
+	// An approval goes to the requester, with the console's link.
+	if status, body := send(t, f.handler, http.MethodPost, "/api/operator/trial-requests/"+requested.Id+"/approve", staff, `{}`); status != 200 {
+		t.Fatalf("approve = %d %s", status, body)
+	}
+	approved := f.mail.sent[1]
+	if approved.template != email.TrialApproved || approved.to[0] != "user_1@example.com" {
+		t.Fatalf("sent %+v, want the approval to the requester", approved)
+	}
+	if got := approved.data.(email.TrialDecision); got.Company != "Hooli" || got.Link != origin+"/" || got.EndsAt == "" {
+		t.Errorf("the approval says %+v", got)
+	}
+	// The trial's emails go to the requester.
+	var customer *v1alpha1.Customer
+	for i := range f.customers.customers {
+		if f.customers.customers[i].Spec.Trial != nil {
+			customer = &f.customers.customers[i]
+		}
+	}
+	if customer == nil || customer.Spec.Trial.Contact != "user_1@example.com" {
+		t.Fatalf("the trial's customer = %+v, want its contact the requester", customer)
+	}
+	// Extending keeps the contact.
+	extended := time.Now().Add(20 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	if status, body := send(t, f.handler, http.MethodPatch, "/api/operator/customers/"+customer.Name+"/trial", staff,
+		`{"action":"extend","endsAt":"`+extended+`"}`); status != 200 {
+		t.Fatalf("extend = %d %s", status, body)
+	}
+	if contact := customer.Spec.Trial.Contact; contact != "user_1@example.com" {
+		t.Errorf("after the extension, the contact is %q", contact)
+	}
+
+	// A decline goes to the requester, with the reason and when to ask again;
+	// the mail server being down fails nothing.
+	f.trialRequests.add("tr-mail22", "user_9", "Initech", time.Now())
+	f.mail.fail = true
+	if status, body := send(t, f.handler, http.MethodPost, "/api/operator/trial-requests/tr-mail22/decline", staff, `{"reason":"Not yet"}`); status != 200 {
+		t.Fatalf("declining while mail is down = %d %s, want 200", status, body)
+	}
+	f.mail.fail = false
+	f.trialRequests.add("tr-mayy22", "user_9", "Initech", time.Now())
+	if status, _ := send(t, f.handler, http.MethodPost, "/api/operator/trial-requests/tr-mayy22/decline", staff, `{"reason":"Not yet"}`); status != 200 {
+		t.Fatal("decline failed")
+	}
+	declined := f.mail.sent[len(f.mail.sent)-1]
+	if got, ok := declined.data.(email.TrialDecision); declined.template != email.TrialDeclined || declined.to[0] != "user_9@example.com" ||
+		!ok || got.Reason != "Not yet" || got.AskAgain != time.Now().Add(declineWait).UTC().Format("2 January 2006") {
+		t.Errorf("sent %+v, want the decline with its reason", declined)
 	}
 }

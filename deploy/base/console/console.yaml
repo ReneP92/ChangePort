@@ -100,6 +100,12 @@ spec:
             - secretRef:
                 name: changeport-console-clerk
                 optional: true
+            # Email about trials (internal/mail): CHANGEPORT_MAIL,
+            # CHANGEPORT_MAIL_FROM and CHANGEPORT_OPERATOR_EMAILS, which
+            # overlays set. Without them, no email is sent.
+            - configMapRef:
+                name: changeport-mail
+                optional: true
           ports:
             - name: http
               containerPort: 8080

@@ -100,6 +100,13 @@ spec:
                 description: Trial, when set, is the customer's trial, which ends
                   on its own.
                 properties:
+                  contact:
+                    description: |-
+                      Contact is who the provisioning controller emails when the trial is
+                      about to end and when it has ended: the trial request's verified
+                      address. Without one, nobody is emailed.
+                    maxLength: 254
+                    type: string
                   endsAt:
                     description: |-
                       EndsAt is when the trial ends: the provisioning controller then

@@ -89,6 +89,13 @@ type CustomerTrial struct {
 	// EndsAt is when the trial ends: the provisioning controller then
 	// deletes the Customer, which deprovisions its cluster.
 	EndsAt metav1.Time `json:"endsAt"`
+
+	// Contact is who the provisioning controller emails when the trial is
+	// about to end and when it has ended: the trial request's verified
+	// address. Without one, nobody is emailed.
+	// +kubebuilder:validation:MaxLength=254
+	// +optional
+	Contact string `json:"contact,omitempty"`
 }
 
 // CustomerSpec is what Changeport runs for a customer. A customer on a trial

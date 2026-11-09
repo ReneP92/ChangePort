@@ -24,6 +24,7 @@ it and runs in the namespace `customer-c-7f3k2q`, with brokers
 - [Rotating a customer's password](#rotating-a-customers-password)
 - [Upgrading Strimzi](#upgrading-strimzi)
 - [Upgrading Kafka](#upgrading-kafka)
+- [Email](#email)
 - [Alerting](#alerting)
 - [Partitions are not in sync](#partitions-are-not-in-sync)
 - [No active controller](#no-active-controller)
@@ -420,6 +421,42 @@ Three kinds of certificate are involved; all renew themselves.
 
 The `letsencrypt` and `letsencrypt-staging` ClusterIssuers, and external-dns,
 come with the domain and the EKS environments (#8, #28).
+
+## Email
+
+The console and the provisioner email about trials (`internal/mail`), each
+message in plain language as text with a small HTML version: operators hear
+of every new trial request, and requesters of the decision, of their
+trial ending in three days and of its end. Where email goes is set in the
+ConfigMap `changeport-mail` in the `changeport` namespace:
+
+| Key | What |
+| --- | --- |
+| `CHANGEPORT_MAIL` | `smtp://host:port`, or `ses` for Amazon SES in the environment's region; empty for no email |
+| `CHANGEPORT_MAIL_FROM` | The address email comes from, and replies go to |
+| `CHANGEPORT_OPERATOR_EMAILS` | Who hears of new trial requests, comma-separated |
+| `CHANGEPORT_CONSOLE_URL` | Where the provisioner's emails link |
+
+Without the ConfigMap no email is sent, and the logs say so (`mail is off`).
+A send is tried four times; every attempt that succeeds or finally fails is
+in the audit log by template and recipients only, never what it said:
+
+```bash
+kubectl -n changeport logs deployment/changeport-console | grep -E 'mail (sent|not sent)'
+kubectl -n changeport logs deployment/changeport-provisioner | grep -E 'mail (sent|not sent)'
+```
+
+A trial's warning is recorded only once it was sent, so the provisioner
+tries a failed one again; the console's emails follow what users did, which
+stands even when the email fails. On kind, email goes to Mailpit, which
+keeps it:
+
+```bash
+kubectl -n mail port-forward svc/mailpit 8025:http   # then open http://localhost:8025
+```
+
+The AWS environments send through Amazon SES, once the domain exists (#8)
+and has its SES identity.
 
 ## Alerting
 
