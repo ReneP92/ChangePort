@@ -9,8 +9,8 @@ launch.
 It is plain HTML with Tailwind's CSS in the console's brand
 ([docs/brand](brand)), and one small script with no framework,
 `site/src/main.ts`, for its animations and interactive parts: the hero's
-data flowing through a cluster, the lag simulator, the console tour and the
-Postgres change data capture demo. There are no cookies, no analytics and no
+data streaming through Changeport, the Postgres change data capture demo,
+the lag simulator and the console tour. There are no cookies, no analytics and no
 third-party requests. Vite builds it into `site/dist`, a folder of static
 files that any static host can serve; publishing it is #138.
 
@@ -55,7 +55,19 @@ a desktop and a phone: that the lag simulator alerts past a minute behind
 and resolves, that the tour switches screens by click, arrow keys and by
 itself, that the questions open, that phones get a menu and nothing scrolls
 sideways, that reduced motion keeps the hero still, and that without the
-script every section and console screen shows.
+script every section and console screen shows. axe checks every page for
+accessibility violations, such as text without enough contrast, with
+reduced motion so that every section is on show: Lighthouse only audits
+what is visible on load, and misses what waits to rise into view.
+
+## Colors and copy
+
+The site leads with real-time data streams and their observability, and
+mentions Kafka as what runs under the hood. Its palette is warm paper
+(`--color-paper`) and charcoal (`--color-ink`) with stone greys and the
+brand's teal as the one accent, kept apart from the navy and blues of other
+streaming products. Small grey text on paper is `stone-600` or darker:
+`stone-500` falls short of 4.5:1 there.
 
 ## Screenshots
 

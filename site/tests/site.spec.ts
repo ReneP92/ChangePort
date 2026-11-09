@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
 const wide = (page: Page) => (page.viewportSize()?.width ?? 0) >= 768;
@@ -70,7 +71,7 @@ test("the console tour moves on by itself on wide screens", async ({ page }) => 
 
 test("the questions open and close", async ({ page }) => {
   await page.goto("/#faq");
-  const question = page.locator(".faq details").filter({ hasText: "Is it real Apache Kafka?" });
+  const question = page.locator(".faq details").filter({ hasText: "What runs under the hood?" });
   await question.locator("summary").click();
   await expect(question.getByText("There is no Changeport SDK")).toBeVisible();
   await question.locator("summary").click();
@@ -106,12 +107,30 @@ test.describe("with reduced motion", () => {
   });
 });
 
+test.describe("every page, fully shown", () => {
+  // With reduced motion nothing waits to rise into view, so that axe sees
+  // every element, which Lighthouse's audit of the first screen does not.
+  test.use({ reducedMotion: "reduce" });
+
+  for (const path of ["/", "/privacy.html", "/terms.html"]) {
+    test(`${path} has no accessibility violations`, async ({ page }) => {
+      await page.goto(path);
+      const results = await new AxeBuilder({ page }).analyze();
+      expect(
+        results.violations.map(
+          (v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`,
+        ),
+      ).toEqual([]);
+    });
+  }
+});
+
 test.describe("without JavaScript", () => {
   test.use({ javaScriptEnabled: false });
 
   test("every section and every console screen shows", async ({ page }) => {
     await page.goto("/");
-    for (const heading of ["Is your consumer keeping up? Ask in minutes.", "Good to know"]) {
+    for (const heading of ["Know how far behind every reader is. In minutes.", "Good to know"]) {
       await expect(page.getByRole("heading", { name: heading })).toHaveCSS("opacity", "1");
     }
     for (const panel of ["overview", "lag", "timeline", "topology"]) {

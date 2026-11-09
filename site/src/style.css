@@ -2,12 +2,16 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
-/* The console's brand (docs/brand): ink and the teal accent, in Geist. */
+/*
+ * Warm paper and charcoal, with the brand's teal (docs/brand) as the one
+ * accent, in Geist.
+ */
 @theme {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
-  --color-ink: #0b1f33;
-  --color-ink-soft: #13304d;
+  --color-paper: #f6f4ef;
+  --color-ink: #1c1a17;
+  --color-ink-soft: #33302b;
   --color-teal: #0d9488;
   --color-teal-dark: #0f766e;
 }
@@ -35,8 +39,8 @@ html {
 }
 
 [data-header][data-scrolled] {
-  border-color: var(--color-slate-200);
-  box-shadow: 0 1px 12px rgb(11 31 51 / 0.06);
+  border-color: var(--color-stone-200);
+  box-shadow: 0 1px 12px rgb(28 26 23 / 0.06);
 }
 
 /*
@@ -76,7 +80,7 @@ html {
 
 .flow .line {
   fill: none;
-  stroke: var(--color-slate-300);
+  stroke: var(--color-stone-300);
   stroke-width: 1.5;
 }
 
@@ -87,8 +91,8 @@ html {
 
 .flow .node {
   fill: white;
-  stroke: var(--color-slate-200);
-  filter: drop-shadow(0 1px 2px rgb(11 31 51 / 0.06));
+  stroke: var(--color-stone-200);
+  filter: drop-shadow(0 1px 2px rgb(28 26 23 / 0.06));
 }
 
 .flow .node-behind {
@@ -104,7 +108,7 @@ html {
 
 .flow .meta {
   font-size: 12px;
-  fill: var(--color-slate-500);
+  fill: var(--color-stone-500);
 }
 
 .flow .meta-behind {
@@ -142,7 +146,7 @@ html {
 
 /* The lag simulator's log: unread messages fill from the newest end. */
 .log-cell {
-  background: var(--color-slate-200);
+  background: var(--color-stone-200);
   transition: background-color 300ms;
 }
 
@@ -242,8 +246,8 @@ html {
   width: 0.5rem;
   height: 0.5rem;
   margin-right: 0.25rem;
-  border-right: 2px solid var(--color-slate-500);
-  border-bottom: 2px solid var(--color-slate-500);
+  border-right: 2px solid var(--color-stone-500);
+  border-bottom: 2px solid var(--color-stone-500);
   transform: translateY(-25%) rotate(45deg);
   transition: transform 200ms;
 }

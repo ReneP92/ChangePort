@@ -32,6 +32,8 @@ The first customer is one design-partner team adopting Kafka for the first time;
 
 Competitors to watch: managed Kafka providers (MSK, Confluent Cloud, Aiven, Redpanda), standalone Kafka observability tools (Conduktor, Kpow, Redpanda Console), and CDC products (Artie, Fivetran, Airbyte, Estuary, Streamkap). Our angle is observability and guidance built in, zero-config and included in the price.
 
+The landing site leads with what teams get rather than with Kafka: real-time data streams from their Postgres database and services, explained as they flow, in the manner of Artie. Kafka appears as what runs under the hood, the open standard that keeps teams free to leave, and the site claims no destination beyond Kafka topics until the CDC product ships (decided Nov 2026; see [site.md](site.md)).
+
 ## Architecture
 
 Each customer gets its own Kafka cluster on EKS, while a separate control plane provisions the clusters and collects their metrics.

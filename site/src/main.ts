@@ -49,7 +49,7 @@ function menu(): void {
   });
 }
 
-/** Sections rise into view once, and numbers count up as they do. */
+/** Sections rise into view once. */
 function reveal(): void {
   const observer = new IntersectionObserver(
     (entries) => {
@@ -57,9 +57,6 @@ function reveal(): void {
         if (entry.isIntersecting) {
           entry.target.classList.add("is-visible");
           observer.unobserve(entry.target);
-          for (const count of entry.target.querySelectorAll<HTMLElement>("[data-count]")) {
-            countUp(count);
-          }
         }
       }
     },
@@ -68,23 +65,6 @@ function reveal(): void {
   for (const element of document.querySelectorAll("[data-reveal]")) {
     observer.observe(element);
   }
-}
-
-function countUp(element: HTMLElement): void {
-  const target = Number(element.dataset.count);
-  if (reducedMotion || !Number.isFinite(target)) {
-    return;
-  }
-  const start = performance.now();
-  const duration = 1200;
-  const step = (now: number) => {
-    const progress = Math.min(1, (now - start) / duration);
-    element.textContent = String(Math.round(target * (1 - (1 - progress) ** 3)));
-    if (progress < 1) {
-      requestAnimationFrame(step);
-    }
-  };
-  requestAnimationFrame(step);
 }
 
 /** The statement lights up word by word as it scrolls up the screen. */
@@ -145,7 +125,7 @@ function hero(): void {
   setInterval(() => {
     if (running) {
       value = Math.round(Math.min(1500, Math.max(1100, value + (Math.random() - 0.5) * 90)));
-      rate.textContent = `${numbers.format(value)} messages/s`;
+      rate.textContent = `${numbers.format(value)} changes/s`;
     }
   }, 1000);
 }
@@ -228,13 +208,13 @@ function lag(): void {
     } else if (share > 1) {
       setStatus("Catching up", "bg-teal-50 text-teal-700");
     } else {
-      setStatus("Holding steady", "bg-slate-100 text-slate-700");
+      setStatus("Holding steady", "bg-stone-100 text-stone-700");
     }
     const firing = behind > threshold;
     if (firing) {
       alert.className =
         "mt-4 flex min-h-[4.5rem] items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm";
-      alert.innerHTML = `<svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 size-4 shrink-0 fill-red-600"><path d="M10 2 1 18h18L10 2zm-1 6h2v5H9V8zm0 6h2v2H9v-2z"/></svg><span><span class="block font-medium text-ink">Consumer group search-indexer is ${duration(behind, true)} behind on orders</span><span class="text-slate-600">Its oldest unread message is older than your threshold of 1 minute.</span></span>`;
+      alert.innerHTML = `<svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 size-4 shrink-0 fill-red-600"><path d="M10 2 1 18h18L10 2zm-1 6h2v5H9V8zm0 6h2v2H9v-2z"/></svg><span><span class="block font-medium text-ink">Consumer group search-indexer is ${duration(behind, true)} behind on orders</span><span class="text-stone-600">Its oldest unread message is older than your threshold of 1 minute.</span></span>`;
     } else if (alerting) {
       alert.className =
         "mt-4 flex min-h-[4.5rem] items-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800";
@@ -370,7 +350,7 @@ function cdc(): void {
   const statuses = ["paid", "shipped"];
   const message = (operation: string, text: string) => {
     const item = document.createElement("li");
-    item.className = "cdc-new rounded-lg bg-white/5 px-3 py-2 text-slate-200";
+    item.className = "cdc-new rounded-lg bg-white/5 px-3 py-2 text-stone-200";
     const op = document.createElement("span");
     op.className = "text-teal-300";
     op.textContent = operation;
