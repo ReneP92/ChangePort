@@ -55,5 +55,14 @@ elif [[ $(console_config_status) == 503 ]]; then
   kubectl -n changeport rollout restart deployment/changeport-console >/dev/null
   kubectl -n changeport rollout status deployment/changeport-console --timeout=2m >/dev/null
 fi
-[[ $(console_config_status) == 200 ]] || die "the console at http://localhost:$CONSOLE_PORT did not take its Clerk configuration"
+# After a restart the old console, without its configuration, can still
+# answer 503 for a moment while the new one takes over, so this waits for the
+# new one rather than judge by the first answer.
+status=""
+for _ in $(seq 30); do
+  status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://localhost:$CONSOLE_PORT/api/config" || true)
+  [[ $status == 200 ]] && break
+  sleep 2
+done
+[[ $status == 200 ]] || die "the console at http://localhost:$CONSOLE_PORT did not take its Clerk configuration (GET /api/config answered $status)"
 log "The console at http://localhost:$CONSOLE_PORT signs in with Clerk"
