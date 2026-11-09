@@ -89,10 +89,10 @@ func caPool() *x509.CertPool {
 }
 GO
 sed -i.bak 's|^	"crypto/tls"$|	"crypto/tls"\n	"crypto/x509"|' "$work/go/main.go"
-run go "$GO_IMAGE" "go mod init example >/dev/null 2>&1 && go get github.com/twmb/franz-go@$FRANZ_GO >/dev/null 2>&1 && go mod tidy >/dev/null 2>&1 && go run ."
+run go "$GO_IMAGE" "go mod init example 2>/dev/null && go get github.com/twmb/franz-go@$FRANZ_GO && go mod tidy && go run ."
 
 example "### Node.js" js | sed 's|^  "sasl.password": process.env.KAFKA_PASSWORD,|&\n  "ssl.ca.location": "/config/ca.crt",|' >"$work/node/example.js"
-run node "$NODE_IMAGE" "npm install --silent --no-audit --no-fund @confluentinc/kafka-javascript@$CONFLUENT_KAFKA_JAVASCRIPT >/dev/null && node example.js"
+run node "$NODE_IMAGE" "npm install --loglevel=error --no-audit --no-fund @confluentinc/kafka-javascript@$CONFLUENT_KAFKA_JAVASCRIPT >/dev/null && node example.js"
 
 # The examples leave a topic and a consumer group each behind.
 for language in java python go node; do
