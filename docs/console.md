@@ -5,7 +5,9 @@ kind: an operator provisions Acme Corp and Globex through the operator
 console, Acme's admin Ada creates topics and adds a Postgres source,
 producers and consumer groups run for a few minutes, and Acme is
 deprovisioned again. Each screen also has a
-phone version, under the same name ending in `-phone.png`. To capture them
+phone version, under the same name ending in `-phone.png`, and both are
+captured at twice the pixels, as a retina screen shows them, so that they
+stay sharp here and on the landing site ([site.md](site.md)). To capture them
 again after changing the console, run `just dev-up` with `.env` filled in,
 then:
 

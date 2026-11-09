@@ -1,0 +1,7 @@
+# Scripts and tools run on Bun, even those whose shebang names node.
+[run]
+bun = true
+
+# bun add saves exact versions; bun.lock pins the rest of the tree.
+[install]
+exact = true

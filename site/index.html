@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- include:head -->
+    <title>Changeport: managed Kafka for teams new to Kafka</title>
+    <meta
+      name="description"
+      content="Changeport runs a dedicated Apache Kafka cluster for your team on AWS, and shows you in plain language what it is doing: how far behind each consumer is, what changed, and where your data flows."
+    />
+    <link rel="canonical" href="%SITE_URL%/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Changeport: managed Kafka for teams new to Kafka" />
+    <meta
+      property="og:description"
+      content="A dedicated Apache Kafka cluster, run for you, that explains itself."
+    />
+    <meta property="og:url" content="%SITE_URL%/" />
+  </head>
+  <body class="bg-white font-sans text-ink antialiased">
+    <!-- include:header -->
+    <main id="main">
+      <section class="mx-auto max-w-6xl px-6 pt-16 pb-12 sm:pt-24">
+        <div class="max-w-3xl">
+          <p class="text-sm font-medium text-teal-dark">Managed Apache Kafka on AWS</p>
+          <h1 class="mt-3 text-4xl font-semibold tracking-tight text-balance sm:text-6xl">
+            Kafka for teams new to Kafka
+          </h1>
+          <p class="mt-6 text-lg leading-relaxed text-slate-600 text-pretty">
+            Changeport runs a dedicated Kafka cluster for your team, and tells you in plain language
+            what it is doing: how far behind each consumer is, what changed, and where your data
+            flows. No operations to learn, no surprises on your bill.
+          </p>
+          <div class="mt-8 flex flex-wrap items-center gap-4">
+            <a
+              href="%CONSOLE_URL%/trial"
+              class="rounded-lg bg-ink px-5 py-3 font-medium text-white hover:bg-slate-800"
+              >Request a trial</a
+            >
+            <a href="#how-it-works" class="font-medium text-ink underline underline-offset-4"
+              >How a trial works</a
+            >
+          </div>
+        </div>
+        <figure
+          class="mx-auto mt-14 max-w-sm overflow-hidden rounded-xl border border-slate-200 shadow-sm md:max-w-none"
+        >
+          <picture>
+            <source
+              media="(max-width: 767px)"
+              srcset="/screens/overview-phone-390.webp 1x, /screens/overview-phone.webp 2x"
+              width="390"
+              height="372"
+            />
+            <img
+              src="/screens/overview-1280.webp"
+              srcset="
+                /screens/overview-640.webp   640w,
+                /screens/overview-960.webp   960w,
+                /screens/overview-1280.webp 1280w,
+                /screens/overview.webp      2040w
+              "
+              sizes="(min-width: 1152px) 1104px, calc(100vw - 48px)"
+              width="1020"
+              height="820"
+              alt="The Changeport console's overview of a cluster: an alert that a consumer group is 3 minutes behind, how clients connect, and the brokers' health."
+              class="h-auto w-full"
+              fetchpriority="high"
+            />
+          </picture>
+        </figure>
+      </section>
+
+      <section aria-labelledby="pillars" class="border-t border-slate-200 bg-slate-50">
+        <div class="mx-auto max-w-6xl px-6 py-20">
+          <h2 id="pillars" class="text-3xl font-semibold tracking-tight">
+            What you get, and what you do not have to learn
+          </h2>
+          <div class="mt-12 grid gap-10 md:grid-cols-3">
+            <article>
+              <h3 class="text-lg font-semibold">Kafka, run for you</h3>
+              <p class="mt-3 leading-relaxed text-slate-600">
+                Your own cluster on AWS, not shared with anyone, which we set up, patch and upgrade.
+                Topics come with sensible limits as you create them, and your connection settings
+                come as one file to download. It is plain Apache Kafka: every client library works,
+                and nothing ties you to us.
+              </p>
+            </article>
+            <article>
+              <h3 class="text-lg font-semibold">See what your data is doing</h3>
+              <p class="mt-3 leading-relaxed text-slate-600">
+                How far behind each consumer is, in minutes rather than offsets. A timeline of what
+                changed, such as a new topic or a rebalance, next to the charts it explains. A map
+                of which applications write to which topics, and who reads them.
+              </p>
+            </article>
+            <article>
+              <h3 class="text-lg font-semibold">No surprise bills</h3>
+              <p class="mt-3 leading-relaxed text-slate-600">
+                You pay for the data you process, at rates we agree with you up front, and we
+                explain your usage in plain language. Your trial costs nothing, and ends on its own
+                unless you choose to stay.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="observability" class="mx-auto max-w-6xl px-6 py-20">
+        <h2 id="observability" class="text-3xl font-semibold tracking-tight">
+          Answers, not dashboards to decode
+        </h2>
+        <div class="mt-12 flex flex-col gap-16 lg:gap-20">
+          <div class="grid items-center gap-8 lg:grid-cols-5 lg:gap-12">
+            <div class="lg:col-span-2">
+              <h3 class="text-lg font-semibold">Lag in time</h3>
+              <p class="mt-3 leading-relaxed text-slate-600">
+                "3 minutes behind" says more than "36,141 messages". Changeport measures how old the
+                oldest message is that each consumer group has not read yet, and alerts you, and
+                your webhook, when it falls further behind than you allow.
+              </p>
+            </div>
+            <picture class="lg:col-span-3">
+              <source
+                media="(max-width: 767px)"
+                srcset="/screens/lag-phone-390.webp 1x, /screens/lag-phone.webp 2x"
+                width="390"
+                height="950"
+              />
+              <img
+                src="/screens/lag-1280.webp"
+                srcset="
+                  /screens/lag-640.webp   640w,
+                  /screens/lag-960.webp   960w,
+                  /screens/lag-1280.webp 1280w,
+                  /screens/lag.webp      2000w
+                "
+                sizes="(min-width: 1152px) 638px, (min-width: 1024px) calc(60vw - 53px), calc(100vw - 48px)"
+                width="1000"
+                height="760"
+                loading="lazy"
+                alt="A consumer group's lag over the last hour, 3 minutes behind on its topic, with the change that preceded it."
+                class="mx-auto h-auto w-full max-w-sm rounded-xl border border-slate-200 shadow-sm md:max-w-none"
+              />
+            </picture>
+          </div>
+          <div class="grid items-center gap-8 lg:grid-cols-5 lg:gap-12">
+            <div class="lg:col-span-2 lg:order-last">
+              <h3 class="text-lg font-semibold">What changed, and when</h3>
+              <p class="mt-3 leading-relaxed text-slate-600">
+                When the traffic moves, the timeline shows what happened around it: topics created
+                and changed, consumers joining and leaving, brokers restarting. Who changed what in
+                the console is there too.
+              </p>
+            </div>
+            <picture class="lg:col-span-3">
+              <source
+                media="(max-width: 767px)"
+                srcset="/screens/timeline-phone-390.webp 1x, /screens/timeline-phone.webp 2x"
+                width="390"
+                height="742"
+              />
+              <img
+                src="/screens/timeline-1280.webp"
+                srcset="
+                  /screens/timeline-640.webp   640w,
+                  /screens/timeline-960.webp   960w,
+                  /screens/timeline-1280.webp 1280w,
+                  /screens/timeline.webp      2000w
+                "
+                sizes="(min-width: 1152px) 638px, (min-width: 1024px) calc(60vw - 53px), calc(100vw - 48px)"
+                width="1000"
+                height="680"
+                loading="lazy"
+                alt="Throughput over the last hour with numbered changes: consumer groups starting and topics being created."
+                class="mx-auto h-auto w-full max-w-sm rounded-xl border border-slate-200 shadow-sm md:max-w-none"
+              />
+            </picture>
+          </div>
+          <div class="grid items-center gap-8 lg:grid-cols-5 lg:gap-12">
+            <div class="lg:col-span-2">
+              <h3 class="text-lg font-semibold">Where your data flows</h3>
+              <p class="mt-3 leading-relaxed text-slate-600">
+                The map draws your producers, the topics they write and the groups that read them,
+                with the traffic on each line and which consumer is behind.
+              </p>
+            </div>
+            <picture class="lg:col-span-3">
+              <source
+                media="(max-width: 767px)"
+                srcset="/screens/topology-phone-390.webp 1x, /screens/topology-phone.webp 2x"
+                width="390"
+                height="374"
+              />
+              <img
+                src="/screens/topology-1280.webp"
+                srcset="
+                  /screens/topology-640.webp   640w,
+                  /screens/topology-960.webp   960w,
+                  /screens/topology-1280.webp 1280w,
+                  /screens/topology.webp      2000w
+                "
+                sizes="(min-width: 1152px) 638px, (min-width: 1024px) calc(60vw - 53px), calc(100vw - 48px)"
+                width="1000"
+                height="315"
+                loading="lazy"
+                alt="A data flow map: one producer writing to three topics, read by three consumer groups, one of them 3 minutes behind."
+                class="mx-auto h-auto w-full max-w-sm rounded-xl border border-slate-200 shadow-sm md:max-w-none"
+              />
+            </picture>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="how-it-works"
+        aria-labelledby="how-it-works-title"
+        class="scroll-mt-6 border-t border-slate-200 bg-slate-50"
+      >
+        <div class="mx-auto max-w-6xl px-6 py-20">
+          <h2 id="how-it-works-title" class="text-3xl font-semibold tracking-tight">
+            How a trial works
+          </h2>
+          <ol class="mt-12 grid gap-8 md:grid-cols-4">
+            <li>
+              <span class="text-sm font-semibold text-teal-dark">1</span>
+              <h3 class="mt-2 font-semibold">Sign up</h3>
+              <p class="mt-2 leading-relaxed text-slate-600">
+                Create an account with your work email address.
+              </p>
+            </li>
+            <li>
+              <span class="text-sm font-semibold text-teal-dark">2</span>
+              <h3 class="mt-2 font-semibold">Tell us what you need</h3>
+              <p class="mt-2 leading-relaxed text-slate-600">
+                What you want Kafka for, and roughly how much data. It takes two minutes.
+              </p>
+            </li>
+            <li>
+              <span class="text-sm font-semibold text-teal-dark">3</span>
+              <h3 class="mt-2 font-semibold">Get your cluster</h3>
+              <p class="mt-2 leading-relaxed text-slate-600">
+                A person at Changeport reviews your request. Once approved, your dedicated cluster
+                is ready within minutes, and you are emailed the link.
+              </p>
+            </li>
+            <li>
+              <span class="text-sm font-semibold text-teal-dark">4</span>
+              <h3 class="mt-2 font-semibold">Try it for 14 days</h3>
+              <p class="mt-2 leading-relaxed text-slate-600">
+                Connect your applications and see them in the console. We remind you three days
+                before the trial ends, and you decide whether to stay.
+              </p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section
+        id="faq"
+        aria-labelledby="faq-title"
+        class="mx-auto max-w-6xl scroll-mt-6 px-6 py-20"
+      >
+        <h2 id="faq-title" class="text-3xl font-semibold tracking-tight">Questions</h2>
+        <div class="faq mt-10 max-w-3xl divide-y divide-slate-200 border-y border-slate-200">
+          <details>
+            <summary class="py-5 font-medium">Is it real Apache Kafka?</summary>
+            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
+              Yes. Your applications use the Kafka client libraries they would use anywhere, with a
+              username and password over TLS. There is no Changeport SDK, so you can move your
+              applications to another Kafka at any time.
+            </p>
+          </details>
+          <details>
+            <summary class="py-5 font-medium">Where does my cluster run?</summary>
+            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
+              On AWS in us-east-1 (Northern Virginia), on servers that run your cluster and no one
+              else's. Production clusters spread their brokers over three availability zones, so the
+              loss of one does not stop them.
+            </p>
+          </details>
+          <details>
+            <summary class="py-5 font-medium">Who can see my data?</summary>
+            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
+              Your team. The console shows your topics and how they are used, and only your
+              organization's admins can look at messages in it. Our operators run the cluster
+              without reading what you send through it.
+            </p>
+          </details>
+          <details>
+            <summary class="py-5 font-medium">Can I get my Postgres tables into Kafka?</summary>
+            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
+              Yes. Add your database as a source in the console, run the SQL it gives you, and each
+              table's changes stream into a topic of its own, from the rows that exist today on.
+            </p>
+          </details>
+          <details>
+            <summary class="py-5 font-medium">What happens when my trial ends?</summary>
+            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
+              If you want to keep your cluster, tell us before the end and it stays as it is. If you
+              do nothing, the cluster and its data are deleted when the trial ends. We email you
+              three days before.
+            </p>
+          </details>
+          <details>
+            <summary class="py-5 font-medium">What does it cost?</summary>
+            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
+              The trial is free. After it, you pay for the data your cluster processes, at rates we
+              agree with you before you decide to stay.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <section aria-labelledby="start" class="bg-ink">
+        <div class="mx-auto max-w-6xl px-6 py-16 text-white">
+          <h2 id="start" class="text-3xl font-semibold tracking-tight">
+            Start with a cluster of your own
+          </h2>
+          <p class="mt-4 max-w-2xl text-lg text-slate-300">
+            Request a trial, and connect your first application minutes after it is approved.
+          </p>
+          <a
+            href="%CONSOLE_URL%/trial"
+            class="mt-8 inline-block rounded-lg bg-white px-5 py-3 font-medium text-ink hover:bg-slate-100"
+            >Request a trial</a
+          >
+        </div>
+      </section>
+    </main>
+    <!-- include:footer -->
+  </body>
+</html>
