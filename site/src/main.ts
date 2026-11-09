@@ -336,19 +336,18 @@ function tour(): void {
 }
 
 /**
- * The change data capture demo. Every few seconds an order arrives or moves
- * along: its row lights up where it changed, a dot carries the change down
- * the pipe, and it lands as the newest message in the topic, with the next
- * offset. A new row or message grows in as the oldest shrinks away, so the
- * cards never change size.
+ * The change data capture demo. Every few seconds an order arrives, or the
+ * next one moves along, in turns. The change lifts out of its row as the
+ * message it becomes, flies across to the topic while the topic makes room
+ * at the top, and lands there with the next offset. A new row or message
+ * grows in as the oldest shrinks away, so the cards never change size.
  */
 function cdc(): void {
   const root = document.querySelector<HTMLElement>("[data-cdc]");
   const rows = root?.querySelector<HTMLElement>("[data-cdc-rows]");
   const messages = root?.querySelector<HTMLElement>("[data-cdc-messages]");
   const pipe = root?.querySelector<HTMLElement>("[data-cdc-pipe]");
-  const packet = root?.querySelector<HTMLElement>("[data-cdc-packet]");
-  if (!root || !rows || !messages || !pipe || !packet || reducedMotion) {
+  if (!root || !rows || !messages || !pipe || reducedMotion) {
     return;
   }
 
@@ -360,8 +359,19 @@ function cdc(): void {
   const statuses = ["new", "paid", "shipped"];
   let nextID = 1044;
   let offset = 42;
+  let turn = 0;
   let running = false;
   watch(root, (on) => (running = on));
+
+  // On wide screens the pipe runs across, level with the newest row and
+  // message; on phones it runs down between the cards.
+  const wide = matchMedia("(min-width: 640px)");
+  const placeLane = () => {
+    const lane = rows.getBoundingClientRect().top - pipe.getBoundingClientRect().top + 22;
+    pipe.style.setProperty("--lane", wide.matches ? `${String(lane)}px` : "50%");
+  };
+  placeLane();
+  new ResizeObserver(placeLane).observe(root);
 
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const span = (text: string, className = "") => {
@@ -370,11 +380,16 @@ function cdc(): void {
     element.textContent = text;
     return element;
   };
+  const label = (operation: string, text: string) => {
+    const element = span("", "truncate");
+    element.append(span(operation, "text-teal-300"), ` ${text}`);
+    return element;
+  };
 
   /** Puts item first in list, growing it in as the last one shrinks away. */
   const push = (list: HTMLElement, item: HTMLElement) => {
     list.prepend(item);
-    item.animate({ height: ["0", height], opacity: [0, 1] }, { duration: 500, easing: ease });
+    item.animate({ height: ["0", height] }, { duration: 500, easing: ease });
     const last = list.lastElementChild;
     if (last instanceof HTMLElement && list.children.length > 4) {
       last
@@ -386,12 +401,17 @@ function cdc(): void {
     }
   };
 
-  /** Changes the table, and returns the message the change becomes. */
-  const change = (): [string, string] => {
-    const pending = Array.from(rows.children).find(
-      (row) => row.querySelector("[data-status]")?.textContent !== "shipped",
-    );
-    if (pending && Math.random() < 0.6) {
+  /**
+   * Changes the table, in turns a new order and the next order moving
+   * along, and returns the changed row and the message it becomes.
+   */
+  const change = (): [Element, string, string] => {
+    // The oldest order on show that has not shipped yet moves along.
+    const pending = Array.from(rows.children)
+      .slice(0, 4)
+      .reverse()
+      .find((row) => row.querySelector("[data-status]")?.textContent !== "shipped");
+    if (pending && turn++ % 2 === 1) {
       const cell = pending.querySelector<HTMLElement>("[data-status]");
       const status = statuses[statuses.indexOf(cell?.textContent ?? "") + 1] ?? "shipped";
       if (cell) {
@@ -405,7 +425,7 @@ function cdc(): void {
         { backgroundColor: [lit, unlit] },
         { duration: 1800, easing: "ease-out" },
       );
-      return ["update", `${pending.querySelector("span")?.textContent ?? ""} ${status}`];
+      return [pending, "update", `${pending.querySelector("span")?.textContent ?? ""} ${status}`];
     }
     const id = String(nextID++);
     const total = (8 + Math.random() * 120).toFixed(2);
@@ -420,73 +440,77 @@ function cdc(): void {
     row.append(cells);
     push(rows, row);
     cells.animate({ backgroundColor: [lit, unlit] }, { duration: 1800, easing: "ease-out" });
-    return ["insert", `${id} ${total}`];
+    return [row, "insert", `${id} ${total}`];
   };
 
-  // On wide screens the pipe runs across, level with the newest row and
-  // message; on phones it runs down between the cards.
-  const wide = matchMedia("(min-width: 640px)");
-  const laneOf = () => rows.getBoundingClientRect().top - pipe.getBoundingClientRect().top + 22;
-  const placeLane = () => {
-    pipe.style.setProperty("--lane", wide.matches ? `${String(laneOf())}px` : "50%");
-  };
-  placeLane();
-  new ResizeObserver(placeLane).observe(root);
-
-  /** Carries a dot down the pipe, from the table to the topic. */
-  const carry = async () => {
-    const { width, height: tall } = pipe.getBoundingClientRect();
-    const half = packet.offsetWidth / 2;
-    const [from, to] = wide.matches
-      ? [
-          [8 - half, laneOf() - half],
-          [width - 8 - half, laneOf() - half],
-        ]
-      : [
-          [width / 2 - half, 0],
-          [width / 2 - half, tall - 2 * half],
-        ];
-    await packet.animate(
-      {
-        transform: [
-          `translate(${String(from[0])}px, ${String(from[1])}px) scale(0.6)`,
-          `translate(${String(to[0])}px, ${String(to[1])}px) scale(1)`,
-        ],
-        opacity: [0, 1, 1, 0],
-        offset: [0, 0.15, 0.85, 1],
-      },
-      { duration: 650, easing: "cubic-bezier(0.45, 0, 0.25, 1)" },
-    ).finished;
-  };
-
-  const land = ([operation, text]: [string, string]) => {
+  /**
+   * Lifts the change out of its row as a message, flies it to the top of
+   * the topic as the topic makes room for it, and lands it there.
+   */
+  const deliver = async (row: Element, operation: string, text: string) => {
     const item = document.createElement("li");
     item.className = "h-11 overflow-hidden px-3 py-1";
     const pill = document.createElement("div");
     pill.className =
-      "flex h-9 items-center justify-between gap-3 rounded-lg bg-white/5 px-3 text-neutral-200";
-    const label = span("", "truncate");
-    label.append(span(operation, "text-teal-300"), ` ${text}`);
-    pill.append(label, span(String(offset++), "text-neutral-400 tabular-nums"));
+      "flex h-9 items-center justify-between gap-3 rounded-lg bg-white/5 px-3 text-neutral-200 opacity-0";
+    pill.append(label(operation, text), span(String(offset++), "text-neutral-400 tabular-nums"));
     item.append(pill);
+
+    // The pill's place once its slot has grown: the top of the list.
+    const frame = root.getBoundingClientRect();
+    const list = messages.getBoundingClientRect();
+    const to = { left: list.left + 12, top: list.top + 4, width: list.width - 24 };
+    // It emerges small beside its row on wide screens, or below the table
+    // on phones, so that it never covers the row, and grows as it flies.
+    const from = row.getBoundingClientRect();
+    const start = wide.matches
+      ? { left: from.right, top: from.top + 4 }
+      : { left: to.left, top: pipe.getBoundingClientRect().top - 18 };
+
+    const chip = document.createElement("div");
+    chip.className =
+      "pointer-events-none absolute z-10 flex h-9 items-center rounded-lg bg-[#1d3532] px-3 font-mono text-xs text-neutral-100 shadow-[0_0_0_1px_rgb(94_234_212/0.6),0_10px_30px_-6px_rgb(45_212_191/0.45)]";
+    chip.style.left = `${String(start.left - frame.left)}px`;
+    chip.style.top = `${String(start.top - frame.top)}px`;
+    chip.style.width = `${String(to.width)}px`;
+    chip.style.transformOrigin = wide.matches ? "left center" : "top center";
+    chip.append(label(operation, text));
+    root.append(chip);
+
     push(messages, item);
+    const dx = to.left - start.left;
+    const dy = to.top - start.top;
+    await chip.animate(
+      [
+        { transform: "translate(0, 0) scale(0.35)", opacity: 0 },
+        {
+          transform: `translate(${String(dx * 0.12)}px, ${String(dy * 0.12)}px) scale(0.6)`,
+          opacity: 1,
+          offset: 0.2,
+        },
+        { transform: `translate(${String(dx)}px, ${String(dy)}px) scale(1)`, opacity: 1 },
+      ],
+      { duration: 1100, easing: "cubic-bezier(0.55, 0, 0.25, 1)" },
+    ).finished;
+    pill.classList.remove("opacity-0");
+    chip.remove();
     pill.animate(
       {
         backgroundColor: ["rgb(45 212 191 / 0.22)", "rgb(255 255 255 / 0.05)"],
-        boxShadow: ["inset 0 0 0 1px rgb(94 234 212 / 0.5)", "inset 0 0 0 1px rgb(94 234 212 / 0)"],
+        boxShadow: ["inset 0 0 0 1px rgb(94 234 212 / 0.6)", "inset 0 0 0 1px rgb(94 234 212 / 0)"],
       },
-      { duration: 1800, easing: "ease-out" },
+      { duration: 1600, easing: "ease-out" },
     );
   };
 
   const loop = async () => {
     for (;;) {
       if (running && !document.hidden) {
-        const message = change();
-        await sleep(300);
-        await carry();
-        land(message);
-        await sleep(2000);
+        const [row, operation, text] = change();
+        // Let a new row grow in before its change lifts out of it.
+        await sleep(550);
+        await deliver(row, operation, text);
+        await sleep(1900);
       } else {
         await sleep(400);
       }
