@@ -94,12 +94,13 @@ site-dev: site-install
 site-build: site-install
     BUN_DIR=site hack/bun.sh run build
 
-# Type-check, format-check and build the landing site, then hold every page to Lighthouse 95+
+# Type-check, format-check and build the landing site, test its interactive parts, then hold every page to Lighthouse 95+
 [group('Site (site/, run by the pinned Bun in bin/)')]
 site-check: site-build
     BUN_DIR=site hack/bun.sh run typecheck
     BUN_DIR=site hack/bun.sh run format:check
-    BUN_DIR=site hack/bun.sh x playwright-core install {{ if env("CI", "") != "" { "--with-deps" } else { "" } }} chromium
+    BUN_DIR=site hack/bun.sh x playwright install {{ if env("CI", "") != "" { "--with-deps" } else { "" } }} chromium
+    BUN_DIR=site hack/bun.sh run test
     BUN_DIR=site hack/bun.sh run lighthouse
 
 # Fail on em dashes anywhere in the repository
@@ -382,4 +383,4 @@ tf-apply account:
 clean:
     @# setup-envtest leaves its binaries read-only.
     @if [ -d bin/envtest ]; then chmod -R u+w bin/envtest; fi
-    rm -rf bin deploy/base/*/upstream web/dist web/node_modules site/dist site/node_modules site/public/screens site/lighthouse
+    rm -rf bin deploy/base/*/upstream web/dist web/node_modules site/dist site/node_modules site/public/screens site/lighthouse site/playwright-report site/test-results

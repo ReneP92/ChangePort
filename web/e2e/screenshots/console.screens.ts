@@ -387,6 +387,8 @@ test("every screen of the console", async ({ browser }) => {
   await nav.getByRole("link", { name: "Cluster" }).click();
   await nav.getByRole("link", { name: /^Alerts/ }).click();
   await expect(main.getByText(/search-indexer is .* behind/)).toBeVisible();
+  // The settings load on their own, after the active alerts.
+  await expect(main.getByRole("heading", { name: "Where alerts go" })).toBeVisible();
   await shot(admin, "30-alerts");
   await nav.getByRole("link", { name: "Cluster" }).click();
 

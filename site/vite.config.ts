@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
 
 // The landing site at the domain's root (docs/site.md): plain HTML pages
-// with Tailwind's CSS, and no JavaScript or cookies. The console's address,
+// with Tailwind's CSS, one small script and no cookies. The console's address,
 // where the call to action leads, and the site's own, for its canonical
 // links, come from the environment; the publishing workflow (#138) sets
 // them for the domain.
@@ -77,5 +77,13 @@ export default defineConfig({
       input: { index: "index.html", privacy: "privacy.html", terms: "terms.html" },
     },
   },
-  server: { port: 5174, strictPort: true },
+  server: {
+    // IPv4, so that http://127.0.0.1:5174 works as well as localhost, which
+    // browsers fall back to IPv4 for.
+    host: "127.0.0.1",
+    port: 5174,
+    strictPort: true,
+    // The checks' reports are written here; they are not the site.
+    watch: { ignored: ["**/lighthouse/**", "**/test-results/**", "**/playwright-report/**"] },
+  },
 });

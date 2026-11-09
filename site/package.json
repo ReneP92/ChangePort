@@ -12,10 +12,14 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc",
-    "lighthouse": "bun scripts/lighthouse.ts"
+    "lighthouse": "bun scripts/lighthouse.ts",
+    "test": "playwright test"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
+    "@playwright/test": "1.64.1",
     "@tailwindcss/vite": "4.3.3",
     "@types/bun": "1.4.3",
     "chrome-launcher": "1.2.3",
