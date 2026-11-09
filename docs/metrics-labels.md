@@ -68,8 +68,10 @@ minute, half an hour around an hour and a half. It depends on producers'
 clocks, since it uses the time the producer gave each message. Classic and
 KIP-848 consumer groups are both covered; groups that keep their offsets
 outside Kafka are not. When a lookup fails, for example while a topic
-switches to tiered storage, the group keeps its last value instead of
-reporting a wrong one.
+switches to tiered storage, a group that consumed nothing since the last
+measurement still waits on the same message, so its lag carries forward
+older by the time since, and its messages behind are counted again; a group
+that did consume keeps its last value instead of reporting a wrong one.
 
 ## Customers, certificates and volumes
 

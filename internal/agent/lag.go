@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 	"time"
@@ -83,6 +84,10 @@ type lagValue struct {
 	// and movedAt when the agent first saw it, or saw it change.
 	committed int64
 	movedAt   time.Time
+	// offsets are the committed offsets by partition when the agent last
+	// measured, at measuredAt.
+	offsets    map[int32]int64
+	measuredAt time.Time
 }
 
 // LagCollector measures each consumer group's lag per topic, in messages and
@@ -164,8 +169,9 @@ func (c *LagCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 // Measure measures every consumer group's lag and replaces the snapshot. A
-// group and topic whose offsets could not all be looked up keep their last
-// measurement rather than report a wrong one; the lookup errors are returned.
+// group and topic whose offsets could not all be looked up carry their last
+// measurement forward rather than report a wrong one (see carried); the
+// lookup errors are returned.
 func (c *LagCollector) Measure(ctx context.Context) error {
 	c.mu.Lock()
 	previous := c.snapshot
@@ -261,7 +267,7 @@ func (c *LagCollector) measure(ctx context.Context, previous map[lagKey]lagValue
 		if err != nil {
 			errs = append(errs, fmt.Errorf("group %s: %w", key.group, err))
 			if last, found := previous[key]; found {
-				snapshot[key] = last
+				snapshot[key] = carried(last, key.topic, committed[key], ends, now)
 			}
 			continue
 		}
@@ -272,6 +278,7 @@ func (c *LagCollector) measure(ctx context.Context, previous map[lagKey]lagValue
 			if last, found := previous[key]; found && last.committed == value.committed {
 				value.movedAt = last.movedAt
 			}
+			value.offsets, value.measuredAt = maps.Clone(committed[key]), now
 			snapshot[key] = value
 		}
 	}
@@ -315,6 +322,31 @@ func lagOf(topic string, committed map[int32]int64, ends kadm.ListedOffsets, anc
 		value.capped = value.capped || capped
 	}
 	return value, known, nil
+}
+
+// carried is a group's lag when its anchors could not be looked up, for
+// example while its topic switches to tiered storage. A group that consumed
+// nothing since the last measurement still waits on the same oldest message,
+// which is older by exactly the time since: its lag carries forward, and its
+// messages behind are counted again from the ends, which need no anchors. A
+// group that moved keeps its last measurement, as a missing anchor would read
+// as "no message since" and overstate its lag.
+func carried(last lagValue, topic string, committed map[int32]int64, ends kadm.ListedOffsets, now time.Time) lagValue {
+	if !maps.Equal(last.offsets, committed) {
+		return last
+	}
+	value := last
+	if !last.capped {
+		value.seconds += now.Sub(last.measuredAt).Seconds()
+	}
+	value.messages = 0
+	for partition, offset := range committed {
+		if end, ok := ends.Lookup(topic, partition); ok && end.Err == nil && offset < end.Offset {
+			value.messages += end.Offset - offset
+		}
+	}
+	value.measuredAt = now
+	return value
 }
 
 func sum(offsets map[int32]int64) int64 {
