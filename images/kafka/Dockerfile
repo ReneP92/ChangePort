@@ -30,8 +30,16 @@ FROM --platform=$BUILDPLATFORM eclipse-temurin:21-jdk@sha256:23cc5734ff46e776f51
 ARG TIERED_STORAGE_COMMIT
 ADD https://github.com/Aiven-Open/tiered-storage-for-apache-kafka.git#${TIERED_STORAGE_COMMIT} /src
 WORKDIR /src
+# The wrapper gives up on its download of Gradle (still checked against the
+# distributionSha256Sum it pins) after a 10-second stall; it gets a minute
+# instead, and three tries.
 RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew --no-daemon distTar :storage:s3:distTar -x test -x integrationTest
+    sed -i 's/^networkTimeout=.*/networkTimeout=60000/' gradle/wrapper/gradle-wrapper.properties \
+    && for try in 1 2 3; do \
+         ./gradlew --no-daemon --version >/dev/null && break; \
+         [ "$try" = 3 ] && exit 1; sleep 15; \
+       done \
+    && ./gradlew --no-daemon distTar :storage:s3:distTar -x test -x integrationTest
 # The core and S3 distributions unpack into one directory, as the Strimzi
 # tiered storage documentation does. Each resolves its dependencies on its own,
 # so a library can come twice in different versions (commons-codec and

@@ -24,9 +24,7 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: 1.59.0
+      - uses: ./.github/actions/setup-just
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -53,9 +51,7 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: 1.59.0
+      - uses: ./.github/actions/setup-just
       - run: just tf-fmt
       - run: just tf-validate
       - run: just tf-test
@@ -91,9 +87,7 @@ jobs:
       - if: env.ROLE_ARN != '' && env.TFVARS != ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - if: env.ROLE_ARN != '' && env.TFVARS != ''
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: 1.59.0
+        uses: ./.github/actions/setup-just
       - if: env.ROLE_ARN != '' && env.TFVARS != ''
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
@@ -109,9 +103,7 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: 1.59.0
+      - uses: ./.github/actions/setup-just
       - run: just shellcheck
       - run: just check-text
       - run: just alerting-check
@@ -124,9 +116,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: 1.59.0
+      - uses: ./.github/actions/setup-just
       # The pinned tools in bin/ and Playwright's browser, until a pin changes.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -154,9 +144,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: 1.59.0
+      - uses: ./.github/actions/setup-just
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -191,9 +179,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Room for the images and a kind cluster, which some runners lack.
       - run: hack/ci-free-disk.sh
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: 1.59.0
+      - uses: ./.github/actions/setup-just
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -204,14 +190,16 @@ jobs:
       # which needs BuildKit's container driver and the runtime's token.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
-      # The pinned tools in bin/ and Playwright's browser, until a pin changes.
+      # The pinned tools in bin/, Playwright's browser and the upstream
+      # manifests (deploy/upstream-files.txt), until a pin changes.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             bin/
             !bin/*.kubeconfig
             ~/.cache/ms-playwright
-          key: tools-${{ runner.os }}-${{ hashFiles('hack/lib.sh', 'tools/go.sum', 'web/bun.lock') }}
+            deploy/base/*/upstream/
+          key: tools-${{ runner.os }}-${{ hashFiles('hack/lib.sh', 'tools/go.sum', 'web/bun.lock', 'deploy/upstream-files.txt') }}
       # The failover suite brings its own customer.
       - run: just dev-up
         env:
@@ -265,9 +253,7 @@ jobs:
       - if: steps.clerk.outputs.available == 'true'
         run: hack/ci-free-disk.sh
       - if: steps.clerk.outputs.available == 'true'
-        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: 1.59.0
+        uses: ./.github/actions/setup-just
       - if: steps.clerk.outputs.available == 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -287,7 +273,8 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - if: steps.clerk.outputs.available == 'true'
         uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
-      # The pinned tools in bin/ and Playwright's browser, until a pin changes.
+      # The pinned tools in bin/, Playwright's browser and the upstream
+      # manifests (deploy/upstream-files.txt), until a pin changes.
       - if: steps.clerk.outputs.available == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -295,7 +282,8 @@ jobs:
             bin/
             !bin/*.kubeconfig
             ~/.cache/ms-playwright
-          key: tools-${{ runner.os }}-${{ hashFiles('hack/lib.sh', 'tools/go.sum', 'web/bun.lock') }}
+            deploy/base/*/upstream/
+          key: tools-${{ runner.os }}-${{ hashFiles('hack/lib.sh', 'tools/go.sum', 'web/bun.lock', 'deploy/upstream-files.txt') }}
       # The signed-in tests create customers of their own.
       - if: steps.clerk.outputs.available == 'true'
         run: just dev-up
@@ -322,9 +310,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: 1.59.0
+      - uses: ./.github/actions/setup-just
       # The image's last stage runs one command (removing the jars it
       # replaces), which needs emulation to build for arm64 here.
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
@@ -339,8 +325,13 @@ jobs:
           docker buildx build --platform linux/amd64,linux/arm64
           --cache-from type=gha,scope=kafka-multiarch --cache-to type=gha,mode=max,scope=kafka-multiarch
           images/kafka
+      # From the layers the build above just cached: building again would
+      # fetch every dependency once more.
       - name: Load the amd64 image
-        run: docker buildx build --load -t changeport/kafka:local images/kafka
+        run: >-
+          docker buildx build --load -t changeport/kafka:local
+          --cache-from type=gha,scope=kafka-multiarch
+          images/kafka
       - run: just kafka-image-test
 
   connect-image:
@@ -349,9 +340,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
-        with:
-          just-version: 1.59.0
+      - uses: ./.github/actions/setup-just
       # BuildKit's container driver builds for several platforms at once, with
       # the layers cached in GitHub Actions' cache. The image has no RUN in its
       # last stage, so arm64 needs no emulation.
@@ -362,8 +351,13 @@ jobs:
           docker buildx build --platform linux/amd64,linux/arm64
           --cache-from type=gha,scope=connect-multiarch --cache-to type=gha,mode=max,scope=connect-multiarch
           images/connect
+      # From the layers the build above just cached: building again would
+      # fetch every dependency once more.
       - name: Load the amd64 image
-        run: docker buildx build --load -t changeport/connect:local images/connect
+        run: >-
+          docker buildx build --load -t changeport/connect:local
+          --cache-from type=gha,scope=connect-multiarch
+          images/connect
       - run: just connect-image-test
 
   provisioner-image:
