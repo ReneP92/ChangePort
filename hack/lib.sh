@@ -189,14 +189,16 @@ envtest_assets() {
 }
 
 # Downloads url to dest unless dest already has the SHA-256 want. The file only
-# appears at dest once its checksum matches.
+# appears at dest once its checksum matches. Failed and stalled downloads are
+# retried for about two minutes, with growing pauses, as GitHub's release
+# downloads answer 5xx now and then.
 download_verified() {
   local url=$1 want=$2 dest=$3 tmp
   [[ -f "$dest" && $(sha256_of "$dest") == "$want" ]] && return
   log "Downloading $url"
   mkdir -p "$(dirname "$dest")"
   tmp=$(mktemp "$dest.XXXXXX")
-  if ! curl -fsSL -o "$tmp" "$url"; then
+  if ! curl -fsSL --retry 7 --retry-all-errors --connect-timeout 30 --speed-limit 1024 --speed-time 60 -o "$tmp" "$url"; then
     rm -f "$tmp"
     die "download of $url failed"
   fi
