@@ -146,9 +146,10 @@ jobs:
             web/test-results
           retention-days: 14
 
-  # The landing site, held to Lighthouse 95+ on a phone and a desktop.
+  # The landing site: its interactive parts tested in Chromium, and every
+  # page held to Lighthouse 95+ on a phone and a desktop.
   site:
-    name: Site build and Lighthouse
+    name: Site tests and Lighthouse
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
@@ -167,8 +168,11 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
-          name: site-lighthouse
-          path: site/lighthouse
+          name: site-reports
+          path: |
+            site/lighthouse
+            site/playwright-report
+            site/test-results
           retention-days: 14
 
   # The end-to-end suites on kind, each on a cluster of its own: the failover

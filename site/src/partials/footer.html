@@ -1,12 +1,31 @@
-<footer class="border-t border-slate-200">
-  <div
-    class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-6 py-8 text-sm text-slate-600"
-  >
-    <span>&copy; %YEAR% Changeport</span>
-    <nav aria-label="Legal" class="flex gap-6">
-      <a href="/privacy.html" class="hover:text-ink">Privacy</a>
-      <a href="/terms.html" class="hover:text-ink">Terms</a>
+<footer class="border-t border-slate-200 bg-white">
+  <div class="mx-auto grid max-w-6xl gap-10 px-6 py-14 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+    <div>
+      <img src="/logo.svg" alt="Changeport" width="140" height="19" class="h-[19px] w-[140px]" />
+      <p class="mt-4 max-w-xs text-sm leading-relaxed text-slate-600">
+        Managed Apache Kafka on AWS for teams new to Kafka, with a console that explains what your
+        data is doing.
+      </p>
+    </div>
+    <nav aria-label="Product" class="flex flex-col gap-3 text-sm">
+      <h2 class="font-medium text-ink">Product</h2>
+      <a href="/#lag" class="text-slate-600 hover:text-ink">Lag, explained</a>
+      <a href="/#tour" class="text-slate-600 hover:text-ink">The console</a>
+      <a href="/#cdc" class="text-slate-600 hover:text-ink">Postgres change data capture</a>
     </nav>
-    <a href="%CONSOLE_URL%/" class="ml-auto hover:text-ink">Sign in to the console</a>
+    <nav aria-label="Getting started" class="flex flex-col gap-3 text-sm">
+      <h2 class="font-medium text-ink">Getting started</h2>
+      <a href="/#how-it-works" class="text-slate-600 hover:text-ink">How a trial works</a>
+      <a href="%CONSOLE_URL%/trial" class="text-slate-600 hover:text-ink">Request a trial</a>
+      <a href="%CONSOLE_URL%/" class="text-slate-600 hover:text-ink">Sign in</a>
+    </nav>
+    <nav aria-label="Legal" class="flex flex-col gap-3 text-sm">
+      <h2 class="font-medium text-ink">Legal</h2>
+      <a href="/privacy.html" class="text-slate-600 hover:text-ink">Privacy</a>
+      <a href="/terms.html" class="text-slate-600 hover:text-ink">Terms</a>
+    </nav>
+  </div>
+  <div class="border-t border-slate-200">
+    <p class="mx-auto max-w-6xl px-6 py-6 text-sm text-slate-500">&copy; %YEAR% Changeport</p>
   </div>
 </footer>

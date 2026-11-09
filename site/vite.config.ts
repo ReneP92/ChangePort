@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
 
 // The landing site at the domain's root (docs/site.md): plain HTML pages
-// with Tailwind's CSS, and no JavaScript or cookies. The console's address,
+// with Tailwind's CSS, one small script and no cookies. The console's address,
 // where the call to action leads, and the site's own, for its canonical
 // links, come from the environment; the publishing workflow (#138) sets
 // them for the domain.

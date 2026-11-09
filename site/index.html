@@ -19,311 +19,1163 @@
   <body class="bg-white font-sans text-ink antialiased">
     <!-- include:header -->
     <main id="main">
-      <section class="mx-auto max-w-6xl px-6 pt-16 pb-12 sm:pt-24">
-        <div class="max-w-3xl">
-          <p class="text-sm font-medium text-teal-dark">Managed Apache Kafka on AWS</p>
-          <h1 class="mt-3 text-4xl font-semibold tracking-tight text-balance sm:text-6xl">
-            Kafka for teams new to Kafka
-          </h1>
-          <p class="mt-6 text-lg leading-relaxed text-slate-600 text-pretty">
-            Changeport runs a dedicated Kafka cluster for your team, and tells you in plain language
-            what it is doing: how far behind each consumer is, what changed, and where your data
-            flows. No operations to learn, no surprises on your bill.
-          </p>
-          <div class="mt-8 flex flex-wrap items-center gap-4">
-            <a
-              href="%CONSOLE_URL%/trial"
-              class="rounded-lg bg-ink px-5 py-3 font-medium text-white hover:bg-slate-800"
-              >Request a trial</a
-            >
-            <a href="#how-it-works" class="font-medium text-ink underline underline-offset-4"
-              >How a trial works</a
-            >
-          </div>
-        </div>
-        <figure
-          class="mx-auto mt-14 max-w-sm overflow-hidden rounded-xl border border-slate-200 shadow-sm md:max-w-none"
+      <!-- Hero: what Changeport is, beside data flowing through a cluster. -->
+      <section class="relative isolate overflow-hidden">
+        <div
+          aria-hidden="true"
+          class="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_75%_35%,rgb(13_148_136/0.10),transparent_45%),linear-gradient(to_bottom,white,rgb(248_250_252))]"
+        ></div>
+        <div
+          aria-hidden="true"
+          class="absolute inset-0 -z-10 bg-[linear-gradient(to_right,rgb(11_31_51/0.045)_1px,transparent_1px),linear-gradient(to_bottom,rgb(11_31_51/0.045)_1px,transparent_1px)] mask-[radial-gradient(ellipse_at_70%_40%,black,transparent_70%)] bg-size-[40px_40px]"
+        ></div>
+        <div
+          class="mx-auto grid max-w-6xl items-center gap-14 px-6 pt-16 pb-20 sm:pt-24 lg:grid-cols-[1.05fr_1fr] lg:pb-28"
         >
-          <picture>
-            <source
-              media="(max-width: 767px)"
-              srcset="/screens/overview-phone-390.webp 1x, /screens/overview-phone.webp 2x"
-              width="390"
-              height="372"
-            />
-            <img
-              src="/screens/overview-1280.webp"
-              srcset="
-                /screens/overview-640.webp   640w,
-                /screens/overview-960.webp   960w,
-                /screens/overview-1280.webp 1280w,
-                /screens/overview.webp      2040w
-              "
-              sizes="(min-width: 1152px) 1104px, calc(100vw - 48px)"
-              width="1020"
-              height="820"
-              alt="The Changeport console's overview of a cluster: an alert that a consumer group is 3 minutes behind, how clients connect, and the brokers' health."
-              class="h-auto w-full"
-              fetchpriority="high"
-            />
-          </picture>
-        </figure>
+          <div>
+            <p
+              class="inline-flex items-center gap-2 rounded-full border border-teal/25 bg-white px-3 py-1 text-sm font-medium text-teal-dark shadow-sm"
+            >
+              <span class="size-1.5 rounded-full bg-teal"></span>
+              Managed Apache Kafka on AWS
+            </p>
+            <h1
+              class="mt-6 text-5xl font-semibold tracking-tight text-balance sm:text-6xl lg:text-[4.25rem] lg:leading-[1.02]"
+            >
+              Kafka for teams new to Kafka
+            </h1>
+            <p class="mt-6 max-w-xl text-lg leading-relaxed text-pretty text-slate-600">
+              Changeport runs a dedicated Kafka cluster for your team, and tells you in plain
+              language what it is doing: how far behind each consumer is, what changed, and where
+              your data flows. No operations to learn, no surprises on your bill.
+            </p>
+            <div class="mt-9 flex flex-wrap items-center gap-3">
+              <a
+                href="%CONSOLE_URL%/trial"
+                class="rounded-lg bg-ink px-5 py-3 font-medium text-white shadow-sm transition-colors hover:bg-ink-soft"
+                >Request a trial</a
+              >
+              <a
+                href="#lag"
+                class="group rounded-lg border border-slate-300 bg-white px-5 py-3 font-medium text-ink transition-colors hover:border-slate-400"
+                >See lag explained
+                <span
+                  aria-hidden="true"
+                  class="inline-block transition-transform group-hover:translate-y-0.5"
+                  >&darr;</span
+                ></a
+              >
+            </div>
+            <ul class="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
+              <li class="flex items-center gap-2">
+                <svg aria-hidden="true" viewBox="0 0 16 16" class="size-4 fill-teal">
+                  <path d="M6.5 11.2 3.3 8l1.1-1.1 2.1 2.1 5.1-5.1 1.1 1.1z" />
+                </svg>
+                14-day free trial
+              </li>
+              <li class="flex items-center gap-2">
+                <svg aria-hidden="true" viewBox="0 0 16 16" class="size-4 fill-teal">
+                  <path d="M6.5 11.2 3.3 8l1.1-1.1 2.1 2.1 5.1-5.1 1.1 1.1z" />
+                </svg>
+                A cluster of your own
+              </li>
+              <li class="flex items-center gap-2">
+                <svg aria-hidden="true" viewBox="0 0 16 16" class="size-4 fill-teal">
+                  <path d="M6.5 11.2 3.3 8l1.1-1.1 2.1 2.1 5.1-5.1 1.1 1.1z" />
+                </svg>
+                No SDK to learn
+              </li>
+            </ul>
+          </div>
+
+          <figure
+            class="rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-[0_20px_60px_-20px_rgb(11_31_51/0.25)] backdrop-blur sm:p-7"
+          >
+            <figcaption class="mb-4 flex items-center justify-between text-sm">
+              <span class="font-medium">Your data, flowing</span>
+              <span class="inline-flex items-center gap-1.5 text-slate-500">
+                <span class="relative flex size-2">
+                  <span
+                    class="absolute inline-flex size-full rounded-full bg-teal opacity-60 motion-safe:animate-ping"
+                  ></span>
+                  <span class="relative inline-flex size-2 rounded-full bg-teal"></span>
+                </span>
+                Live
+              </span>
+            </figcaption>
+
+            <!-- Wide: producers on the left, consumers on the right. -->
+            <svg
+              data-flow
+              viewBox="0 0 560 400"
+              class="flow hidden h-auto w-full sm:block"
+              role="img"
+              aria-labelledby="flow-title"
+            >
+              <title id="flow-title">
+                Two services and a Postgres database write to your Changeport cluster. Billing and
+                fraud-checks read along, caught up; search-indexer falls 3 minutes behind.
+              </title>
+              <defs>
+                <path id="w-in-1" d="M164 70 C 200 70 192 200 226 200" />
+                <path id="w-in-2" d="M164 200 L 226 200" />
+                <path id="w-in-3" d="M164 330 C 200 330 192 200 226 200" />
+                <path id="w-out-1" d="M334 200 C 368 200 360 70 396 70" />
+                <path id="w-out-2" d="M334 200 L 396 200" />
+                <path id="w-out-3" d="M334 200 C 368 200 360 330 396 330" />
+              </defs>
+              <use href="#w-in-1" class="line" />
+              <use href="#w-in-2" class="line" />
+              <use href="#w-in-3" class="line" />
+              <use href="#w-out-1" class="line" />
+              <use href="#w-out-2" class="line line-behind" />
+              <use href="#w-out-3" class="line" />
+
+              <g class="fill-teal">
+                <circle r="3.5">
+                  <animateMotion dur="2.2s" begin="0s" repeatCount="indefinite">
+                    <mpath href="#w-in-1" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="2.2s" begin="-1.1s" repeatCount="indefinite">
+                    <mpath href="#w-in-1" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="1.6s" begin="-0.4s" repeatCount="indefinite">
+                    <mpath href="#w-in-2" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="1.6s" begin="-1.2s" repeatCount="indefinite">
+                    <mpath href="#w-in-2" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="2.6s" begin="-0.7s" repeatCount="indefinite">
+                    <mpath href="#w-in-3" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="2.2s" begin="-0.3s" repeatCount="indefinite">
+                    <mpath href="#w-out-1" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="2.2s" begin="-1.4s" repeatCount="indefinite">
+                    <mpath href="#w-out-1" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="2.4s" begin="-0.9s" repeatCount="indefinite">
+                    <mpath href="#w-out-3" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="2.4s" begin="-2s" repeatCount="indefinite">
+                    <mpath href="#w-out-3" />
+                  </animateMotion>
+                </circle>
+              </g>
+              <!-- search-indexer reads slowly: its messages crawl. -->
+              <g class="fill-amber-400">
+                <circle r="3.5">
+                  <animateMotion dur="5.5s" begin="-1s" repeatCount="indefinite">
+                    <mpath href="#w-out-2" />
+                  </animateMotion>
+                </circle>
+              </g>
+
+              <g>
+                <rect class="node" x="0.5" y="42" width="164" height="56" rx="12" />
+                <text class="name" x="16" y="66">checkout-service</text>
+                <text class="meta" x="16" y="85">writes orders</text>
+                <rect class="node" x="0.5" y="172" width="164" height="56" rx="12" />
+                <text class="name" x="16" y="196">payments-api</text>
+                <text class="meta" x="16" y="215">writes payments</text>
+                <rect class="node" x="0.5" y="302" width="164" height="56" rx="12" />
+                <text class="name" x="16" y="326">Postgres: shop</text>
+                <text class="meta" x="16" y="345">streams its tables</text>
+              </g>
+
+              <g>
+                <rect class="pulse" x="226" y="150" width="108" height="100" rx="22" />
+                <rect x="226" y="150" width="108" height="100" rx="22" class="fill-ink" />
+                <g transform="translate(251.2 171.2) scale(0.9)">
+                  <rect x="8" y="12" width="36" height="10" rx="5" fill="white" />
+                  <rect x="8" y="27" width="24" height="10" rx="5" fill="white" />
+                  <rect x="37" y="27" width="10" height="10" rx="5" fill="#2dd4bf" />
+                  <rect x="8" y="42" width="48" height="10" rx="5" fill="white" />
+                </g>
+                <text class="name" x="280" y="278" text-anchor="middle">Your cluster</text>
+                <text class="meta" x="280" y="297" text-anchor="middle" data-rate>
+                  1,284 messages/s
+                </text>
+              </g>
+
+              <g>
+                <rect class="node" x="395.5" y="42" width="164" height="56" rx="12" />
+                <text class="name" x="412" y="66">billing</text>
+                <circle cx="416" cy="81" r="3.5" class="fill-teal" />
+                <text class="meta" x="425" y="85">caught up</text>
+                <rect
+                  class="pulse pulse-behind"
+                  x="395.5"
+                  y="172"
+                  width="164"
+                  height="56"
+                  rx="12"
+                />
+                <rect class="node node-behind" x="395.5" y="172" width="164" height="56" rx="12" />
+                <text class="name" x="412" y="196">search-indexer</text>
+                <circle cx="416" cy="211" r="3.5" class="fill-red-500" />
+                <text class="meta meta-behind" x="425" y="215">3 minutes behind</text>
+                <rect class="node" x="395.5" y="302" width="164" height="56" rx="12" />
+                <text class="name" x="412" y="326">fraud-checks</text>
+                <circle cx="416" cy="341" r="3.5" class="fill-teal" />
+                <text class="meta" x="425" y="345">caught up</text>
+              </g>
+            </svg>
+
+            <!-- Narrow: producers above, consumers below. -->
+            <svg
+              data-flow
+              viewBox="0 0 360 476"
+              class="flow h-auto w-full sm:hidden"
+              role="img"
+              aria-labelledby="flow-title-narrow"
+            >
+              <title id="flow-title-narrow">
+                Two services and a Postgres database write to your Changeport cluster. Billing and
+                fraud-checks read along, caught up; search-indexer falls 3 minutes behind.
+              </title>
+              <defs>
+                <path id="n-in-1" d="M56 54 C 56 118 180 112 180 180" />
+                <path id="n-in-2" d="M180 54 L 180 180" />
+                <path id="n-in-3" d="M304 54 C 304 118 180 112 180 180" />
+                <path id="n-out-1" d="M180 276 C 180 346 56 346 56 420" />
+                <path id="n-out-2" d="M180 276 L 180 420" />
+                <path id="n-out-3" d="M180 276 C 180 346 304 346 304 420" />
+              </defs>
+              <use href="#n-in-1" class="line" />
+              <use href="#n-in-2" class="line" />
+              <use href="#n-in-3" class="line" />
+              <use href="#n-out-1" class="line" />
+              <use href="#n-out-2" class="line line-behind" />
+              <use href="#n-out-3" class="line" />
+              <g class="fill-teal">
+                <circle r="3.5">
+                  <animateMotion dur="2s" begin="0s" repeatCount="indefinite">
+                    <mpath href="#n-in-1" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="1.6s" begin="-0.6s" repeatCount="indefinite">
+                    <mpath href="#n-in-2" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="2.4s" begin="-1.2s" repeatCount="indefinite">
+                    <mpath href="#n-in-3" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="2s" begin="-0.4s" repeatCount="indefinite">
+                    <mpath href="#n-out-1" />
+                  </animateMotion>
+                </circle>
+                <circle r="3.5">
+                  <animateMotion dur="2.2s" begin="-1.5s" repeatCount="indefinite">
+                    <mpath href="#n-out-3" />
+                  </animateMotion>
+                </circle>
+              </g>
+              <g class="fill-amber-400">
+                <circle r="3.5">
+                  <animateMotion dur="5.5s" begin="-1s" repeatCount="indefinite">
+                    <mpath href="#n-out-2" />
+                  </animateMotion>
+                </circle>
+              </g>
+              <g>
+                <rect class="node" x="1" y="1" width="110" height="52" rx="12" />
+                <text class="name" x="56" y="24" text-anchor="middle">checkout</text>
+                <text class="meta" x="56" y="41" text-anchor="middle">service</text>
+                <rect class="node" x="125" y="1" width="110" height="52" rx="12" />
+                <text class="name" x="180" y="24" text-anchor="middle">payments</text>
+                <text class="meta" x="180" y="41" text-anchor="middle">service</text>
+                <rect class="node" x="249" y="1" width="110" height="52" rx="12" />
+                <text class="name" x="304" y="24" text-anchor="middle">Postgres</text>
+                <text class="meta" x="304" y="41" text-anchor="middle">tables</text>
+              </g>
+              <g>
+                <rect class="pulse" x="126" y="180" width="108" height="96" rx="22" />
+                <rect x="126" y="180" width="108" height="96" rx="22" class="fill-ink" />
+                <g transform="translate(151.2 199.2) scale(0.9)">
+                  <rect x="8" y="12" width="36" height="10" rx="5" fill="white" />
+                  <rect x="8" y="27" width="24" height="10" rx="5" fill="white" />
+                  <rect x="37" y="27" width="10" height="10" rx="5" fill="#2dd4bf" />
+                  <rect x="8" y="42" width="48" height="10" rx="5" fill="white" />
+                </g>
+                <text class="meta" x="246" y="224">Your</text>
+                <text class="meta" x="246" y="240">cluster</text>
+              </g>
+              <g>
+                <rect class="node" x="1" y="420" width="110" height="54" rx="12" />
+                <text class="name" x="56" y="443" text-anchor="middle">billing</text>
+                <text class="meta" x="56" y="461" text-anchor="middle">caught up</text>
+                <rect class="pulse pulse-behind" x="125" y="420" width="110" height="54" rx="12" />
+                <rect class="node node-behind" x="125" y="420" width="110" height="54" rx="12" />
+                <text class="name" x="180" y="443" text-anchor="middle">search-indexer</text>
+                <text class="meta meta-behind" x="180" y="461" text-anchor="middle">
+                  3 min behind
+                </text>
+                <rect class="node" x="249" y="420" width="110" height="54" rx="12" />
+                <text class="name" x="304" y="443" text-anchor="middle">fraud-checks</text>
+                <text class="meta" x="304" y="461" text-anchor="middle">caught up</text>
+              </g>
+            </svg>
+          </figure>
+        </div>
       </section>
 
-      <section aria-labelledby="pillars" class="border-t border-slate-200 bg-slate-50">
-        <div class="mx-auto max-w-6xl px-6 py-20">
-          <h2 id="pillars" class="text-3xl font-semibold tracking-tight">
-            What you get, and what you do not have to learn
+      <!-- What a team gets, in numbers. -->
+      <section aria-label="Changeport in numbers" class="bg-ink text-white">
+        <dl class="mx-auto grid max-w-6xl grid-cols-2 gap-x-6 gap-y-10 px-6 py-14 lg:grid-cols-4">
+          <div data-reveal class="flex flex-col gap-2">
+            <dt class="text-sm text-slate-300">Cluster per team, never shared</dt>
+            <dd class="order-first text-5xl font-semibold tracking-tight tabular-nums">1</dd>
+          </div>
+          <div data-reveal style="--delay: 100ms" class="flex flex-col gap-2">
+            <dt class="text-sm text-slate-300">Availability zones for production</dt>
+            <dd
+              class="order-first text-5xl font-semibold tracking-tight tabular-nums"
+              data-count="3"
+            >
+              3
+            </dd>
+          </div>
+          <div data-reveal style="--delay: 200ms" class="flex flex-col gap-2">
+            <dt class="text-sm text-slate-300">Days to try it, free</dt>
+            <dd
+              class="order-first text-5xl font-semibold tracking-tight tabular-nums"
+              data-count="14"
+            >
+              14
+            </dd>
+          </div>
+          <div data-reveal style="--delay: 300ms" class="flex flex-col gap-2">
+            <dt class="text-sm text-slate-300">SDKs to learn: it is plain Kafka</dt>
+            <dd class="order-first text-5xl font-semibold tracking-tight tabular-nums">0</dd>
+          </div>
+        </dl>
+      </section>
+
+      <!-- The promise, then the three pillars. -->
+      <section aria-labelledby="pillars" class="mx-auto max-w-6xl px-6 pt-28 pb-24">
+        <p
+          data-words
+          class="max-w-4xl text-4xl font-semibold tracking-tight text-balance sm:text-6xl sm:leading-[1.05]"
+        >
+          Managed means we get paged when a broker fails, not your team.
+        </p>
+        <h2 id="pillars" class="sr-only">What you get</h2>
+        <div class="mt-20 grid gap-12 md:grid-cols-3 md:gap-10">
+          <article data-reveal class="border-t border-slate-200 pt-6">
+            <div class="flex gap-4">
+              <span class="pt-1 font-mono text-sm text-slate-400">01</span>
+              <div>
+                <h3 class="text-xl font-semibold">Kafka, run for you</h3>
+                <p class="mt-3 leading-relaxed text-slate-600">
+                  Your own cluster on AWS, which we set up, patch and upgrade. Topics come with
+                  sensible limits, and your connection settings come as one file. It is plain Apache
+                  Kafka: every client library works, and nothing ties you to us.
+                </p>
+              </div>
+            </div>
+          </article>
+          <article data-reveal style="--delay: 120ms" class="border-t border-slate-200 pt-6">
+            <div class="flex gap-4">
+              <span class="pt-1 font-mono text-sm text-slate-400">02</span>
+              <div>
+                <h3 class="text-xl font-semibold">See what your data is doing</h3>
+                <p class="mt-3 leading-relaxed text-slate-600">
+                  How far behind each consumer is, in minutes rather than offsets. What changed,
+                  next to the charts it explains. Which applications write to which topics, and who
+                  reads them.
+                </p>
+              </div>
+            </div>
+          </article>
+          <article data-reveal style="--delay: 240ms" class="border-t border-slate-200 pt-6">
+            <div class="flex gap-4">
+              <span class="pt-1 font-mono text-sm text-slate-400">03</span>
+              <div>
+                <h3 class="text-xl font-semibold">No surprise bills</h3>
+                <p class="mt-3 leading-relaxed text-slate-600">
+                  You pay for the data you process, at rates we agree with you up front. Your trial
+                  costs nothing, and ends on its own unless you choose to stay.
+                </p>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- Lag, explained: an interactive consumer that falls behind. -->
+      <section
+        id="lag"
+        aria-labelledby="lag-title"
+        class="scroll-mt-16 border-y border-slate-200 bg-slate-50"
+      >
+        <div
+          class="mx-auto grid max-w-6xl items-center gap-12 px-6 py-24 lg:grid-cols-[1fr_1.2fr] lg:gap-16"
+        >
+          <div data-reveal>
+            <p class="text-xs font-semibold tracking-[0.14em] text-teal-dark uppercase">
+              Lag, explained
+            </p>
+            <h2
+              id="lag-title"
+              class="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-5xl"
+            >
+              Is your consumer keeping up? Ask in minutes.
+            </h2>
+            <p class="mt-5 text-lg leading-relaxed text-slate-600">
+              Kafka counts lag in messages: how many a consumer group has yet to read. Whether
+              36,000 messages is a problem depends on how fast they arrive. Changeport measures how
+              old the oldest unread message is, and alerts you when it passes your threshold.
+            </p>
+            <p class="mt-4 leading-relaxed text-slate-600">
+              Slow <span class="font-medium text-ink">search-indexer</span> down, or speed it up,
+              and watch both numbers.
+            </p>
+          </div>
+
+          <div
+            data-reveal
+            data-lag
+            class="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_20px_60px_-24px_rgb(11_31_51/0.25)] sm:p-7"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p class="text-sm">
+                <span class="font-medium">search-indexer</span>
+                <span class="text-slate-500">reading</span>
+                <span class="font-mono font-medium">orders</span>
+              </p>
+              <span
+                data-lag-status
+                class="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700"
+                >Caught up</span
+              >
+            </div>
+
+            <div class="mt-6">
+              <div
+                data-lag-log
+                aria-hidden="true"
+                class="grid h-14 grid-cols-[repeat(60,minmax(0,1fr))] gap-[2px]"
+              ></div>
+              <div class="mt-2 flex justify-between text-xs text-slate-500">
+                <span>3 minutes ago</span>
+                <span>Newest message</span>
+              </div>
+            </div>
+
+            <dl class="mt-6 grid grid-cols-2 gap-4">
+              <div class="rounded-xl border border-slate-200 p-4">
+                <dt class="text-xs text-slate-500">Kafka reports</dt>
+                <dd class="mt-1 text-2xl font-semibold tabular-nums sm:text-3xl">
+                  <span data-lag-messages>0</span>
+                  <span class="block text-sm font-normal text-slate-500">messages behind</span>
+                </dd>
+              </div>
+              <div class="rounded-xl border border-teal/30 bg-teal/5 p-4">
+                <dt class="text-xs text-teal-dark">Changeport shows</dt>
+                <dd class="mt-1 text-2xl font-semibold tabular-nums sm:text-3xl">
+                  <span data-lag-time>0 s</span>
+                  <span class="block text-sm font-normal text-slate-500">behind</span>
+                </dd>
+              </div>
+            </dl>
+
+            <div
+              data-lag-alert
+              role="status"
+              class="mt-4 flex min-h-[4.5rem] items-center rounded-xl border border-dashed border-slate-200 px-4 py-3 text-sm text-slate-500"
+            >
+              An alert fires when the group is more than 1 minute behind.
+            </div>
+
+            <div class="mt-6">
+              <div class="flex items-center justify-between gap-4 text-sm">
+                <label for="lag-speed" class="font-medium">How fast search-indexer reads</label>
+                <output data-lag-speed for="lag-speed" class="shrink-0 text-slate-600 tabular-nums"
+                  >80% of writes</output
+                >
+              </div>
+              <input
+                id="lag-speed"
+                type="range"
+                min="50"
+                max="150"
+                step="5"
+                value="80"
+                class="mt-3 w-full accent-teal"
+              />
+              <div class="mt-1 flex justify-between text-xs text-slate-500">
+                <span>Slower</span>
+                <span>Faster</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- The console, screen by screen. -->
+      <section id="tour" aria-labelledby="tour-title" class="scroll-mt-16">
+        <div class="mx-auto max-w-6xl px-6 py-24">
+          <div data-reveal class="max-w-2xl">
+            <p class="text-xs font-semibold tracking-[0.14em] text-teal-dark uppercase">
+              The console
+            </p>
+            <h2
+              id="tour-title"
+              class="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-5xl"
+            >
+              Answers, not dashboards to decode
+            </h2>
+            <p class="mt-5 text-lg leading-relaxed text-slate-600">
+              Every screen says what is happening in words, next to the numbers behind it. These are
+              screenshots of the real console.
+            </p>
+          </div>
+
+          <div
+            data-tour
+            data-reveal
+            class="tour mt-12 grid gap-6 lg:grid-cols-[18rem_1fr] lg:gap-8"
+          >
+            <div
+              role="tablist"
+              aria-label="Console screens"
+              class="-mx-6 flex gap-2 overflow-x-auto px-6 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0"
+            >
+              <button
+                type="button"
+                role="tab"
+                id="tab-overview"
+                aria-controls="panel-overview"
+                aria-selected="true"
+                class="relative shrink-0 cursor-pointer overflow-hidden rounded-xl border border-slate-200 px-4 py-3 text-left transition-colors hover:bg-slate-50 aria-selected:bg-white aria-selected:shadow-sm lg:border-transparent lg:py-4 lg:aria-selected:border-slate-200"
+              >
+                <span class="block font-medium">Overview</span>
+                <span class="mt-1 hidden text-sm text-slate-600 lg:block"
+                  >Alerts, how to connect, and your brokers' health.</span
+                >
+                <span
+                  class="progress absolute inset-x-0 bottom-0 h-0.5 bg-teal"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-lag"
+                aria-controls="panel-lag"
+                aria-selected="false"
+                class="relative shrink-0 cursor-pointer overflow-hidden rounded-xl border border-slate-200 px-4 py-3 text-left transition-colors hover:bg-slate-50 aria-selected:bg-white aria-selected:shadow-sm lg:border-transparent lg:py-4 lg:aria-selected:border-slate-200"
+              >
+                <span class="block font-medium">Lag in time</span>
+                <span class="mt-1 hidden text-sm text-slate-600 lg:block"
+                  >Each consumer group, behind by minutes rather than offsets.</span
+                >
+                <span
+                  class="progress absolute inset-x-0 bottom-0 h-0.5 bg-teal"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-timeline"
+                aria-controls="panel-timeline"
+                aria-selected="false"
+                class="relative shrink-0 cursor-pointer overflow-hidden rounded-xl border border-slate-200 px-4 py-3 text-left transition-colors hover:bg-slate-50 aria-selected:bg-white aria-selected:shadow-sm lg:border-transparent lg:py-4 lg:aria-selected:border-slate-200"
+              >
+                <span class="block font-medium">What changed</span>
+                <span class="mt-1 hidden text-sm text-slate-600 lg:block"
+                  >Topics, consumers and restarts, numbered on the chart.</span
+                >
+                <span
+                  class="progress absolute inset-x-0 bottom-0 h-0.5 bg-teal"
+                  aria-hidden="true"
+                ></span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-topology"
+                aria-controls="panel-topology"
+                aria-selected="false"
+                class="relative shrink-0 cursor-pointer overflow-hidden rounded-xl border border-slate-200 px-4 py-3 text-left transition-colors hover:bg-slate-50 aria-selected:bg-white aria-selected:shadow-sm lg:border-transparent lg:py-4 lg:aria-selected:border-slate-200"
+              >
+                <span class="block font-medium">Data flow</span>
+                <span class="mt-1 hidden text-sm text-slate-600 lg:block"
+                  >Who writes to which topic, and who reads it.</span
+                >
+                <span
+                  class="progress absolute inset-x-0 bottom-0 h-0.5 bg-teal"
+                  aria-hidden="true"
+                ></span>
+              </button>
+            </div>
+
+            <div
+              class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_70px_-28px_rgb(11_31_51/0.35)]"
+            >
+              <div class="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+                <span class="size-2.5 rounded-full bg-slate-200"></span>
+                <span class="size-2.5 rounded-full bg-slate-200"></span>
+                <span class="size-2.5 rounded-full bg-slate-200"></span>
+                <span
+                  class="mx-auto rounded-md bg-slate-100 px-3 py-0.5 font-mono text-xs text-slate-500"
+                  >Changeport console</span
+                >
+                <span class="w-[46px]"></span>
+              </div>
+              <div class="relative md:in-[.js]:aspect-[5/4]">
+                <div
+                  role="tabpanel"
+                  id="panel-overview"
+                  aria-labelledby="tab-overview"
+                  class="md:in-[.js]:absolute md:in-[.js]:inset-0"
+                >
+                  <picture>
+                    <source
+                      media="(max-width: 767px)"
+                      srcset="/screens/overview-phone-390.webp 1x, /screens/overview-phone.webp 2x"
+                      width="390"
+                      height="372"
+                    />
+                    <img
+                      src="/screens/overview-1280.webp"
+                      srcset="
+                        /screens/overview-640.webp   640w,
+                        /screens/overview-960.webp   960w,
+                        /screens/overview-1280.webp 1280w,
+                        /screens/overview.webp      2040w
+                      "
+                      sizes="(min-width: 1152px) 794px, (min-width: 1024px) calc(100vw - 368px), calc(100vw - 48px)"
+                      width="1020"
+                      height="820"
+                      loading="lazy"
+                      alt="The console's overview of a cluster: an alert that a consumer group is 3 minutes behind, how clients connect, and the brokers' health."
+                      class="mx-auto h-auto w-full max-w-sm md:h-full md:max-w-none md:object-cover md:object-top"
+                    />
+                  </picture>
+                </div>
+                <div
+                  role="tabpanel"
+                  id="panel-lag"
+                  aria-labelledby="tab-lag"
+                  class="md:in-[.js]:absolute md:in-[.js]:inset-0"
+                >
+                  <picture>
+                    <source
+                      media="(max-width: 767px)"
+                      srcset="/screens/lag-phone-390.webp 1x, /screens/lag-phone.webp 2x"
+                      width="390"
+                      height="950"
+                    />
+                    <img
+                      src="/screens/lag-1280.webp"
+                      srcset="
+                        /screens/lag-640.webp   640w,
+                        /screens/lag-960.webp   960w,
+                        /screens/lag-1280.webp 1280w,
+                        /screens/lag.webp      2000w
+                      "
+                      sizes="(min-width: 1152px) 794px, (min-width: 1024px) calc(100vw - 368px), calc(100vw - 48px)"
+                      width="1000"
+                      height="760"
+                      loading="lazy"
+                      alt="A consumer group's lag over the last hour, 3 minutes behind on its topic, with the change that preceded it."
+                      class="mx-auto h-auto w-full max-w-sm md:max-w-none"
+                    />
+                  </picture>
+                </div>
+                <div
+                  role="tabpanel"
+                  id="panel-timeline"
+                  aria-labelledby="tab-timeline"
+                  class="md:in-[.js]:absolute md:in-[.js]:inset-0"
+                >
+                  <picture>
+                    <source
+                      media="(max-width: 767px)"
+                      srcset="/screens/timeline-phone-390.webp 1x, /screens/timeline-phone.webp 2x"
+                      width="390"
+                      height="742"
+                    />
+                    <img
+                      src="/screens/timeline-1280.webp"
+                      srcset="
+                        /screens/timeline-640.webp   640w,
+                        /screens/timeline-960.webp   960w,
+                        /screens/timeline-1280.webp 1280w,
+                        /screens/timeline.webp      2000w
+                      "
+                      sizes="(min-width: 1152px) 794px, (min-width: 1024px) calc(100vw - 368px), calc(100vw - 48px)"
+                      width="1000"
+                      height="680"
+                      loading="lazy"
+                      alt="Throughput over the last hour with numbered changes: consumer groups starting and topics being created."
+                      class="mx-auto h-auto w-full max-w-sm md:max-w-none"
+                    />
+                  </picture>
+                </div>
+                <div
+                  role="tabpanel"
+                  id="panel-topology"
+                  aria-labelledby="tab-topology"
+                  class="md:in-[.js]:absolute md:in-[.js]:inset-0 md:flex md:items-center"
+                >
+                  <picture class="md:w-full">
+                    <source
+                      media="(max-width: 767px)"
+                      srcset="/screens/topology-phone-390.webp 1x, /screens/topology-phone.webp 2x"
+                      width="390"
+                      height="374"
+                    />
+                    <img
+                      src="/screens/topology-1280.webp"
+                      srcset="
+                        /screens/topology-640.webp   640w,
+                        /screens/topology-960.webp   960w,
+                        /screens/topology-1280.webp 1280w,
+                        /screens/topology.webp      2000w
+                      "
+                      sizes="(min-width: 1152px) 794px, (min-width: 1024px) calc(100vw - 368px), calc(100vw - 48px)"
+                      width="1000"
+                      height="315"
+                      loading="lazy"
+                      alt="A data flow map: one producer writing to three topics, read by three consumer groups, one of them 3 minutes behind."
+                      class="mx-auto h-auto w-full max-w-sm md:max-w-none"
+                    />
+                  </picture>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Postgres change data capture: rows become messages. -->
+      <section id="cdc" aria-labelledby="cdc-title" class="scroll-mt-16 bg-ink text-white">
+        <div
+          class="mx-auto grid max-w-6xl items-center gap-12 px-6 py-24 lg:grid-cols-[1fr_1.15fr] lg:gap-16"
+        >
+          <div data-reveal>
+            <p class="text-xs font-semibold tracking-[0.14em] text-teal-300 uppercase">
+              New: Postgres change data capture
+            </p>
+            <h2
+              id="cdc-title"
+              class="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-5xl"
+            >
+              Your Postgres tables, streaming into topics
+            </h2>
+            <p class="mt-5 text-lg leading-relaxed text-slate-300">
+              Add your database as a source in the console and choose its tables. Each table streams
+              into a topic of its own, starting with the rows that exist today, then every insert,
+              update and delete as it happens.
+            </p>
+            <ol class="mt-8 space-y-4">
+              <li class="flex gap-4">
+                <span
+                  class="flex size-7 shrink-0 items-center justify-center rounded-full border border-white/20 font-mono text-xs"
+                  >1</span
+                >
+                <p class="text-slate-300">
+                  <span class="font-medium text-white">Connect.</span> Changeport checks it can
+                  reach your database over TLS.
+                </p>
+              </li>
+              <li class="flex gap-4">
+                <span
+                  class="flex size-7 shrink-0 items-center justify-center rounded-full border border-white/20 font-mono text-xs"
+                  >2</span
+                >
+                <p class="text-slate-300">
+                  <span class="font-medium text-white">Run the SQL it gives you.</span> It creates a
+                  role that may replicate, and nothing else.
+                </p>
+              </li>
+              <li class="flex gap-4">
+                <span
+                  class="flex size-7 shrink-0 items-center justify-center rounded-full border border-white/20 font-mono text-xs"
+                  >3</span
+                >
+                <p class="text-slate-300">
+                  <span class="font-medium text-white">Choose your tables.</span> Their changes
+                  arrive as messages your applications can read.
+                </p>
+              </li>
+            </ol>
+          </div>
+
+          <div
+            data-reveal
+            data-cdc
+            class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center"
+          >
+            <div class="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+              <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                <span class="font-mono text-sm">public.orders</span>
+                <span class="text-xs text-slate-400">Postgres</span>
+              </div>
+              <table class="w-full font-mono text-xs">
+                <thead class="text-slate-400">
+                  <tr>
+                    <th scope="col" class="px-4 py-2 text-left font-normal">id</th>
+                    <th scope="col" class="px-4 py-2 text-left font-normal">status</th>
+                    <th scope="col" class="px-4 py-2 text-right font-normal">total</th>
+                  </tr>
+                </thead>
+                <tbody data-cdc-rows class="text-slate-200">
+                  <tr class="border-t border-white/5">
+                    <td class="px-4 py-2">1043</td>
+                    <td class="px-4 py-2">paid</td>
+                    <td class="px-4 py-2 text-right">42.50</td>
+                  </tr>
+                  <tr class="border-t border-white/5">
+                    <td class="px-4 py-2">1042</td>
+                    <td class="px-4 py-2">shipped</td>
+                    <td class="px-4 py-2 text-right">18.00</td>
+                  </tr>
+                  <tr class="border-t border-white/5">
+                    <td class="px-4 py-2">1041</td>
+                    <td class="px-4 py-2">shipped</td>
+                    <td class="px-4 py-2 text-right">96.20</td>
+                  </tr>
+                  <tr class="border-t border-white/5">
+                    <td class="px-4 py-2">1040</td>
+                    <td class="px-4 py-2">shipped</td>
+                    <td class="px-4 py-2 text-right">12.75</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div aria-hidden="true" class="flex justify-center">
+              <svg viewBox="0 0 64 24" class="h-6 w-16 rotate-90 sm:rotate-0">
+                <path
+                  d="M2 12 H 56"
+                  class="stroke-teal-300"
+                  stroke-width="2"
+                  stroke-dasharray="2 6"
+                  stroke-linecap="round"
+                  fill="none"
+                >
+                  <animate
+                    attributeName="stroke-dashoffset"
+                    from="16"
+                    to="0"
+                    dur="0.8s"
+                    repeatCount="indefinite"
+                  />
+                </path>
+                <path
+                  d="M52 6 L 60 12 L 52 18"
+                  class="stroke-teal-300"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  fill="none"
+                />
+              </svg>
+            </div>
+
+            <div class="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+              <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                <span class="truncate font-mono text-sm">shop.public.orders</span>
+                <span class="shrink-0 pl-2 text-xs text-slate-400">topic</span>
+              </div>
+              <ul data-cdc-messages class="space-y-2 p-3 font-mono text-xs">
+                <li class="rounded-lg bg-white/5 px-3 py-2 text-slate-200">
+                  <span class="text-teal-300">update</span> 1043: paid
+                </li>
+                <li class="rounded-lg bg-white/5 px-3 py-2 text-slate-200">
+                  <span class="text-teal-300">insert</span> 1043: 42.50
+                </li>
+                <li class="rounded-lg bg-white/5 px-3 py-2 text-slate-200">
+                  <span class="text-teal-300">update</span> 1042: shipped
+                </li>
+                <li class="rounded-lg bg-white/5 px-3 py-2 text-slate-200">
+                  <span class="text-teal-300">update</span> 1041: shipped
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Built for production, row by row. -->
+      <section aria-labelledby="production-title" class="mx-auto max-w-6xl px-6 py-24">
+        <div data-reveal class="max-w-2xl">
+          <p class="text-xs font-semibold tracking-[0.14em] text-teal-dark uppercase">
+            Under the hood
+          </p>
+          <h2
+            id="production-title"
+            class="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-5xl"
+          >
+            Built for production from the first day
           </h2>
-          <div class="mt-12 grid gap-10 md:grid-cols-3">
-            <article>
-              <h3 class="text-lg font-semibold">Kafka, run for you</h3>
-              <p class="mt-3 leading-relaxed text-slate-600">
-                Your own cluster on AWS, not shared with anyone, which we set up, patch and upgrade.
-                Topics come with sensible limits as you create them, and your connection settings
-                come as one file to download. It is plain Apache Kafka: every client library works,
-                and nothing ties you to us.
+        </div>
+        <div class="mt-12 divide-y divide-slate-200 border-y border-slate-200">
+          <div data-reveal class="grid gap-6 py-8 md:grid-cols-[1.2fr_1fr_1fr]">
+            <h3 class="text-xl font-semibold">Yours alone</h3>
+            <div>
+              <p class="font-medium">A dedicated cluster</p>
+              <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                Brokers that run your cluster and no one else's, on AWS in us-east-1.
               </p>
-            </article>
-            <article>
-              <h3 class="text-lg font-semibold">See what your data is doing</h3>
-              <p class="mt-3 leading-relaxed text-slate-600">
-                How far behind each consumer is, in minutes rather than offsets. A timeline of what
-                changed, such as a new topic or a rebalance, next to the charts it explains. A map
-                of which applications write to which topics, and who reads them.
+            </div>
+            <div>
+              <p class="font-medium">Spread over zones</p>
+              <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                Production clusters keep running when an availability zone goes down.
               </p>
-            </article>
-            <article>
-              <h3 class="text-lg font-semibold">No surprise bills</h3>
-              <p class="mt-3 leading-relaxed text-slate-600">
-                You pay for the data you process, at rates we agree with you up front, and we
-                explain your usage in plain language. Your trial costs nothing, and ends on its own
-                unless you choose to stay.
+            </div>
+          </div>
+          <div data-reveal class="grid gap-6 py-8 md:grid-cols-[1.2fr_1fr_1fr]">
+            <h3 class="text-xl font-semibold">Secure by default</h3>
+            <div>
+              <p class="font-medium">TLS and passwords</p>
+              <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                Every client connects over TLS, with a username and password.
               </p>
-            </article>
+            </div>
+            <div>
+              <p class="font-medium">Admins only</p>
+              <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                Only your organization's admins can read messages in the console.
+              </p>
+            </div>
+          </div>
+          <div data-reveal class="grid gap-6 py-8 md:grid-cols-[1.2fr_1fr_1fr]">
+            <h3 class="text-xl font-semibold">You hear about it first</h3>
+            <div>
+              <p class="font-medium">Alerts in plain language</p>
+              <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                Lag, stuck consumers, failing requests and throttling, at thresholds you set.
+              </p>
+            </div>
+            <div>
+              <p class="font-medium">Webhooks</p>
+              <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                Alerts reach your own systems as well as the console.
+              </p>
+            </div>
+          </div>
+          <div data-reveal class="grid gap-6 py-8 md:grid-cols-[1.2fr_1fr_1fr]">
+            <h3 class="text-xl font-semibold">Room to grow</h3>
+            <div>
+              <p class="font-medium">Tiered storage</p>
+              <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                Older messages move to object storage, so long retention stays affordable.
+              </p>
+            </div>
+            <div>
+              <p class="font-medium">Postgres sources</p>
+              <p class="mt-1 text-sm leading-relaxed text-slate-600">
+                Your database's tables, as topics, without running Kafka Connect yourself.
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
-      <section aria-labelledby="observability" class="mx-auto max-w-6xl px-6 py-20">
-        <h2 id="observability" class="text-3xl font-semibold tracking-tight">
-          Answers, not dashboards to decode
-        </h2>
-        <div class="mt-12 flex flex-col gap-16 lg:gap-20">
-          <div class="grid items-center gap-8 lg:grid-cols-5 lg:gap-12">
-            <div class="lg:col-span-2">
-              <h3 class="text-lg font-semibold">Lag in time</h3>
-              <p class="mt-3 leading-relaxed text-slate-600">
-                "3 minutes behind" says more than "36,141 messages". Changeport measures how old the
-                oldest message is that each consumer group has not read yet, and alerts you, and
-                your webhook, when it falls further behind than you allow.
-              </p>
-            </div>
-            <picture class="lg:col-span-3">
-              <source
-                media="(max-width: 767px)"
-                srcset="/screens/lag-phone-390.webp 1x, /screens/lag-phone.webp 2x"
-                width="390"
-                height="950"
-              />
-              <img
-                src="/screens/lag-1280.webp"
-                srcset="
-                  /screens/lag-640.webp   640w,
-                  /screens/lag-960.webp   960w,
-                  /screens/lag-1280.webp 1280w,
-                  /screens/lag.webp      2000w
-                "
-                sizes="(min-width: 1152px) 638px, (min-width: 1024px) calc(60vw - 53px), calc(100vw - 48px)"
-                width="1000"
-                height="760"
-                loading="lazy"
-                alt="A consumer group's lag over the last hour, 3 minutes behind on its topic, with the change that preceded it."
-                class="mx-auto h-auto w-full max-w-sm rounded-xl border border-slate-200 shadow-sm md:max-w-none"
-              />
-            </picture>
-          </div>
-          <div class="grid items-center gap-8 lg:grid-cols-5 lg:gap-12">
-            <div class="lg:col-span-2 lg:order-last">
-              <h3 class="text-lg font-semibold">What changed, and when</h3>
-              <p class="mt-3 leading-relaxed text-slate-600">
-                When the traffic moves, the timeline shows what happened around it: topics created
-                and changed, consumers joining and leaving, brokers restarting. Who changed what in
-                the console is there too.
-              </p>
-            </div>
-            <picture class="lg:col-span-3">
-              <source
-                media="(max-width: 767px)"
-                srcset="/screens/timeline-phone-390.webp 1x, /screens/timeline-phone.webp 2x"
-                width="390"
-                height="742"
-              />
-              <img
-                src="/screens/timeline-1280.webp"
-                srcset="
-                  /screens/timeline-640.webp   640w,
-                  /screens/timeline-960.webp   960w,
-                  /screens/timeline-1280.webp 1280w,
-                  /screens/timeline.webp      2000w
-                "
-                sizes="(min-width: 1152px) 638px, (min-width: 1024px) calc(60vw - 53px), calc(100vw - 48px)"
-                width="1000"
-                height="680"
-                loading="lazy"
-                alt="Throughput over the last hour with numbered changes: consumer groups starting and topics being created."
-                class="mx-auto h-auto w-full max-w-sm rounded-xl border border-slate-200 shadow-sm md:max-w-none"
-              />
-            </picture>
-          </div>
-          <div class="grid items-center gap-8 lg:grid-cols-5 lg:gap-12">
-            <div class="lg:col-span-2">
-              <h3 class="text-lg font-semibold">Where your data flows</h3>
-              <p class="mt-3 leading-relaxed text-slate-600">
-                The map draws your producers, the topics they write and the groups that read them,
-                with the traffic on each line and which consumer is behind.
-              </p>
-            </div>
-            <picture class="lg:col-span-3">
-              <source
-                media="(max-width: 767px)"
-                srcset="/screens/topology-phone-390.webp 1x, /screens/topology-phone.webp 2x"
-                width="390"
-                height="374"
-              />
-              <img
-                src="/screens/topology-1280.webp"
-                srcset="
-                  /screens/topology-640.webp   640w,
-                  /screens/topology-960.webp   960w,
-                  /screens/topology-1280.webp 1280w,
-                  /screens/topology.webp      2000w
-                "
-                sizes="(min-width: 1152px) 638px, (min-width: 1024px) calc(60vw - 53px), calc(100vw - 48px)"
-                width="1000"
-                height="315"
-                loading="lazy"
-                alt="A data flow map: one producer writing to three topics, read by three consumer groups, one of them 3 minutes behind."
-                class="mx-auto h-auto w-full max-w-sm rounded-xl border border-slate-200 shadow-sm md:max-w-none"
-              />
-            </picture>
-          </div>
-        </div>
-      </section>
-
+      <!-- How a trial works. -->
       <section
         id="how-it-works"
         aria-labelledby="how-it-works-title"
-        class="scroll-mt-6 border-t border-slate-200 bg-slate-50"
+        class="scroll-mt-16 border-t border-slate-200 bg-slate-50"
       >
-        <div class="mx-auto max-w-6xl px-6 py-20">
-          <h2 id="how-it-works-title" class="text-3xl font-semibold tracking-tight">
-            How a trial works
-          </h2>
-          <ol class="mt-12 grid gap-8 md:grid-cols-4">
-            <li>
-              <span class="text-sm font-semibold text-teal-dark">1</span>
-              <h3 class="mt-2 font-semibold">Sign up</h3>
-              <p class="mt-2 leading-relaxed text-slate-600">
-                Create an account with your work email address.
-              </p>
-            </li>
-            <li>
-              <span class="text-sm font-semibold text-teal-dark">2</span>
-              <h3 class="mt-2 font-semibold">Tell us what you need</h3>
-              <p class="mt-2 leading-relaxed text-slate-600">
-                What you want Kafka for, and roughly how much data. It takes two minutes.
-              </p>
-            </li>
-            <li>
-              <span class="text-sm font-semibold text-teal-dark">3</span>
-              <h3 class="mt-2 font-semibold">Get your cluster</h3>
-              <p class="mt-2 leading-relaxed text-slate-600">
-                A person at Changeport reviews your request. Once approved, your dedicated cluster
-                is ready within minutes, and you are emailed the link.
-              </p>
-            </li>
-            <li>
-              <span class="text-sm font-semibold text-teal-dark">4</span>
-              <h3 class="mt-2 font-semibold">Try it for 14 days</h3>
-              <p class="mt-2 leading-relaxed text-slate-600">
-                Connect your applications and see them in the console. We remind you three days
-                before the trial ends, and you decide whether to stay.
-              </p>
-            </li>
-          </ol>
+        <div class="mx-auto max-w-6xl px-6 py-24">
+          <div data-reveal class="max-w-2xl">
+            <p class="text-xs font-semibold tracking-[0.14em] text-teal-dark uppercase">Trials</p>
+            <h2
+              id="how-it-works-title"
+              class="mt-3 text-3xl font-semibold tracking-tight text-balance sm:text-5xl"
+            >
+              How a trial works
+            </h2>
+          </div>
+          <div data-reveal class="relative mt-14">
+            <div
+              aria-hidden="true"
+              class="steps-line absolute top-4 right-[12.5%] left-[12.5%] hidden h-px bg-teal md:block"
+            ></div>
+            <ol class="relative grid gap-10 md:grid-cols-4 md:gap-8">
+              <li class="md:text-center">
+                <span
+                  class="flex size-8 items-center justify-center rounded-full bg-ink font-mono text-sm text-white md:mx-auto"
+                  >1</span
+                >
+                <h3 class="mt-4 font-semibold">Sign up</h3>
+                <p class="mt-2 leading-relaxed text-slate-600">
+                  Create an account with your work email address.
+                </p>
+              </li>
+              <li class="md:text-center">
+                <span
+                  class="flex size-8 items-center justify-center rounded-full bg-ink font-mono text-sm text-white md:mx-auto"
+                  >2</span
+                >
+                <h3 class="mt-4 font-semibold">Tell us what you need</h3>
+                <p class="mt-2 leading-relaxed text-slate-600">
+                  What you want Kafka for, and roughly how much data. It takes two minutes.
+                </p>
+              </li>
+              <li class="md:text-center">
+                <span
+                  class="flex size-8 items-center justify-center rounded-full bg-ink font-mono text-sm text-white md:mx-auto"
+                  >3</span
+                >
+                <h3 class="mt-4 font-semibold">Get your cluster</h3>
+                <p class="mt-2 leading-relaxed text-slate-600">
+                  A person at Changeport reviews your request. Once it is approved, your cluster is
+                  ready within minutes, and you get an email.
+                </p>
+              </li>
+              <li class="md:text-center">
+                <span
+                  class="flex size-8 items-center justify-center rounded-full bg-teal font-mono text-sm text-white md:mx-auto"
+                  >4</span
+                >
+                <h3 class="mt-4 font-semibold">Try it for 14 days</h3>
+                <p class="mt-2 leading-relaxed text-slate-600">
+                  Connect your applications and see them in the console. We remind you three days
+                  before the end, and you decide whether to stay.
+                </p>
+              </li>
+            </ol>
+          </div>
         </div>
       </section>
 
-      <section
-        id="faq"
-        aria-labelledby="faq-title"
-        class="mx-auto max-w-6xl scroll-mt-6 px-6 py-20"
-      >
-        <h2 id="faq-title" class="text-3xl font-semibold tracking-tight">Questions</h2>
-        <div class="faq mt-10 max-w-3xl divide-y divide-slate-200 border-y border-slate-200">
-          <details>
-            <summary class="py-5 font-medium">Is it real Apache Kafka?</summary>
-            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
-              Yes. Your applications use the Kafka client libraries they would use anywhere, with a
-              username and password over TLS. There is no Changeport SDK, so you can move your
-              applications to another Kafka at any time.
+      <!-- Questions. -->
+      <section id="faq" aria-labelledby="faq-title" class="scroll-mt-16">
+        <div class="mx-auto grid max-w-6xl gap-10 px-6 py-24 lg:grid-cols-[1fr_1.6fr] lg:gap-16">
+          <div data-reveal>
+            <p class="text-xs font-semibold tracking-[0.14em] text-teal-dark uppercase">
+              Questions
             </p>
-          </details>
-          <details>
-            <summary class="py-5 font-medium">Where does my cluster run?</summary>
-            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
-              On AWS in us-east-1 (Northern Virginia), on servers that run your cluster and no one
-              else's. Production clusters spread their brokers over three availability zones, so the
-              loss of one does not stop them.
+            <h2 id="faq-title" class="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">
+              Good to know
+            </h2>
+            <p class="mt-5 leading-relaxed text-slate-600">
+              Anything else? Ask in your trial request, and the person who reviews it answers.
             </p>
-          </details>
-          <details>
-            <summary class="py-5 font-medium">Who can see my data?</summary>
-            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
-              Your team. The console shows your topics and how they are used, and only your
-              organization's admins can look at messages in it. Our operators run the cluster
-              without reading what you send through it.
-            </p>
-          </details>
-          <details>
-            <summary class="py-5 font-medium">Can I get my Postgres tables into Kafka?</summary>
-            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
-              Yes. Add your database as a source in the console, run the SQL it gives you, and each
-              table's changes stream into a topic of its own, from the rows that exist today on.
-            </p>
-          </details>
-          <details>
-            <summary class="py-5 font-medium">What happens when my trial ends?</summary>
-            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
-              If you want to keep your cluster, tell us before the end and it stays as it is. If you
-              do nothing, the cluster and its data are deleted when the trial ends. We email you
-              three days before.
-            </p>
-          </details>
-          <details>
-            <summary class="py-5 font-medium">What does it cost?</summary>
-            <p class="-mt-1 pb-5 leading-relaxed text-slate-600">
-              The trial is free. After it, you pay for the data your cluster processes, at rates we
-              agree with you before you decide to stay.
-            </p>
-          </details>
+          </div>
+          <div data-reveal class="faq divide-y divide-slate-200 border-y border-slate-200">
+            <details>
+              <summary class="py-5 font-medium">Is it real Apache Kafka?</summary>
+              <p class="pb-5 leading-relaxed text-slate-600">
+                Yes. Your applications use the Kafka client libraries they would use anywhere, with
+                a username and password over TLS. There is no Changeport SDK, so you can move your
+                applications to another Kafka at any time.
+              </p>
+            </details>
+            <details>
+              <summary class="py-5 font-medium">Where does my cluster run?</summary>
+              <p class="pb-5 leading-relaxed text-slate-600">
+                On AWS in us-east-1 (Northern Virginia), on servers that run your cluster and no one
+                else's. Production clusters spread their brokers over three availability zones, so
+                the loss of one does not stop them.
+              </p>
+            </details>
+            <details>
+              <summary class="py-5 font-medium">Who can see my data?</summary>
+              <p class="pb-5 leading-relaxed text-slate-600">
+                Your team. The console shows your topics and how they are used, and only your
+                organization's admins can look at messages in it. Our operators run the cluster
+                without reading what you send through it.
+              </p>
+            </details>
+            <details>
+              <summary class="py-5 font-medium">Can I get my Postgres tables into Kafka?</summary>
+              <p class="pb-5 leading-relaxed text-slate-600">
+                Yes. Add your database as a source in the console, run the SQL it gives you, and
+                each table's changes stream into a topic of its own, from the rows that exist today
+                on.
+              </p>
+            </details>
+            <details>
+              <summary class="py-5 font-medium">What happens when my trial ends?</summary>
+              <p class="pb-5 leading-relaxed text-slate-600">
+                If you want to keep your cluster, tell us before the end and it stays as it is. If
+                you do nothing, the cluster and its data are deleted when the trial ends. We email
+                you three days before.
+              </p>
+            </details>
+            <details>
+              <summary class="py-5 font-medium">What does it cost?</summary>
+              <p class="pb-5 leading-relaxed text-slate-600">
+                The trial is free. After it, you pay for the data your cluster processes, at rates
+                we agree with you before you decide to stay.
+              </p>
+            </details>
+          </div>
         </div>
       </section>
 
-      <section aria-labelledby="start" class="bg-ink">
-        <div class="mx-auto max-w-6xl px-6 py-16 text-white">
-          <h2 id="start" class="text-3xl font-semibold tracking-tight">
-            Start with a cluster of your own
-          </h2>
-          <p class="mt-4 max-w-2xl text-lg text-slate-300">
-            Request a trial, and connect your first application minutes after it is approved.
-          </p>
-          <a
-            href="%CONSOLE_URL%/trial"
-            class="mt-8 inline-block rounded-lg bg-white px-5 py-3 font-medium text-ink hover:bg-slate-100"
-            >Request a trial</a
+      <!-- The closing call to action, over streams of data. -->
+      <section aria-labelledby="start" class="px-4 pb-16 sm:px-6">
+        <div
+          class="relative isolate mx-auto max-w-6xl overflow-hidden rounded-3xl bg-ink px-6 py-20 text-white sm:px-14"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 1200 400"
+            preserveAspectRatio="none"
+            class="streams absolute inset-0 -z-10 size-full"
           >
+            <path d="M-20 60 C 300 20 500 140 1220 70" class="base" />
+            <path d="M-20 120 C 400 180 700 40 1220 140" class="base" />
+            <path d="M-20 190 C 260 150 820 260 1220 200" class="base" />
+            <path d="M-20 260 C 500 300 760 200 1220 270" class="base" />
+            <path d="M-20 330 C 380 290 640 380 1220 330" class="base" />
+            <path d="M-20 60 C 300 20 500 140 1220 70" class="pulse-teal" />
+            <path d="M-20 120 C 400 180 700 40 1220 140" class="pulse-white" />
+            <path d="M-20 190 C 260 150 820 260 1220 200" class="pulse-teal" />
+            <path d="M-20 260 C 500 300 760 200 1220 270" class="pulse-white" />
+            <path d="M-20 330 C 380 290 640 380 1220 330" class="pulse-teal" />
+          </svg>
+          <div class="max-w-2xl">
+            <h2 id="start" class="text-3xl font-semibold tracking-tight text-balance sm:text-5xl">
+              Start with a cluster of your own
+            </h2>
+            <p class="mt-5 text-lg text-slate-300">
+              Request a trial, and connect your first application minutes after it is approved.
+            </p>
+            <div class="mt-9 flex flex-wrap gap-3">
+              <a
+                href="%CONSOLE_URL%/trial"
+                class="rounded-lg bg-white px-5 py-3 font-medium text-ink transition-colors hover:bg-slate-100"
+                >Request a trial</a
+              >
+              <a
+                href="%CONSOLE_URL%/"
+                class="rounded-lg border border-white/25 px-5 py-3 font-medium text-white transition-colors hover:border-white/50"
+                >Sign in</a
+              >
+            </div>
+          </div>
         </div>
       </section>
     </main>

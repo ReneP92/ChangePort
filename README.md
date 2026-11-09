@@ -65,7 +65,7 @@ More on the data plane:
 - [docs/alerts.md](docs/alerts.md): the customers' guide to the alerts about their applications, and how they work.
 - [docs/timeline.md](docs/timeline.md): the change timeline over the console's graphs, and how changes are recorded.
 - [docs/runbook.md](docs/runbook.md): the operators' procedures, from provisioning to upgrades.
-- [docs/site.md](docs/site.md): the landing site, its screenshots, and its Lighthouse check.
+- [docs/site.md](docs/site.md): the landing site, its screenshots, its tests and its Lighthouse check.
 
 ## Roadmap
 
@@ -101,7 +101,7 @@ for progress.
 | `cmd/agent` | The Kafka agent next to every customer's cluster: turns on tiered storage for every topic that can use it, keeps the client metrics subscription in place and measures consumer lag in seconds |
 | `internal/provisioning` | The per-customer template and the code that applies it through the Kubernetes API |
 | `web` | The console's React app, built and tested with Bun (see [web/README.md](web/README.md)) |
-| `site` | The landing site: plain HTML and Tailwind built by Vite, with no JavaScript at runtime (see [docs/site.md](docs/site.md)) |
+| `site` | The landing site: plain HTML and Tailwind built by Vite, with one small script for its animations and demos (see [docs/site.md](docs/site.md)) |
 | `terraform` | Base infrastructure per environment: VPC, EKS, S3, IAM, and ECR in prod (modules written; nothing applied yet; see [terraform/README.md](terraform/README.md)) |
 | `deploy` | Kubernetes manifests: the kind cluster, and the platform components (Strimzi, cert-manager) with one overlay per environment |
 | `images` | Container images we build: Strimzi's Kafka image plus the tiered storage plugin and client telemetry, Kafka Connect with Debezium's Postgres connector, the Kafka agent, the provisioner and the console. `.github/workflows/publish-images.yml` publishes them to ECR from main, and `cmd/eksimages` sets the digests the EKS platforms run |
@@ -559,7 +559,7 @@ Strimzi and cert-manager CRDs (envtest), which `just test` downloads into
 generated code.
 
 CI runs the same Go lint and tests, the web app's checks and Playwright
-tests, the landing site's Lighthouse check, `just tf-fmt tf-validate tf-test`, `just shellcheck`, and `just check-text`,
+tests, the landing site's tests and Lighthouse check, `just tf-fmt tf-validate tf-test`, `just shellcheck`, and `just check-text`,
 which fails on any em dash in the repository, and on every push and pull
 request the whole end-to-end suite on a fresh kind cluster: `just dev-up e2e
 platform-check`, where `platform-check` also server-side dry-runs the EKS

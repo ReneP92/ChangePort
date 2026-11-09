@@ -3,3 +3,5 @@ dist/
 # Written by bun run screens from docs/screenshots.
 public/screens/
 lighthouse/
+playwright-report/
+test-results/

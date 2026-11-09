@@ -1,12 +1,20 @@
 @import "tailwindcss";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 /* The console's brand (docs/brand): ink and the teal accent, in Geist. */
 @theme {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
   --color-ink: #0b1f33;
+  --color-ink-soft: #13304d;
   --color-teal: #0d9488;
   --color-teal-dark: #0f766e;
+}
+
+:root {
+  /* Lets the questions' answers open with a transition, where supported. */
+  interpolate-size: allow-keywords;
 }
 
 html {
@@ -16,6 +24,201 @@ html {
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+}
+
+/* The header gains a border once the page scrolls under it. */
+[data-header] {
+  transition:
+    border-color 200ms,
+    box-shadow 200ms;
+}
+
+[data-header][data-scrolled] {
+  border-color: var(--color-slate-200);
+  box-shadow: 0 1px 12px rgb(11 31 51 / 0.06);
+}
+
+/*
+ * Sections rise into view as they scroll in. Without JavaScript (no .js on
+ * the root) or with reduced motion, everything simply shows.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .js [data-reveal] {
+    transition:
+      opacity 700ms cubic-bezier(0.2, 0.7, 0.2, 1),
+      translate 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    transition-delay: var(--delay, 0ms);
+  }
+
+  .js [data-reveal]:not(.is-visible) {
+    opacity: 0;
+    translate: 0 1.25rem;
+  }
+}
+
+/*
+ * The statement lights up word by word as it scrolls past. Unlit words keep
+ * the 3:1 contrast that text this large needs.
+ */
+.js [data-words] .word {
+  transition: opacity 250ms;
+}
+
+.js [data-words] .word:not(.is-lit) {
+  opacity: 0.5;
+}
+
+/* The flow diagrams of the hero. */
+.flow text {
+  font-family: var(--font-sans);
+}
+
+.flow .line {
+  fill: none;
+  stroke: var(--color-slate-300);
+  stroke-width: 1.5;
+}
+
+.flow .line-behind {
+  stroke: var(--color-amber-400);
+  stroke-dasharray: 4 5;
+}
+
+.flow .node {
+  fill: white;
+  stroke: var(--color-slate-200);
+  filter: drop-shadow(0 1px 2px rgb(11 31 51 / 0.06));
+}
+
+.flow .node-behind {
+  fill: var(--color-red-50);
+  stroke: var(--color-red-300);
+}
+
+.flow .name {
+  font-size: 14px;
+  font-weight: 600;
+  fill: var(--color-ink);
+}
+
+.flow .meta {
+  font-size: 12px;
+  fill: var(--color-slate-500);
+}
+
+.flow .meta-behind {
+  fill: var(--color-red-600);
+  font-weight: 500;
+}
+
+.flow .pulse {
+  fill: none;
+  stroke: var(--color-teal);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.flow .pulse-behind {
+  stroke: var(--color-red-400);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .flow .pulse {
+    animation: flow-pulse 2.4s ease-out infinite;
+  }
+}
+
+@keyframes flow-pulse {
+  from {
+    opacity: 0.6;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 1.35;
+  }
+}
+
+/* The lag simulator's log: unread messages fill from the newest end. */
+.log-cell {
+  background: var(--color-slate-200);
+  transition: background-color 300ms;
+}
+
+.log-cell.unread {
+  background: var(--color-teal);
+}
+
+.log-cell.unread.old {
+  background: var(--color-amber-400);
+}
+
+.log-cell.unread.older {
+  background: var(--color-red-400);
+}
+
+/* The console tour's progress bar fills while a screen shows. */
+.tour [role="tab"] .progress {
+  transform-origin: left;
+  scale: 0 1;
+}
+
+.tour[data-autoplay] [role="tab"][aria-selected="true"] .progress {
+  animation: progress var(--tour-interval, 7s) linear forwards;
+}
+
+.tour[data-autoplay]:hover [role="tab"][aria-selected="true"] .progress,
+.tour[data-autoplay]:focus-within [role="tab"][aria-selected="true"] .progress {
+  animation-play-state: paused;
+}
+
+@keyframes progress {
+  to {
+    scale: 1 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tour [role="tabpanel"]:not([hidden]) {
+    animation: fade-in 450ms ease-out;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    translate: 0 0.5rem;
+  }
+}
+
+/* New rows and messages of the change data capture demo. */
+@media (prefers-reduced-motion: no-preference) {
+  .cdc-new {
+    animation: cdc-in 600ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+}
+
+@keyframes cdc-in {
+  from {
+    opacity: 0;
+    translate: -0.75rem 0;
+    background-color: var(--color-teal-50);
+  }
+}
+
+/* The trial's steps join up as they come into view. */
+.steps-line {
+  transform-origin: left;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .js .steps-line {
+    transition: scale 1400ms cubic-bezier(0.2, 0.7, 0.2, 1) 200ms;
+  }
+
+  .js [data-reveal]:not(.is-visible) .steps-line {
+    scale: 0 1;
   }
 }
 
@@ -42,7 +245,7 @@ html {
   border-right: 2px solid var(--color-slate-500);
   border-bottom: 2px solid var(--color-slate-500);
   transform: translateY(-25%) rotate(45deg);
-  transition: transform 150ms;
+  transition: transform 200ms;
 }
 
 .faq details[open] summary::after {
@@ -53,8 +256,83 @@ html {
   color: var(--color-teal-dark);
 }
 
+.faq details::details-content {
+  block-size: 0;
+  overflow: hidden;
+  transition:
+    block-size 250ms ease,
+    content-visibility 250ms allow-discrete;
+}
+
+.faq details[open]::details-content {
+  block-size: auto;
+}
+
+/* The streams behind the closing call to action: faint lines, along which
+   bright pulses travel. */
+.streams path {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.streams .base {
+  stroke: rgb(255 255 255 / 0.08);
+}
+
+.streams [class^="pulse-"] {
+  stroke-width: 2;
+  stroke-dasharray: 90 1400;
+  stroke-dashoffset: 90;
+}
+
+.streams .pulse-teal {
+  stroke: var(--color-teal-400);
+}
+
+.streams .pulse-white {
+  stroke: rgb(255 255 255 / 0.5);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .streams [class^="pulse-"] {
+    animation: stream 7s linear infinite;
+  }
+
+  .streams [class^="pulse-"]:nth-of-type(7) {
+    animation-duration: 9s;
+    animation-delay: -3s;
+  }
+
+  .streams [class^="pulse-"]:nth-of-type(8) {
+    animation-duration: 6s;
+    animation-delay: -1s;
+  }
+
+  .streams [class^="pulse-"]:nth-of-type(9) {
+    animation-duration: 10s;
+    animation-delay: -6s;
+  }
+
+  .streams [class^="pulse-"]:nth-of-type(10) {
+    animation-duration: 8s;
+    animation-delay: -4s;
+  }
+}
+
+@keyframes stream {
+  from {
+    stroke-dashoffset: 90;
+  }
+  to {
+    stroke-dashoffset: -1310;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .faq summary::after {
+  .faq summary::after,
+  .faq details::details-content,
+  .log-cell {
     transition: none;
   }
 }
