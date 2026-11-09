@@ -24,6 +24,8 @@ test("the hero fills the first screen, so the next section starts at the fold", 
   for (const height of [800, 900, 1000]) {
     await page.setViewportSize({ width: page.viewportSize()?.width ?? 0, height });
     await page.goto("/");
+    // Measured in the site's own font, which lays the hero out.
+    await page.evaluate(() => document.fonts.ready);
     const bottom = await page
       .locator("main > section")
       .first()
