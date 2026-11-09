@@ -77,5 +77,13 @@ export default defineConfig({
       input: { index: "index.html", privacy: "privacy.html", terms: "terms.html" },
     },
   },
-  server: { port: 5174, strictPort: true },
+  server: {
+    // IPv4, so that http://127.0.0.1:5174 works as well as localhost, which
+    // browsers fall back to IPv4 for.
+    host: "127.0.0.1",
+    port: 5174,
+    strictPort: true,
+    // The checks' reports are written here; they are not the site.
+    watch: { ignored: ["**/lighthouse/**", "**/test-results/**", "**/playwright-report/**"] },
+  },
 });
