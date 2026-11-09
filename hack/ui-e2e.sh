@@ -26,6 +26,7 @@ export CLERK_PUBLISHABLE_KEY CLERK_SECRET_KEY CHANGEPORT_STAFF_ORG_ID
 export KUBECTL=$KUBECTL_BIN KUBE_CONTEXT
 export PLAYWRIGHT_BASE_URL="http://localhost:$CONSOLE_PORT"
 
+stay_awake
 hack/bun.sh install --frozen-lockfile >/dev/null
 hack/bun.sh x playwright install ${CI:+--with-deps} chromium >/dev/null
 hack/bun.sh run e2e "$@"

@@ -28,6 +28,9 @@ const devices = [
   ["desktop", { width: 1280, height: 900 }],
   ["phone", { width: 390, height: 844 }],
 ] as const;
+// At twice the pixels, as a retina screen shows them, so that they stay sharp
+// in the docs and on the landing site (site/).
+const context = { viewport: devices[0][1], deviceScaleFactor: 2 };
 
 /**
  * Saves the page as name-desktop.png and name-phone.png, once Clerk's
@@ -63,7 +66,7 @@ async function shot(page: Page, name: string): Promise<void> {
 
 /** Signs user in, in a browser context of their own, and opens path. */
 async function signIn(browser: Browser, user: UserFixture, at: string): Promise<Page> {
-  const page = await (await browser.newContext({ viewport: devices[0][1] })).newPage();
+  const page = await (await browser.newContext(context)).newPage();
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: user.email });
   await page.goto(at);
@@ -131,7 +134,7 @@ test("every screen of the console", async ({ browser }) => {
   const clerkAPI = clerkClient();
 
   // Signed out, the console shows Clerk's sign-in.
-  const visitor = await (await browser.newContext({ viewport: devices[0][1] })).newPage();
+  const visitor = await (await browser.newContext(context)).newPage();
   await visitor.goto("/");
   await expect(visitor.getByLabel(/email address/i)).toBeVisible({ timeout: 20_000 });
   await shot(visitor, "01-sign-in");

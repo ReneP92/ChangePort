@@ -146,6 +146,31 @@ jobs:
             web/test-results
           retention-days: 14
 
+  # The landing site, held to Lighthouse 95+ on a phone and a desktop.
+  site:
+    name: Site build and Lighthouse
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: 1.59.0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            bin/
+            !bin/*.kubeconfig
+            ~/.cache/ms-playwright
+          key: site-tools-${{ runner.os }}-${{ hashFiles('hack/lib.sh', 'site/bun.lock') }}
+      - run: just site-check
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: site-lighthouse
+          path: site/lighthouse
+          retention-days: 14
+
   # The end-to-end suites on kind, each on a cluster of its own: the failover
   # suite freezes a zone, which would disturb the core suite's tests.
   e2e:

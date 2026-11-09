@@ -15,6 +15,8 @@ const devices = [
   ["desktop", { width: 1280, height: 900 }],
   ["phone", { width: 390, height: 844 }],
 ] as const;
+// As in console.screens.ts: at twice the pixels, as a retina screen shows them.
+const context = { viewport: devices[0][1], deviceScaleFactor: 2 };
 
 /** As in console.screens.ts: the whole page, or the viewport with a dialog. */
 async function shot(page: Page, name: string): Promise<void> {
@@ -70,7 +72,7 @@ async function visitor(browser: Browser, role: string, at: string): Promise<Page
     skipPasswordRequirement: true,
   });
   visitors.push(user.id);
-  const page = await (await browser.newContext({ viewport: devices[0][1] })).newPage();
+  const page = await (await browser.newContext(context)).newPage();
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: testEmail(fixtures.run, role) });
   await page.goto(at);
@@ -92,7 +94,7 @@ test("the screens of trial requests", async ({ browser }) => {
   test.setTimeout(10 * 60_000);
 
   // Signed out, /trial shows Clerk's sign-up.
-  const stranger = await (await browser.newContext({ viewport: devices[0][1] })).newPage();
+  const stranger = await (await browser.newContext(context)).newPage();
   await setupClerkTestingToken({ page: stranger });
   await stranger.goto("/trial");
   await expect(stranger.getByLabel(/email address/i)).toBeVisible({ timeout: 20_000 });
@@ -131,7 +133,7 @@ test("the screens of trial requests", async ({ browser }) => {
   ).toBeVisible();
 
   // The operator reviews both.
-  const operator = await (await browser.newContext({ viewport: devices[0][1] })).newPage();
+  const operator = await (await browser.newContext(context)).newPage();
   await operator.goto("/");
   await clerk.signIn({ page: operator, emailAddress: fixtures.users.staff.email });
   await operator.goto("/operator/trials");

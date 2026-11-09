@@ -1,0 +1,5 @@
+node_modules/
+dist/
+# Written by bun run screens from docs/screenshots.
+public/screens/
+lighthouse/

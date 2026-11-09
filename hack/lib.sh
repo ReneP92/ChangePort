@@ -108,6 +108,14 @@ TERRAFORM_BIN="$BIN_DIR/terraform-$TERRAFORM_VERSION"
 log() { printf '\033[1m==> %s\033[0m\n' "$*" >&2; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
+# Keeps a Mac from idle sleep until the calling script exits: a sleep pauses
+# kind, and outlasts the timeouts of the tests that run on it.
+stay_awake() {
+  if command -v caffeinate >/dev/null; then
+    caffeinate -i -w $$ &
+  fi
+}
+
 # Runs a command that reaches a container registry up to three times, as
 # registries fail now and then (such as quay.io answering 503 for a layer).
 retry_registry() {

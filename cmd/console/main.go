@@ -15,9 +15,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
@@ -62,6 +64,9 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	// The customer watch's informers log through controller-runtime, which
+	// otherwise prints a stack trace at start instead.
+	ctrl.SetLogger(logr.FromSlogHandler(logger.Handler()))
 
 	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientcmd.NewDefaultClientConfigLoadingRules(),

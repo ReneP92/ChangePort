@@ -40,6 +40,7 @@ cluster_exists || die "kind cluster $CLUSTER_NAME does not exist; run just dev-u
 # A full disk shows up as obscure failures deep in a test, such as the
 # object store refusing tiered storage uploads.
 check_docker_disk
+stay_awake
 
 SUITE=${SUITE:-all}
 case $SUITE in

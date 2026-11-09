@@ -1,0 +1,30 @@
+{
+  "name": "changeport-site",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "bun@1.4.3",
+  "scripts": {
+    "screens": "bun scripts/screens.ts",
+    "dev": "bun run screens && vite",
+    "build": "bun run screens && vite build",
+    "preview": "vite preview --port 4174 --strictPort",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc",
+    "lighthouse": "bun scripts/lighthouse.ts"
+  },
+  "devDependencies": {
+    "@fontsource-variable/geist": "5.3.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/bun": "1.4.3",
+    "chrome-launcher": "1.2.3",
+    "lighthouse": "13.6.0",
+    "playwright-core": "1.64.1",
+    "prettier": "3.9.10",
+    "sharp": "0.35.5",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "vite": "8.3.5"
+  }
+}
