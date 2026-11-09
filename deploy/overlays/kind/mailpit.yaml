@@ -1,0 +1,61 @@
+# Where the console and the provisioner send email on kind, instead of
+# Amazon SES (internal/mail): Mailpit keeps every message and serves them on
+# its web UI and API at port 8025, which the end-to-end tests read through
+# the API server's service proxy
+# (/api/v1/namespaces/mail/services/mailpit:http/proxy/api/v1/messages):
+#   kubectl -n mail port-forward svc/mailpit 8025:http
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mail
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  namespace: mail
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mailpit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mailpit
+    spec:
+      containers:
+        - name: mailpit
+          # As in KIND_CONTROL_PLANE_IMAGES of hack/lib.sh, by tag.
+          image: axllent/mailpit:v1.33.1
+          ports:
+            - name: smtp
+              containerPort: 1025
+            - name: http
+              containerPort: 8025
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  namespace: mail
+spec:
+  selector:
+    app.kubernetes.io/name: mailpit
+  ports:
+    - name: smtp
+      port: 1025
+      targetPort: smtp
+    - name: http
+      port: 8025
+      targetPort: http

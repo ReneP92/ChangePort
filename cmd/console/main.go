@@ -26,6 +26,7 @@ import (
 	"github.com/ReneP92/changeport/internal/console"
 	"github.com/ReneP92/changeport/internal/console/ui"
 	"github.com/ReneP92/changeport/internal/events"
+	"github.com/ReneP92/changeport/internal/mail"
 	"github.com/ReneP92/changeport/internal/metrics"
 	"github.com/ReneP92/changeport/internal/provisioning"
 )
@@ -104,12 +105,20 @@ func run(ctx context.Context, args []string) error {
 	kafka := clusters.NewPool(console.KubeSecrets{Client: kube}, logger)
 	defer kafka.Close()
 
+	// Email about trials (internal/mail), off without CHANGEPORT_MAIL.
+	mailer, err := mail.New(ctx, os.Getenv("CHANGEPORT_MAIL"), os.Getenv("CHANGEPORT_MAIL_FROM"), logger)
+	if err != nil {
+		return err
+	}
+
 	server, err := console.New(console.Config{
 		PublishableKey:      os.Getenv("CLERK_PUBLISHABLE_KEY"),
 		SecretKey:           os.Getenv("CLERK_SECRET_KEY"),
 		StaffOrganizationID: os.Getenv("CHANGEPORT_STAFF_ORG_ID"),
 		Origins:             splitList(os.Getenv("CHANGEPORT_CONSOLE_ORIGINS")),
+		OperatorEmails:      splitList(os.Getenv("CHANGEPORT_OPERATOR_EMAILS")),
 	}, console.Options{
+		Mail:          mailer,
 		Customers:     console.KubeCustomers{Client: kube, Cache: customers},
 		TrialRequests: console.KubeTrialRequests{Client: kube},
 		Clusters:      console.KubeClusters{Client: kube, Kafka: kafka},

@@ -36,6 +36,7 @@ import (
 	"github.com/ReneP92/changeport/internal/cdc"
 	"github.com/ReneP92/changeport/internal/controller"
 	"github.com/ReneP92/changeport/internal/events"
+	"github.com/ReneP92/changeport/internal/mail"
 	"github.com/ReneP92/changeport/internal/provisioning"
 )
 
@@ -342,7 +343,14 @@ func runController(ctx context.Context, args []string, logger *slog.Logger, stde
 	leaderNamespace := fs.String("leader-election-namespace", "", "namespace of the leader election lease (default: the pod's own)")
 	eventsURL := fs.String("events-url", provisioning.EventsURL, `VictoriaLogs to record brokers' restarts and clients' throttling in for the timeline, or "" for none`)
 	eventsAddress := fs.String("events-address", ":8082", "address of the endpoint Alertmanager sends the timeline's alerts to")
+	mailTo := fs.String("mail", os.Getenv("CHANGEPORT_MAIL"), `where trials' contacts are emailed through: smtp://host:port, or ses; "" for no email`)
+	mailFrom := fs.String("mail-from", os.Getenv("CHANGEPORT_MAIL_FROM"), "the address trials' emails come from")
+	consoleURL := fs.String("console-url", os.Getenv("CHANGEPORT_CONSOLE_URL"), "the console's address, where trials' emails link")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	mailer, err := mail.New(ctx, *mailTo, *mailFrom, logger)
+	if err != nil {
 		return err
 	}
 	platform, err := platformFlags.resolve()
@@ -395,6 +403,9 @@ func runController(ctx context.Context, args []string, logger *slog.Logger, stde
 		Platform:       platform,
 		PollInterval:   10 * time.Second,
 		ResyncInterval: 10 * time.Minute,
+		Mail:           mailer,
+		ConsoleURL:     *consoleURL,
+		Reader:         mgr.GetAPIReader(),
 	}
 	if err := reconciler.SetupWithManager(mgr); err != nil {
 		return err

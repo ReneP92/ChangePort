@@ -28,6 +28,7 @@ import (
 	"github.com/ReneP92/changeport/internal/clusters"
 	"github.com/ReneP92/changeport/internal/console/api"
 	"github.com/ReneP92/changeport/internal/events"
+	email "github.com/ReneP92/changeport/internal/mail"
 	"github.com/ReneP92/changeport/internal/metrics"
 	"github.com/ReneP92/changeport/internal/provisioning"
 	"github.com/ReneP92/changeport/internal/tail"
@@ -43,8 +44,12 @@ type Config struct {
 	// operators.
 	StaffOrganizationID string
 	// Origins are the console's origins, such as http://localhost:8088:
-	// the authorized parties session tokens must name.
+	// the authorized parties session tokens must name. The first is where
+	// email links lead.
 	Origins []string
+	// OperatorEmails are who is emailed about new trial requests; without
+	// any, nobody is.
+	OperatorEmails []string
 }
 
 // missing lists the settings the configuration lacks.
@@ -72,6 +77,7 @@ type Server struct {
 	customers     Customers
 	organizations Organizations
 	trialRequests TrialRequests
+	mail          Mail
 	clusters      Clusters
 	metrics       Metrics
 	sources       Sources
@@ -113,6 +119,8 @@ type Options struct {
 	Organizations Organizations
 	// TrialRequests keeps the requests for trials that operators decide on.
 	TrialRequests TrialRequests
+	// Mail sends email about trials (internal/mail); the default is off.
+	Mail Mail
 	// Clusters and Metrics read the customers' clusters and their metrics.
 	Clusters Clusters
 	Metrics  Metrics
@@ -161,6 +169,7 @@ func New(config Config, options Options) (*Server, error) {
 		customers:     options.Customers,
 		organizations: options.Organizations,
 		trialRequests: options.TrialRequests,
+		mail:          cmp.Or[Mail](options.Mail, &email.Mailer{Logger: options.Logger}),
 		clusters:      options.Clusters,
 		metrics:       options.Metrics,
 		sources:       options.Sources,

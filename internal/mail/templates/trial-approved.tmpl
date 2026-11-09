@@ -1,0 +1,19 @@
+{{define "trial-approved-subject"}}Your Changeport trial is approved{{end}}
+
+{{define "trial-approved-text"}}
+Hello,
+
+Your trial request for {{.Company}} is approved. Changeport is setting up your dedicated Kafka cluster now, which takes a few minutes.
+
+Open your console:
+{{.Link}}
+
+Your trial runs until {{.EndsAt}}. We will remind you three days before it ends.
+{{end}}
+
+{{define "trial-approved-html"}}
+<p>Hello,</p>
+<p>Your trial request for {{.Company}} is approved. Changeport is setting up your dedicated Kafka cluster now, which takes a few minutes.</p>
+<p><a href="{{.Link}}">Open your console</a></p>
+<p>Your trial runs until {{.EndsAt}}. We will remind you three days before it ends.</p>
+{{end}}

@@ -258,6 +258,7 @@ type fixture struct {
 	alerts        *fakeAlerts
 	alertSettings *fakeAlertSettings
 	trialRequests *fakeTrialRequests
+	mail          *fakeMail
 	// log is what the server logged, as JSON lines.
 	log     *bytes.Buffer
 	fetches int
@@ -284,6 +285,7 @@ func newFixture(t *testing.T) *fixture {
 		messages:      &fakeMessages{},
 		alertSettings: &fakeAlertSettings{settings: map[string]*v1alpha1.AlertSettings{}},
 		trialRequests: newFakeTrialRequests(),
+		mail:          &fakeMail{},
 		log:           &bytes.Buffer{},
 	}
 	server, err := New(Config{
@@ -291,10 +293,12 @@ func newFixture(t *testing.T) *fixture {
 		SecretKey:           "sk_test_unused",
 		StaffOrganizationID: staffOrg,
 		Origins:             []string{origin, "http://localhost:5173"},
+		OperatorEmails:      []string{"ops@changeport.test"},
 	}, Options{
 		Customers:     f.customers,
 		Organizations: f.organizations,
 		TrialRequests: f.trialRequests,
+		Mail:          f.mail,
 		Clusters:      f.clusters,
 		Metrics:       fakeMetrics{},
 		Sources:       f.sources,

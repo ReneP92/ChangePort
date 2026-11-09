@@ -1,0 +1,26 @@
+{{define "trial-requested-subject"}}New trial request from {{.Company}}{{end}}
+
+{{define "trial-requested-text"}}
+{{.Company}} requests a trial of Changeport ({{.ID}}).
+
+Who: {{.Email}}, {{.Role}}
+What for: {{.UseCase}}
+Peak throughput: {{.Throughput}}
+Messages kept: {{.Retention}}
+Start: {{.Start}}
+
+Approve or decline it in the operator console:
+{{.Link}}
+{{end}}
+
+{{define "trial-requested-html"}}
+<p>{{.Company}} requests a trial of Changeport ({{.ID}}).</p>
+<table style="border-collapse:collapse;margin:0 0 16px">
+<tr><td style="padding:2px 16px 2px 0;white-space:nowrap;color:#737373">Who</td><td>{{.Email}}, {{.Role}}</td></tr>
+<tr><td style="padding:2px 16px 2px 0;white-space:nowrap;color:#737373;vertical-align:top">What for</td><td style="white-space:pre-line">{{.UseCase}}</td></tr>
+<tr><td style="padding:2px 16px 2px 0;white-space:nowrap;color:#737373">Peak throughput</td><td>{{.Throughput}}</td></tr>
+<tr><td style="padding:2px 16px 2px 0;white-space:nowrap;color:#737373">Messages kept</td><td>{{.Retention}}</td></tr>
+<tr><td style="padding:2px 16px 2px 0;white-space:nowrap;color:#737373">Start</td><td>{{.Start}}</td></tr>
+</table>
+<p><a href="{{.Link}}">Approve or decline it in the operator console</a></p>
+{{end}}

@@ -213,6 +213,13 @@ spec:
           args:
             - controller
             - -leader-elect
+          # Email to trials' contacts (internal/mail): CHANGEPORT_MAIL,
+          # CHANGEPORT_MAIL_FROM and CHANGEPORT_CONSOLE_URL, which overlays
+          # set. Without them, no email is sent.
+          envFrom:
+            - configMapRef:
+                name: changeport-mail
+                optional: true
           ports:
             - name: metrics
               containerPort: 8080

@@ -463,7 +463,11 @@ reason the requester sees. Both are audited. The approved customer is on a
 controller warns it (the `TrialEnding` condition), and at the end deletes
 the Customer, which deprovisions it as usual. Operators extend a trial or
 convert the customer on its page; the console may change nothing else of a
-Customer, which an admission policy enforces.
+Customer, which an admission policy enforces. Operators and requesters are
+emailed at each step; on kind the email goes to Mailpit
+(`kubectl -n mail port-forward svc/mailpit 8025:http`, then
+<http://localhost:8025>), and [docs/runbook.md](docs/runbook.md#email) says
+where it goes elsewhere.
 [docs/console.md](docs/console.md#trials) shows the screens.
 
 Applications on your machine connect to a customer's cluster with the

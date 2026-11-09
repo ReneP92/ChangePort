@@ -17,6 +17,7 @@ import (
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
 	"github.com/ReneP92/changeport/internal/console/api"
+	email "github.com/ReneP92/changeport/internal/mail"
 )
 
 // Trial requests (#132): a signed-in user whose organization has no Kafka
@@ -42,6 +43,37 @@ const (
 )
 
 var trialRequestIDPattern = regexp.MustCompile(`^tr-[a-km-np-z2-9]{6}$`)
+
+// Mail sends email (internal/mail).
+type Mail interface {
+	Send(ctx context.Context, template email.Template, to []string, data any) error
+}
+
+// The rough sizes of a request as emails say them, as the web app does.
+var (
+	throughputLabels = map[string]string{
+		v1alpha1.ThroughputUnder1MBps: "Under 1 MB/s", v1alpha1.Throughput1To10MBps: "1 to 10 MB/s",
+		v1alpha1.Throughput10To100MBps: "10 to 100 MB/s", v1alpha1.ThroughputOver100MBps: "Over 100 MB/s",
+	}
+	retentionLabels = map[string]string{
+		v1alpha1.RetentionUpTo1Day: "Up to a day", v1alpha1.RetentionUpTo7Days: "Up to a week",
+		v1alpha1.RetentionUpTo30Days: "Up to a month", v1alpha1.RetentionOver30Days: "Longer than a month",
+	}
+)
+
+// sendMail sends an email about a trial, whose failure the Mailer has
+// logged and audited; it never fails what the user did, which happened.
+func (s *Server) sendMail(ctx context.Context, template email.Template, to []string, data any) {
+	if len(to) == 0 {
+		return
+	}
+	_ = s.mail.Send(context.WithoutCancel(ctx), template, to, data)
+}
+
+// consoleLink is the console's address at path, for email.
+func (s *Server) consoleLink(path string) string {
+	return strings.TrimSuffix(s.config.Origins[0], "/") + path
+}
 
 func validTrialRequestID(id string) bool {
 	return trialRequestIDPattern.MatchString(id)
@@ -105,7 +137,7 @@ func (s *Server) RequestTrial(ctx context.Context, request api.RequestTrialReque
 	if refused := refuseAnotherTrialRequest(mine, now); refused != nil {
 		return refused, nil
 	}
-	email, err := s.users.VerifiedEmail(ctx, principal.UserID)
+	verified, err := s.users.VerifiedEmail(ctx, principal.UserID)
 	if errors.Is(err, ErrNoVerifiedEmail) {
 		return api.RequestTrial403JSONResponse{ForbiddenJSONResponse: api.ForbiddenJSONResponse(problem(http.StatusForbidden,
 			"Verify your email address", "Verify your primary email address in your account settings, then request a trial."))}, nil
@@ -118,7 +150,7 @@ func (s *Server) RequestTrial(ctx context.Context, request api.RequestTrialReque
 		ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{v1alpha1.ClerkUserLabel: principal.UserID}},
 		Spec: v1alpha1.TrialRequestSpec{
 			ClerkUserID:    principal.UserID,
-			Email:          email,
+			Email:          verified,
 			Company:        company,
 			Role:           role,
 			UseCase:        useCase,
@@ -155,6 +187,15 @@ func (s *Server) RequestTrial(ctx context.Context, request api.RequestTrialReque
 		return nil, err
 	}
 	s.audit(ctx, principal, trial.Name, "trial requested", "company", company)
+	start := "As soon as possible"
+	if preferredStart != "" {
+		start = preferredStart
+	}
+	s.sendMail(ctx, email.TrialRequested, s.config.OperatorEmails, email.TrialRequest{
+		ID: trial.Name, Company: company, Email: trial.Spec.Email, Role: role, UseCase: useCase,
+		Throughput: throughputLabels[trial.Spec.Throughput], Retention: retentionLabels[trial.Spec.Retention],
+		Start: start, Link: s.consoleLink("/operator/trials"),
+	})
 	return api.RequestTrial201JSONResponse(toAPITrialRequest(trial)), nil
 }
 
@@ -261,7 +302,10 @@ func (s *Server) ApproveTrialRequest(ctx context.Context, request api.ApproveTri
 	customer := &v1alpha1.Customer{Spec: v1alpha1.CustomerSpec{
 		DisplayName: trial.Spec.Company,
 		Profile:     profile,
-		Trial:       &v1alpha1.CustomerTrial{EndsAt: metav1.NewTime(time.Now().Add(trialLength).Truncate(time.Second))},
+		Trial: &v1alpha1.CustomerTrial{
+			EndsAt:  metav1.NewTime(time.Now().Add(trialLength).Truncate(time.Second)),
+			Contact: trial.Spec.Email,
+		},
 	}}
 	undo, err := s.provision(ctx, customer, func(organizationID string) error {
 		return s.organizations.AddAdmin(ctx, organizationID, trial.Spec.ClerkUserID)
@@ -285,6 +329,9 @@ func (s *Server) ApproveTrialRequest(ctx context.Context, request api.ApproveTri
 	}
 	s.audit(ctx, principal, customer.Name, "trial request approved", "trial_request", trial.Name, "requester", trial.Spec.ClerkUserID,
 		"profile", profile, "customer_organization", customer.Spec.ClerkOrganizationID, "trial_ends_at", customer.Spec.Trial.EndsAt.UTC())
+	s.sendMail(ctx, email.TrialApproved, []string{trial.Spec.Email}, email.TrialDecision{
+		Company: trial.Spec.Company, Link: s.consoleLink("/"), EndsAt: email.FormatTime(customer.Spec.Trial.EndsAt.Time),
+	})
 	return api.ApproveTrialRequest200JSONResponse(toAPITrialRequest(trial)), nil
 }
 
@@ -324,6 +371,10 @@ func (s *Server) DeclineTrialRequest(ctx context.Context, request api.DeclineTri
 		return nil, err
 	}
 	s.audit(ctx, principal, trial.Name, "trial request declined", "requester", trial.Spec.ClerkUserID, "reason", reason)
+	s.sendMail(ctx, email.TrialDeclined, []string{trial.Spec.Email}, email.TrialDecision{
+		Company: trial.Spec.Company, Reason: reason,
+		AskAgain: trial.Status.DecidedAt.Add(declineWait).UTC().Format("2 January 2006"),
+	})
 	return api.DeclineTrialRequest200JSONResponse(toAPITrialRequest(trial)), nil
 }
 
@@ -414,6 +465,7 @@ func (s *Server) ChangeTrial(ctx context.Context, request api.ChangeTrialRequest
 			p.Field = ptr.To("endsAt")
 			return api.ChangeTrial400JSONResponse{BadRequestJSONResponse: api.BadRequestJSONResponse(p)}, nil
 		}
+		// The contact stays; the end moves.
 		trial = &v1alpha1.CustomerTrial{EndsAt: metav1.NewTime(body.EndsAt.Truncate(time.Second))}
 	case api.Convert:
 	default:
@@ -434,6 +486,9 @@ func (s *Server) ChangeTrial(ctx context.Context, request api.ChangeTrialRequest
 	case customer.Spec.Trial == nil:
 		return api.ChangeTrial409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(problem(http.StatusConflict,
 			"Not on a trial", fmt.Sprintf("Customer %s is not on a trial.", customer.Name)))}, nil
+	}
+	if trial != nil {
+		trial.Contact = customer.Spec.Trial.Contact
 	}
 	if err := s.customers.SetTrial(ctx, customer, trial); errors.Is(err, ErrCustomerChanged) {
 		return api.ChangeTrial409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(problem(http.StatusConflict,

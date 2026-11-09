@@ -23,6 +23,30 @@ test.afterAll(async () => {
   }
 });
 
+/**
+ * The subjects of the email Mailpit on kind keeps for address
+ * (deploy/overlays/kind/mailpit.yaml), read through the API server's service
+ * proxy, newest first, and their texts.
+ */
+function mailTo(address: string): { subjects: string[]; texts: () => string[] } {
+  const proxy = "/api/v1/namespaces/mail/services/mailpit:http/proxy/api/v1";
+  const found = JSON.parse(
+    kubectl(["get", "--raw", `${proxy}/search?query=${encodeURIComponent(`to:"${address}"`)}`]),
+  ) as { messages: { ID: string; Subject: string }[] };
+  return {
+    subjects: found.messages.map((message) => message.Subject),
+    texts: () =>
+      found.messages.map(
+        (message) =>
+          (
+            JSON.parse(kubectl(["get", "--raw", `${proxy}/message/${message.ID}`])) as {
+              Text: string;
+            }
+          ).Text,
+      ),
+  };
+}
+
 /** Fills in and sends the trial request form for company. */
 async function requestTrial(page: Page, company: string): Promise<void> {
   const main = page.getByRole("main");
@@ -96,6 +120,10 @@ test("a visitor signs up, requests a trial, an operator approves, and the visito
   visitors.push(visitor?.id ?? "");
 
   await requestTrial(page, company);
+  // The operators hear of it.
+  await expect
+    .poll(() => mailTo("operators@changeport.test").subjects, { timeout: 20_000 })
+    .toContain(`New trial request from ${company}`);
 
   // The operator approves it on the dev profile.
   const operator = await openRequest(browser, company);
@@ -111,6 +139,9 @@ test("a visitor signs up, requests a trial, an operator approves, and the visito
   await expect(decided.getByText(/^Approved/).first()).toBeVisible();
   const customerLink = decided.getByRole("link", { name: /^c-/ });
   await expect(customerLink).toBeVisible();
+  await expect
+    .poll(() => mailTo(email).subjects, { timeout: 20_000 })
+    .toContain("Your Changeport trial is approved");
 
   // The visitor's page moves on by itself, into their new organization,
   // and their cluster is on a 14-day trial.
@@ -186,12 +217,18 @@ test("a declined visitor sees the reason", async ({ page, browser }) => {
   await expect(main.getByText(reason)).toBeVisible();
   await expect(main.getByText(/You may ask again from/)).toBeVisible();
   await expect(main.getByRole("button", { name: "Request a trial" })).toHaveCount(0);
+  // The email says so too, with the reason.
+  await expect
+    .poll(() => mailTo(email).subjects, { timeout: 20_000 })
+    .toContain("Your Changeport trial request");
+  expect(mailTo(email).texts().join("\n")).toContain(reason);
 });
 
 test("a trial that ends deprovisions its customer", async () => {
   // Deprovisioning on kind takes about a minute.
   test.setTimeout(4 * 60_000);
   const id = `${fixtures.run}-x`;
+  const contact = testEmail(fixtures.run, "expiring");
   const endsAt = new Date(Date.now() + 20_000).toISOString().replace(/\.\d+Z$/, "Z");
   kubectl(
     ["apply", "--server-side", "--field-manager=changeport-e2e", "-f", "-"],
@@ -199,7 +236,7 @@ test("a trial that ends deprovisions its customer", async () => {
       apiVersion: "changeport.io/v1alpha1",
       kind: "Customer",
       metadata: { name: id },
-      spec: { displayName: `E2E ${fixtures.run} X`, profile: "dev", trial: { endsAt } },
+      spec: { displayName: `E2E ${fixtures.run} X`, profile: "dev", trial: { endsAt, contact } },
     }),
   );
   const get = (output: string) =>
@@ -211,4 +248,9 @@ test("a trial that ends deprovisions its customer", async () => {
   await expect.poll(trialReason, { timeout: 20_000 }).toBe("TrialEnding");
   await expect.poll(trialReason, { timeout: 60_000 }).toBe("TrialEnded");
   await expect.poll(() => get("name"), { timeout: 3 * 60_000, intervals: [2_000] }).toBe("");
+  // Its contact was warned, then told it ended.
+  expect(mailTo(contact).subjects).toEqual([
+    "Your Changeport trial has ended",
+    "Your Changeport trial ends in 3 days",
+  ]);
 });

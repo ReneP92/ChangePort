@@ -1,0 +1,18 @@
+{{define "trial-declined-subject"}}Your Changeport trial request{{end}}
+
+{{define "trial-declined-text"}}
+Hello,
+
+Thank you for your interest in Changeport. We cannot offer {{.Company}} a trial at the moment:
+
+{{.Reason}}
+
+You may request a trial again from {{.AskAgain}}.
+{{end}}
+
+{{define "trial-declined-html"}}
+<p>Hello,</p>
+<p>Thank you for your interest in Changeport. We cannot offer {{.Company}} a trial at the moment:</p>
+<blockquote style="margin:0 0 16px;padding-left:12px;border-left:2px solid #e5e5e5;white-space:pre-line">{{.Reason}}</blockquote>
+<p>You may request a trial again from {{.AskAgain}}.</p>
+{{end}}

@@ -1,0 +1,19 @@
+{{define "trial-ending-subject"}}Your Changeport trial ends in 3 days{{end}}
+
+{{define "trial-ending-text"}}
+Hello,
+
+Your trial for {{.Company}} ends on {{.EndsAt}}. Your Kafka cluster and its data are then deleted.
+
+To keep your cluster, reply to this email before then.
+
+Open your console:
+{{.Link}}
+{{end}}
+
+{{define "trial-ending-html"}}
+<p>Hello,</p>
+<p>Your trial for {{.Company}} ends on {{.EndsAt}}. Your Kafka cluster and its data are then deleted.</p>
+<p>To keep your cluster, reply to this email before then.</p>
+<p><a href="{{.Link}}">Open your console</a></p>
+{{end}}
