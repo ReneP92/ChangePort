@@ -63,11 +63,15 @@ what is visible on load, and misses what waits to rise into view.
 ## Colors and copy
 
 The site leads with real-time data streams and their observability, and
-mentions Kafka as what runs under the hood. Its palette is warm paper
-(`--color-paper`) and charcoal (`--color-ink`) with stone greys and the
-brand's teal as the one accent, kept apart from the navy and blues of other
-streaming products. Small grey text on paper is `stone-600` or darker:
-`stone-500` falls short of 4.5:1 there.
+mentions Kafka as what runs under the hood. Its palette is crisp white with
+near-black text (`--color-ink`), neutral greys, `--color-mist` to set every
+other section apart, and the brand's teal as the one accent, kept apart from
+the navy and blues of other streaming products. Small grey text is
+`neutral-600` or darker wherever it may sit on mist.
+
+On wide screens the hero fills the screen under the announcement and the
+header, so the next section starts exactly at the fold, whatever the
+screen's height, instead of peeking in cut off.
 
 ## Screenshots
 

@@ -17,6 +17,21 @@ test("the hero's diagram draws white nodes on thin lines", async ({ page }) => {
   expect(styles).toEqual({ node: "rgb(255, 255, 255)", line: "none" });
 });
 
+test("the hero fills the first screen, so the next section starts at the fold", async ({
+  page,
+}) => {
+  test.skip((page.viewportSize()?.width ?? 0) < 1024, "Phones scroll on through the hero");
+  for (const height of [800, 900, 1000]) {
+    await page.setViewportSize({ width: page.viewportSize()?.width ?? 0, height });
+    await page.goto("/");
+    const bottom = await page
+      .locator("main > section")
+      .first()
+      .evaluate((hero) => hero.getBoundingClientRect().bottom);
+    expect(Math.round(bottom)).toBe(height);
+  }
+});
+
 test("the lag simulator alerts past a minute behind, and resolves", async ({ page }) => {
   await page.goto("/#lag");
   const simulator = page.locator("[data-lag]");

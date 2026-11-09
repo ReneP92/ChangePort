@@ -3,15 +3,15 @@
 @import "@fontsource-variable/geist-mono";
 
 /*
- * Warm paper and charcoal, with the brand's teal (docs/brand) as the one
- * accent, in Geist.
+ * Crisp white, near-black and neutral greys, with the brand's teal
+ * (docs/brand) as the one accent, in Geist. Mist sets sections apart.
  */
 @theme {
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
-  --color-paper: #f6f4ef;
-  --color-ink: #1c1a17;
-  --color-ink-soft: #33302b;
+  --color-mist: #fafafa;
+  --color-ink: #111111;
+  --color-ink-soft: #2a2a2a;
   --color-teal: #0d9488;
   --color-teal-dark: #0f766e;
 }
@@ -39,8 +39,8 @@ html {
 }
 
 [data-header][data-scrolled] {
-  border-color: var(--color-stone-200);
-  box-shadow: 0 1px 12px rgb(28 26 23 / 0.06);
+  border-color: var(--color-neutral-200);
+  box-shadow: 0 1px 12px rgb(17 17 17 / 0.06);
 }
 
 /*
@@ -80,7 +80,7 @@ html {
 
 .flow .line {
   fill: none;
-  stroke: var(--color-stone-300);
+  stroke: var(--color-neutral-300);
   stroke-width: 1.5;
 }
 
@@ -91,8 +91,8 @@ html {
 
 .flow .node {
   fill: white;
-  stroke: var(--color-stone-200);
-  filter: drop-shadow(0 1px 2px rgb(28 26 23 / 0.06));
+  stroke: var(--color-neutral-200);
+  filter: drop-shadow(0 1px 2px rgb(17 17 17 / 0.06));
 }
 
 .flow .node-behind {
@@ -108,7 +108,7 @@ html {
 
 .flow .meta {
   font-size: 12px;
-  fill: var(--color-stone-500);
+  fill: var(--color-neutral-500);
 }
 
 .flow .meta-behind {
@@ -146,7 +146,7 @@ html {
 
 /* The lag simulator's log: unread messages fill from the newest end. */
 .log-cell {
-  background: var(--color-stone-200);
+  background: var(--color-neutral-200);
   transition: background-color 300ms;
 }
 
@@ -246,8 +246,8 @@ html {
   width: 0.5rem;
   height: 0.5rem;
   margin-right: 0.25rem;
-  border-right: 2px solid var(--color-stone-500);
-  border-bottom: 2px solid var(--color-stone-500);
+  border-right: 2px solid var(--color-neutral-500);
+  border-bottom: 2px solid var(--color-neutral-500);
   transform: translateY(-25%) rotate(45deg);
   transition: transform 200ms;
 }

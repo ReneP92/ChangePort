@@ -208,13 +208,13 @@ function lag(): void {
     } else if (share > 1) {
       setStatus("Catching up", "bg-teal-50 text-teal-700");
     } else {
-      setStatus("Holding steady", "bg-stone-100 text-stone-700");
+      setStatus("Holding steady", "bg-neutral-100 text-neutral-700");
     }
     const firing = behind > threshold;
     if (firing) {
       alert.className =
         "mt-4 flex min-h-[4.5rem] items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm";
-      alert.innerHTML = `<svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 size-4 shrink-0 fill-red-600"><path d="M10 2 1 18h18L10 2zm-1 6h2v5H9V8zm0 6h2v2H9v-2z"/></svg><span><span class="block font-medium text-ink">Consumer group search-indexer is ${duration(behind, true)} behind on orders</span><span class="text-stone-600">Its oldest unread message is older than your threshold of 1 minute.</span></span>`;
+      alert.innerHTML = `<svg aria-hidden="true" viewBox="0 0 20 20" class="mt-0.5 size-4 shrink-0 fill-red-600"><path d="M10 2 1 18h18L10 2zm-1 6h2v5H9V8zm0 6h2v2H9v-2z"/></svg><span><span class="block font-medium text-ink">Consumer group search-indexer is ${duration(behind, true)} behind on orders</span><span class="text-neutral-600">Its oldest unread message is older than your threshold of 1 minute.</span></span>`;
     } else if (alerting) {
       alert.className =
         "mt-4 flex min-h-[4.5rem] items-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800";
@@ -350,7 +350,7 @@ function cdc(): void {
   const statuses = ["paid", "shipped"];
   const message = (operation: string, text: string) => {
     const item = document.createElement("li");
-    item.className = "cdc-new rounded-lg bg-white/5 px-3 py-2 text-stone-200";
+    item.className = "cdc-new rounded-lg bg-white/5 px-3 py-2 text-neutral-200";
     const op = document.createElement("span");
     op.className = "text-teal-300";
     op.textContent = operation;
