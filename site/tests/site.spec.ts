@@ -54,6 +54,20 @@ test("the lag simulator alerts past a minute behind, and resolves", async ({ pag
   await expect(simulator.locator("[data-lag-messages]")).toHaveText("0");
 });
 
+test("each change in the table lands in the topic, and nothing moves", async ({ page }) => {
+  await page.goto("/#how");
+  const demo = page.locator("[data-cdc]");
+  const newest = demo.locator("[data-cdc-messages] > li").first();
+  await expect(newest).toContainText("41");
+  const height = (await demo.boundingBox())?.height;
+  // The next change lands as the newest message, at the next offset.
+  await expect(newest).toContainText("42", { timeout: 8_000 });
+  await expect(newest).toContainText(/^(insert|update) 104\d /);
+  await expect(demo.locator("[data-cdc-messages] > li")).toHaveCount(4);
+  await expect(demo.locator("[data-cdc-rows] > div")).toHaveCount(4);
+  expect((await demo.boundingBox())?.height).toBe(height);
+});
+
 test("the console tour switches screens by click and arrow keys", async ({ page }) => {
   await page.goto("/#tour");
   const tour = page.locator("[data-tour]");
@@ -117,6 +131,9 @@ test.describe("with reduced motion", () => {
       .locator("svg[data-flow]")
       .evaluateAll((svgs) => svgs.every((svg) => (svg as SVGSVGElement).animationsPaused()));
     expect(paused).toBe(true);
+    await page.locator("[data-cdc]").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(3_500);
+    await expect(page.locator("[data-cdc-messages] > li").first()).toContainText("41");
     await page.locator("#faq").scrollIntoViewIfNeeded();
     await expect(page.getByRole("heading", { name: "Good to know" })).toHaveCSS("opacity", "1");
   });

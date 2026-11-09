@@ -335,65 +335,164 @@ function tour(): void {
   );
 }
 
-/** The change data capture demo: orders change, and messages follow. */
+/**
+ * The change data capture demo. Every few seconds an order arrives or moves
+ * along: its row lights up where it changed, a dot carries the change down
+ * the pipe, and it lands as the newest message in the topic, with the next
+ * offset. A new row or message grows in as the oldest shrinks away, so the
+ * cards never change size.
+ */
 function cdc(): void {
   const root = document.querySelector<HTMLElement>("[data-cdc]");
   const rows = root?.querySelector<HTMLElement>("[data-cdc-rows]");
   const messages = root?.querySelector<HTMLElement>("[data-cdc-messages]");
-  if (!root || !rows || !messages || reducedMotion) {
+  const pipe = root?.querySelector<HTMLElement>("[data-cdc-pipe]");
+  const packet = root?.querySelector<HTMLElement>("[data-cdc-packet]");
+  if (!root || !rows || !messages || !pipe || !packet || reducedMotion) {
     return;
   }
+
+  // Rows and messages are 2.75rem tall, so that each pair lines up.
+  const height = "2.75rem";
+  const ease = "cubic-bezier(0.2, 0.7, 0.2, 1)";
+  const lit = "rgb(45 212 191 / 0.18)";
+  const unlit = "rgb(45 212 191 / 0)";
+  const statuses = ["new", "paid", "shipped"];
   let nextID = 1044;
+  let offset = 42;
   let running = false;
   watch(root, (on) => (running = on));
 
-  const statuses = ["paid", "shipped"];
-  const message = (operation: string, text: string) => {
-    const item = document.createElement("li");
-    item.className = "cdc-new rounded-lg bg-white/5 px-3 py-2 text-neutral-200";
-    const op = document.createElement("span");
-    op.className = "text-teal-300";
-    op.textContent = operation;
-    item.append(op, ` ${text}`);
-    messages.prepend(item);
-    messages.lastElementChild?.remove();
-  };
-  const cell = (text: string, right = false) => {
-    const td = document.createElement("td");
-    td.className = right ? "px-4 py-2 text-right" : "px-4 py-2";
-    td.textContent = text;
-    return td;
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const span = (text: string, className = "") => {
+    const element = document.createElement("span");
+    element.className = className;
+    element.textContent = text;
+    return element;
   };
 
-  setInterval(() => {
-    if (!running) {
-      return;
+  /** Puts item first in list, growing it in as the last one shrinks away. */
+  const push = (list: HTMLElement, item: HTMLElement) => {
+    list.prepend(item);
+    item.animate({ height: ["0", height], opacity: [0, 1] }, { duration: 500, easing: ease });
+    const last = list.lastElementChild;
+    if (last instanceof HTMLElement && list.children.length > 4) {
+      last
+        .animate({ height: [height, "0"], opacity: [1, 0] }, { duration: 500, easing: ease })
+        .finished.then(
+          () => last.remove(),
+          () => last.remove(),
+        );
     }
-    // Every other step a new order arrives; otherwise one moves along.
-    const pending = Array.from(rows.querySelectorAll("tr")).find(
-      (row) => row.children[1]?.textContent !== "shipped",
+  };
+
+  /** Changes the table, and returns the message the change becomes. */
+  const change = (): [string, string] => {
+    const pending = Array.from(rows.children).find(
+      (row) => row.querySelector("[data-status]")?.textContent !== "shipped",
     );
-    if (pending && Math.random() < 0.5) {
-      const status = pending.children[1];
-      const next = statuses[statuses.indexOf(status?.textContent ?? "") + 1] ?? "shipped";
-      if (status) {
-        status.textContent = next;
+    if (pending && Math.random() < 0.6) {
+      const cell = pending.querySelector<HTMLElement>("[data-status]");
+      const status = statuses[statuses.indexOf(cell?.textContent ?? "") + 1] ?? "shipped";
+      if (cell) {
+        cell.textContent = status;
+        cell.animate(
+          { color: ["#5eead4", "#5eead4", "#e5e5e5"], translate: ["0 3px", "0 0", "0 0"] },
+          { duration: 1800, easing: ease },
+        );
       }
-      pending.classList.remove("cdc-new");
-      void pending.getBoundingClientRect();
-      pending.classList.add("cdc-new");
-      message("update", `${pending.children[0]?.textContent ?? ""}: ${next}`);
-      return;
+      pending.firstElementChild?.animate(
+        { backgroundColor: [lit, unlit] },
+        { duration: 1800, easing: "ease-out" },
+      );
+      return ["update", `${pending.querySelector("span")?.textContent ?? ""} ${status}`];
     }
     const id = String(nextID++);
     const total = (8 + Math.random() * 120).toFixed(2);
-    const row = document.createElement("tr");
-    row.className = "cdc-new border-t border-white/5";
-    row.append(cell(id), cell("new"), cell(total, true));
-    rows.prepend(row);
-    rows.lastElementChild?.remove();
-    message("insert", `${id}: ${total}`);
-  }, 2200);
+    const row = document.createElement("div");
+    row.className = "h-11 overflow-hidden";
+    const cells = document.createElement("div");
+    cells.className =
+      "grid h-11 grid-cols-[3.25rem_1fr_auto] items-center gap-x-3 border-t border-white/5 px-4";
+    const status = span("new");
+    status.dataset.status = "";
+    cells.append(span(id), status, span(total, "text-right"));
+    row.append(cells);
+    push(rows, row);
+    cells.animate({ backgroundColor: [lit, unlit] }, { duration: 1800, easing: "ease-out" });
+    return ["insert", `${id} ${total}`];
+  };
+
+  // On wide screens the pipe runs across, level with the newest row and
+  // message; on phones it runs down between the cards.
+  const wide = matchMedia("(min-width: 640px)");
+  const laneOf = () => rows.getBoundingClientRect().top - pipe.getBoundingClientRect().top + 22;
+  const placeLane = () => {
+    pipe.style.setProperty("--lane", wide.matches ? `${String(laneOf())}px` : "50%");
+  };
+  placeLane();
+  new ResizeObserver(placeLane).observe(root);
+
+  /** Carries a dot down the pipe, from the table to the topic. */
+  const carry = async () => {
+    const { width, height: tall } = pipe.getBoundingClientRect();
+    const half = packet.offsetWidth / 2;
+    const [from, to] = wide.matches
+      ? [
+          [8 - half, laneOf() - half],
+          [width - 8 - half, laneOf() - half],
+        ]
+      : [
+          [width / 2 - half, 0],
+          [width / 2 - half, tall - 2 * half],
+        ];
+    await packet.animate(
+      {
+        transform: [
+          `translate(${String(from[0])}px, ${String(from[1])}px) scale(0.6)`,
+          `translate(${String(to[0])}px, ${String(to[1])}px) scale(1)`,
+        ],
+        opacity: [0, 1, 1, 0],
+        offset: [0, 0.15, 0.85, 1],
+      },
+      { duration: 650, easing: "cubic-bezier(0.45, 0, 0.25, 1)" },
+    ).finished;
+  };
+
+  const land = ([operation, text]: [string, string]) => {
+    const item = document.createElement("li");
+    item.className = "h-11 overflow-hidden px-3 py-1";
+    const pill = document.createElement("div");
+    pill.className =
+      "flex h-9 items-center justify-between gap-3 rounded-lg bg-white/5 px-3 text-neutral-200";
+    const label = span("", "truncate");
+    label.append(span(operation, "text-teal-300"), ` ${text}`);
+    pill.append(label, span(String(offset++), "text-neutral-400 tabular-nums"));
+    item.append(pill);
+    push(messages, item);
+    pill.animate(
+      {
+        backgroundColor: ["rgb(45 212 191 / 0.22)", "rgb(255 255 255 / 0.05)"],
+        boxShadow: ["inset 0 0 0 1px rgb(94 234 212 / 0.5)", "inset 0 0 0 1px rgb(94 234 212 / 0)"],
+      },
+      { duration: 1800, easing: "ease-out" },
+    );
+  };
+
+  const loop = async () => {
+    for (;;) {
+      if (running && !document.hidden) {
+        const message = change();
+        await sleep(300);
+        await carry();
+        land(message);
+        await sleep(2000);
+      } else {
+        await sleep(400);
+      }
+    }
+  };
+  void loop();
 }
 
 header();

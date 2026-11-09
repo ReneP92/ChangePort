@@ -465,99 +465,148 @@
             </ol>
           </div>
 
-          <div
+          <figure
             data-reveal
             data-cdc
-            class="grid gap-3 rounded-3xl bg-ink p-4 text-white shadow-[0_24px_70px_-28px_rgb(17_17_17/0.5)] sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center sm:p-6"
+            class="rounded-3xl bg-ink p-4 text-white shadow-[0_24px_70px_-28px_rgb(17_17_17/0.5)] sm:p-6"
           >
-            <div class="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-              <div class="border-b border-white/10 px-4 py-3">
-                <span class="block text-xs text-neutral-400">Postgres table</span>
-                <span class="font-mono text-sm">public.orders</span>
-              </div>
-              <table class="w-full font-mono text-xs">
-                <thead class="text-neutral-400">
-                  <tr>
-                    <th scope="col" class="px-4 py-2 text-left font-normal">id</th>
-                    <th scope="col" class="px-4 py-2 text-left font-normal">status</th>
-                    <th scope="col" class="px-4 py-2 text-right font-normal">total</th>
-                  </tr>
-                </thead>
-                <tbody data-cdc-rows class="text-neutral-200">
-                  <tr class="border-t border-white/5">
-                    <td class="px-4 py-2">1043</td>
-                    <td class="px-4 py-2">paid</td>
-                    <td class="px-4 py-2 text-right">42.50</td>
-                  </tr>
-                  <tr class="border-t border-white/5">
-                    <td class="px-4 py-2">1042</td>
-                    <td class="px-4 py-2">shipped</td>
-                    <td class="px-4 py-2 text-right">18.00</td>
-                  </tr>
-                  <tr class="border-t border-white/5">
-                    <td class="px-4 py-2">1041</td>
-                    <td class="px-4 py-2">shipped</td>
-                    <td class="px-4 py-2 text-right">96.20</td>
-                  </tr>
-                  <tr class="border-t border-white/5">
-                    <td class="px-4 py-2">1040</td>
-                    <td class="px-4 py-2">shipped</td>
-                    <td class="px-4 py-2 text-right">12.75</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div aria-hidden="true" class="flex justify-center">
-              <svg viewBox="0 0 64 24" class="h-6 w-16 rotate-90 sm:rotate-0">
-                <path
-                  d="M2 12 H 56"
-                  class="stroke-teal-300"
-                  stroke-width="2"
-                  stroke-dasharray="2 6"
-                  stroke-linecap="round"
-                  fill="none"
+            <figcaption class="sr-only">
+              The Postgres table public.orders beside its topic, shop.public.orders: every insert
+              and update of a row becomes a message in the topic as it happens.
+            </figcaption>
+            <div
+              aria-hidden="true"
+              class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_3.5rem_minmax(0,1fr)] sm:gap-0"
+            >
+              <div class="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                <div class="border-b border-white/10 px-4 py-3">
+                  <span class="block text-xs text-neutral-400">Postgres table</span>
+                  <span class="font-mono text-sm">public.orders</span>
+                </div>
+                <div
+                  class="grid grid-cols-[3.25rem_1fr_auto] gap-x-3 px-4 py-2 font-mono text-xs text-neutral-400"
                 >
-                  <animate
-                    attributeName="stroke-dashoffset"
-                    from="16"
-                    to="0"
-                    dur="0.8s"
-                    repeatCount="indefinite"
-                  />
-                </path>
-                <path
-                  d="M52 6 L 60 12 L 52 18"
-                  class="stroke-teal-300"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  fill="none"
-                />
-              </svg>
-            </div>
-
-            <div class="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-              <div class="border-b border-white/10 px-4 py-3">
-                <span class="block text-xs text-neutral-400">Topic</span>
-                <span class="font-mono text-sm">shop.public.orders</span>
+                  <span>id</span><span>status</span><span class="text-right">total</span>
+                </div>
+                <div data-cdc-rows class="h-44 overflow-hidden font-mono text-xs text-neutral-200">
+                  <div class="h-11 overflow-hidden">
+                    <div
+                      class="grid h-11 grid-cols-[3.25rem_1fr_auto] items-center gap-x-3 border-t border-white/5 px-4"
+                    >
+                      <span>1043</span><span data-status>paid</span
+                      ><span class="text-right">42.50</span>
+                    </div>
+                  </div>
+                  <div class="h-11 overflow-hidden">
+                    <div
+                      class="grid h-11 grid-cols-[3.25rem_1fr_auto] items-center gap-x-3 border-t border-white/5 px-4"
+                    >
+                      <span>1042</span><span data-status>shipped</span
+                      ><span class="text-right">18.00</span>
+                    </div>
+                  </div>
+                  <div class="h-11 overflow-hidden">
+                    <div
+                      class="grid h-11 grid-cols-[3.25rem_1fr_auto] items-center gap-x-3 border-t border-white/5 px-4"
+                    >
+                      <span>1041</span><span data-status>shipped</span
+                      ><span class="text-right">96.20</span>
+                    </div>
+                  </div>
+                  <div class="h-11 overflow-hidden">
+                    <div
+                      class="grid h-11 grid-cols-[3.25rem_1fr_auto] items-center gap-x-3 border-t border-white/5 px-4"
+                    >
+                      <span>1040</span><span data-status>shipped</span
+                      ><span class="text-right">12.75</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <ul data-cdc-messages class="space-y-2 p-3 font-mono text-xs">
-                <li class="rounded-lg bg-white/5 px-3 py-2 text-neutral-200">
-                  <span class="text-teal-300">update</span> 1043: paid
-                </li>
-                <li class="rounded-lg bg-white/5 px-3 py-2 text-neutral-200">
-                  <span class="text-teal-300">insert</span> 1043: 42.50
-                </li>
-                <li class="rounded-lg bg-white/5 px-3 py-2 text-neutral-200">
-                  <span class="text-teal-300">update</span> 1042: shipped
-                </li>
-                <li class="rounded-lg bg-white/5 px-3 py-2 text-neutral-200">
-                  <span class="text-teal-300">update</span> 1041: shipped
-                </li>
-              </ul>
+
+              <div
+                data-cdc-pipe
+                style="--lane: 50%"
+                class="relative flex h-12 items-center justify-center sm:block sm:h-auto"
+              >
+                <!-- On wide screens, level with the newest row and message (--lane). -->
+                <div
+                  class="h-full border-l border-dashed border-teal-300/35 sm:absolute sm:inset-x-2 sm:top-(--lane) sm:h-0 sm:border-t sm:border-l-0"
+                ></div>
+                <svg
+                  viewBox="0 0 12 12"
+                  class="absolute bottom-0 left-1/2 size-3 -translate-x-1/2 rotate-90 text-teal-300/60 sm:top-(--lane) sm:right-0 sm:bottom-auto sm:left-auto sm:translate-x-0 sm:-translate-y-1/2 sm:rotate-0"
+                >
+                  <path
+                    d="M3 2 L 8 6 L 3 10"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.75"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+                <span
+                  data-cdc-packet
+                  class="absolute top-0 left-0 size-2.5 rounded-full bg-teal-300 opacity-0 shadow-[0_0_14px_4px_rgb(94_234_212/0.55)]"
+                ></span>
+              </div>
+
+              <div class="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+                <div class="border-b border-white/10 px-4 py-3">
+                  <span class="block text-xs text-neutral-400">Topic</span>
+                  <span class="font-mono text-sm">shop.public.orders</span>
+                </div>
+                <div
+                  class="flex justify-between gap-3 px-6 py-2 font-mono text-xs text-neutral-400"
+                >
+                  <span>change</span><span>offset</span>
+                </div>
+                <ul data-cdc-messages class="h-44 overflow-hidden font-mono text-xs">
+                  <li class="h-11 overflow-hidden px-3 py-1">
+                    <div
+                      class="flex h-9 items-center justify-between gap-3 rounded-lg bg-white/5 px-3 text-neutral-200"
+                    >
+                      <span class="truncate"
+                        ><span class="text-teal-300">update</span> 1043 paid</span
+                      >
+                      <span class="text-neutral-400 tabular-nums">41</span>
+                    </div>
+                  </li>
+                  <li class="h-11 overflow-hidden px-3 py-1">
+                    <div
+                      class="flex h-9 items-center justify-between gap-3 rounded-lg bg-white/5 px-3 text-neutral-200"
+                    >
+                      <span class="truncate"
+                        ><span class="text-teal-300">insert</span> 1043 42.50</span
+                      >
+                      <span class="text-neutral-400 tabular-nums">40</span>
+                    </div>
+                  </li>
+                  <li class="h-11 overflow-hidden px-3 py-1">
+                    <div
+                      class="flex h-9 items-center justify-between gap-3 rounded-lg bg-white/5 px-3 text-neutral-200"
+                    >
+                      <span class="truncate"
+                        ><span class="text-teal-300">update</span> 1042 shipped</span
+                      >
+                      <span class="text-neutral-400 tabular-nums">39</span>
+                    </div>
+                  </li>
+                  <li class="h-11 overflow-hidden px-3 py-1">
+                    <div
+                      class="flex h-9 items-center justify-between gap-3 rounded-lg bg-white/5 px-3 text-neutral-200"
+                    >
+                      <span class="truncate"
+                        ><span class="text-teal-300">update</span> 1041 shipped</span
+                      >
+                      <span class="text-neutral-400 tabular-nums">38</span>
+                    </div>
+                  </li>
+                </ul>
+              </div>
             </div>
-          </div>
+          </figure>
         </div>
         <div class="mx-auto max-w-6xl px-6 pb-24">
           <div data-reveal class="grid gap-8 border-t border-neutral-200 pt-10 md:grid-cols-2">
