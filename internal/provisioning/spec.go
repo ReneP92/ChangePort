@@ -451,7 +451,8 @@ var DevHAProfile = Profile{
 // three zones, replication factor 3, min.insync.replicas 2. It is sized for
 // the design partner's volume (peak under 1 MB/s, under 50 GB a day) on
 // dedicated 2-vCPU, 8 GiB nodes (m7g.large), leaving room on each node for
-// the entity operator and the Kafka agent next to the broker. The Connect
+// the entity operator (1Gi and 100m in all, fixed in the template) and the
+// Kafka agent next to the broker. The Connect
 // worker and the schema registry of customers with CDC sources share one more
 // such node.
 var ProductionProfile = Profile{

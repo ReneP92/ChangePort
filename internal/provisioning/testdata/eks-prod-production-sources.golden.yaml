@@ -277,8 +277,25 @@ spec:
         affinity:
           nodeAffinity: {requiredDuringSchedulingIgnoredDuringExecution: {nodeSelectorTerms: [{matchExpressions: [{key: changeport.io/tenant, operator: In, values: ["acme"]}]}]}}
         tolerations: [{key: changeport.io/tenant, operator: Equal, value: "acme", effect: NoSchedule}]
-    topicOperator: {}
-    userOperator: {}
+    # Without a memory limit each operator's JVM takes a fifth of the node's
+    # memory as its heap ceiling, so the pair could grow past the room the
+    # broker leaves on its node (and on kind, where every node reports the
+    # whole Docker VM, past the VM). With 512Mi the heap stops at about
+    # 100 MiB; idle, each operator uses about 40 MiB of heap and 250 MiB in all.
+    topicOperator:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 512Mi
+        limits:
+          memory: 512Mi
+    userOperator:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 512Mi
+        limits:
+          memory: 512Mi
 ---
 # The customer's user. It manages topics, consumer groups and transactions,
 # but cannot change the cluster's configuration, which the platform owns.

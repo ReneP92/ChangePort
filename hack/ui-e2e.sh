@@ -11,6 +11,14 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 ensure_kind
 ensure_kubectl
 cluster_exists || die "kind cluster $CLUSTER_NAME does not exist; run just dev-up first"
+# The tests provision customers of their own, four Kafka clusters and a
+# Connect worker at once. Next to the demo customer they outgrow a 12 GB
+# Docker: the cluster ran short of memory until its API answered slowly
+# enough to fail steps at random, or the kernel killed pods.
+docker_memory_gib=$(($(docker info --format '{{.MemTotal}}') / 1024 / 1024 / 1024))
+if ((docker_memory_gib < 15)) && kubectl get customer demo >/dev/null 2>&1; then
+  die "Docker has ${docker_memory_gib} GiB of memory, too little for these tests next to the demo customer: remove it with kubectl --context $KUBE_CONTEXT delete customer demo (just dev-up brings it back), or give Docker 16 GB"
+fi
 config=$(console_config_status)
 [[ $config == 200 ]] ||
   die "the console at http://localhost:$CONSOLE_PORT is not configured (GET /api/config answered $config); fill in .env and run just console-config"
