@@ -117,7 +117,8 @@ stay_awake() {
 }
 
 # Runs a command that reaches a container registry up to three times, as
-# registries fail now and then (such as quay.io answering 503 for a layer).
+# registries fail now and then (such as quay.io answering 503 for a layer, or
+# registry.k8s.io 429 when it rate limits the runner).
 retry_registry() {
   local attempt
   for attempt in 1 2 3; do
@@ -513,6 +514,10 @@ prune_node_images() {
 ensure_cloud_provider_kind() {
   [[ $(docker inspect -f '{{.State.Running}}' "$CLOUD_PROVIDER_KIND_CONTAINER" 2>/dev/null) == true ]] && return
   docker rm -f "$CLOUD_PROVIDER_KIND_CONTAINER" >/dev/null 2>&1 || true
+  if ! docker image inspect "$CLOUD_PROVIDER_KIND_IMAGE" >/dev/null 2>&1; then
+    log "Pulling $CLOUD_PROVIDER_KIND_IMAGE"
+    retry_registry docker pull --quiet "$CLOUD_PROVIDER_KIND_IMAGE" >/dev/null
+  fi
   log "Starting cloud-provider-kind"
   docker run -d --name "$CLOUD_PROVIDER_KIND_CONTAINER" --restart unless-stopped --network kind \
     -v /var/run/docker.sock:/var/run/docker.sock "$CLOUD_PROVIDER_KIND_IMAGE" --gateway-channel disabled >/dev/null
