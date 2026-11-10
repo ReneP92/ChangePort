@@ -117,7 +117,9 @@ template by the provisioning service. Locally this runs on
 
 Prerequisites: Docker (give it at least 12 GB of memory: with 8 GB the full
 end-to-end suite runs out, as the e2e customers' brokers come and go next to
-the demo's), Go 1.26 and [just](https://just.systems/) (`brew install just`),
+the demo's; the console's signed-in tests and screenshots, `just ui-e2e` and
+`just ui-screenshots`, need 16 GB next to the demo customer, or 12 GB without
+it), Go 1.26 and [just](https://just.systems/) (`brew install just`),
 which runs every task here; `just` alone lists them.
 The scripts download a pinned, checksum-verified kubectl into `bin/` and the
 upstream install files pinned in `deploy/upstream-files.txt` (Strimzi,
