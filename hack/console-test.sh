@@ -38,6 +38,6 @@ log "The console's API refuses requests without a valid session ($refused; confi
 
 log "Opening the console in Chromium"
 hack/bun.sh install --frozen-lockfile >/dev/null
-hack/bun.sh x playwright install ${CI:+--with-deps} chromium >/dev/null
+hack/playwright-install.sh
 PLAYWRIGHT_BASE_URL=$url hack/bun.sh run e2e
 log "Console test passed"
