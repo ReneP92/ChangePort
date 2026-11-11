@@ -663,59 +663,6 @@ paths:
           $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/NotConfigured"
-  /api/customer/sample:
-    get:
-      operationId: getSampleApp
-      summary: Whether the customer's sample app runs, for the guided first ten minutes
-      responses:
-        "200":
-          description: The sample app
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SampleApp"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/NotConfigured"
-    put:
-      operationId: startSampleApp
-      summary: Starts the sample app for an hour, or keeps it running for another hour from now; for organization admins
-      responses:
-        "200":
-          description: The sample app
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SampleApp"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          $ref: "#/components/responses/Conflict"
-        "503":
-          $ref: "#/components/responses/NotConfigured"
-    delete:
-      operationId: stopSampleApp
-      summary: Stops the sample app, deleting its topic; for organization admins
-      responses:
-        "204":
-          description: The sample app stops
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "503":
-          $ref: "#/components/responses/NotConfigured"
   /api/customer/alert-settings:
     get:
       operationId: getAlertSettings
@@ -1451,27 +1398,6 @@ components:
         source:
           type: string
           description: The Postgres source that writes the topic, which keeps it from being deleted
-        sample:
-          type: boolean
-          description: Whether the sample app writes the topic, which keeps it from being deleted while the sample runs
-    SampleApp:
-      type: object
-      required: [state, topic, group]
-      properties:
-        state:
-          type: string
-          enum: [stopped, starting, running]
-          description: Whether the sample app runs; it starts within a few minutes
-        stopsAt:
-          type: string
-          format: date-time
-          description: When the sample app stops on its own; absent while stopped
-        topic:
-          type: string
-          description: The topic the sample app writes orders to
-        group:
-          type: string
-          description: The consumer group that reads them
     TopicPolicy:
       type: object
       required: [maxNameLength, reservedPrefixes, partitions, replicationFactor, retentionPresets, defaultRetentionMs, cleanupPolicies]

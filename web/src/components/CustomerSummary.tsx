@@ -45,31 +45,43 @@ export function CustomerSummary({ customer }: { customer: Customer }) {
             <p className="text-sm text-muted-foreground">Known once the cluster is created.</p>
           )}
         </section>
-        {!customer.ready && (
-          <p className="text-sm text-muted-foreground" role="status">
-            {customer.status.message}
-          </p>
-        )}
-        {/* Every part shows from the start, also before the controller
-            has said anything about it. */}
-        <ul aria-label="Progress" className="flex flex-col gap-2">
-          {parts.map((part) => {
-            const condition = customer.conditions.find((c) => c.type === part);
-            const ready = condition?.ready ?? false;
-            return (
-              <li key={part} className="flex items-baseline gap-3 text-sm">
-                <span aria-hidden className={ready ? "text-primary" : "text-muted-foreground"}>
-                  {ready ? "●" : "○"}
-                </span>
-                <span className="w-44 shrink-0">{conditionNames[part]}</span>
-                <span className="truncate text-muted-foreground">
-                  {ready ? "Done" : (condition?.message ?? "Not started")}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+        <ClusterProgress customer={customer} />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * How far a customer's cluster is, part by part, with what it waits for
+ * until it is ready.
+ */
+export function ClusterProgress({ customer }: { customer: Customer }) {
+  return (
+    <>
+      {!customer.ready && (
+        <p className="text-sm text-muted-foreground" role="status">
+          {customer.status.message}
+        </p>
+      )}
+      {/* Every part shows from the start, also before the controller
+          has said anything about it. */}
+      <ul aria-label="Progress" className="flex flex-col gap-2">
+        {parts.map((part) => {
+          const condition = customer.conditions.find((c) => c.type === part);
+          const ready = condition?.ready ?? false;
+          return (
+            <li key={part} className="flex items-baseline gap-3 text-sm">
+              <span aria-hidden className={ready ? "text-primary" : "text-muted-foreground"}>
+                {ready ? "●" : "○"}
+              </span>
+              <span className="w-44 shrink-0">{conditionNames[part]}</span>
+              <span className="truncate text-muted-foreground">
+                {ready ? "Done" : (condition?.message ?? "Not started")}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }

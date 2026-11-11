@@ -116,10 +116,11 @@ stay_awake() {
   fi
 }
 
-# Runs a command that reaches a container registry up to three times, as
-# registries fail now and then (such as quay.io answering 503 for a layer, or
-# registry.k8s.io 429 when it rate limits the runner).
-retry_registry() {
+# Runs a command that downloads over the network up to three times, as
+# registries and mirrors fail now and then: quay.io answering 503 for a
+# layer, registry.k8s.io 429 when it rate limits the runner, or Ubuntu's
+# package mirror not resolving.
+retry_network() {
   local attempt
   for attempt in 1 2 3; do
     "$@" && return 0
@@ -328,42 +329,42 @@ build_cache_args() {
 build_kafka_image() {
   log "Building $KAFKA_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args kafka) -t "$KAFKA_IMAGE" images/kafka >/dev/null || return
+  retry_network docker buildx build --load --quiet $(build_cache_args kafka) -t "$KAFKA_IMAGE" images/kafka >/dev/null || return
   tag_content "$KAFKA_IMAGE"
 }
 
 build_connect_image() {
   log "Building $CONNECT_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args connect) -t "$CONNECT_IMAGE" images/connect >/dev/null || return
+  retry_network docker buildx build --load --quiet $(build_cache_args connect) -t "$CONNECT_IMAGE" images/connect >/dev/null || return
   tag_content "$CONNECT_IMAGE"
 }
 
 build_agent_image() {
   log "Building $AGENT_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args agent) -t "$AGENT_IMAGE" -f images/agent/Dockerfile . >/dev/null || return
+  retry_network docker buildx build --load --quiet $(build_cache_args agent) -t "$AGENT_IMAGE" -f images/agent/Dockerfile . >/dev/null || return
   tag_content "$AGENT_IMAGE"
 }
 
 build_registry_gateway_image() {
   log "Building $REGISTRY_GATEWAY_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args registry-gateway) -t "$REGISTRY_GATEWAY_IMAGE" -f images/registry-gateway/Dockerfile . >/dev/null || return
+  retry_network docker buildx build --load --quiet $(build_cache_args registry-gateway) -t "$REGISTRY_GATEWAY_IMAGE" -f images/registry-gateway/Dockerfile . >/dev/null || return
   tag_content "$REGISTRY_GATEWAY_IMAGE"
 }
 
 build_provisioner_image() {
   log "Building $PROVISIONER_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args provisioner) -t "$PROVISIONER_IMAGE" -f images/provisioner/Dockerfile . >/dev/null || return
+  retry_network docker buildx build --load --quiet $(build_cache_args provisioner) -t "$PROVISIONER_IMAGE" -f images/provisioner/Dockerfile . >/dev/null || return
   tag_content "$PROVISIONER_IMAGE"
 }
 
 build_console_image() {
   log "Building $CONSOLE_IMAGE"
   # shellcheck disable=SC2046 # the cache arguments are separate words
-  retry_registry docker buildx build --load --quiet $(build_cache_args console) -t "$CONSOLE_IMAGE" -f images/console/Dockerfile . >/dev/null || return
+  retry_network docker buildx build --load --quiet $(build_cache_args console) -t "$CONSOLE_IMAGE" -f images/console/Dockerfile . >/dev/null || return
   tag_content "$CONSOLE_IMAGE"
 }
 
@@ -437,12 +438,12 @@ ensure_kind_cluster() {
   for image in "${KIND_PRELOAD_IMAGES[@]}"; do
     docker image inspect "$image" >/dev/null 2>&1 && continue
     log "Pulling $image"
-    retry_registry docker pull --quiet "$image" >/dev/null
+    retry_network docker pull --quiet "$image" >/dev/null
   done
   for image in "${KIND_CONTROL_PLANE_IMAGES[@]}"; do
     docker image inspect "$image" >/dev/null 2>&1 && continue
     log "Pulling $image"
-    retry_registry docker pull --quiet "$image" >/dev/null
+    retry_network docker pull --quiet "$image" >/dev/null
   done
   # The workers run these pods, and the control plane, which is tainted, the
   # few that tolerate it; every node keeps its own copy of each image.
@@ -516,7 +517,7 @@ ensure_cloud_provider_kind() {
   docker rm -f "$CLOUD_PROVIDER_KIND_CONTAINER" >/dev/null 2>&1 || true
   if ! docker image inspect "$CLOUD_PROVIDER_KIND_IMAGE" >/dev/null 2>&1; then
     log "Pulling $CLOUD_PROVIDER_KIND_IMAGE"
-    retry_registry docker pull --quiet "$CLOUD_PROVIDER_KIND_IMAGE" >/dev/null
+    retry_network docker pull --quiet "$CLOUD_PROVIDER_KIND_IMAGE" >/dev/null
   fi
   log "Starting cloud-provider-kind"
   docker run -d --name "$CLOUD_PROVIDER_KIND_CONTAINER" --restart unless-stopped --network kind \

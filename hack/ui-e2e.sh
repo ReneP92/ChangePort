@@ -36,5 +36,5 @@ export PLAYWRIGHT_BASE_URL="http://localhost:$CONSOLE_PORT"
 
 stay_awake
 hack/bun.sh install --frozen-lockfile >/dev/null
-hack/bun.sh x playwright install ${CI:+--with-deps} chromium >/dev/null
+hack/playwright-install.sh
 hack/bun.sh run e2e "$@"

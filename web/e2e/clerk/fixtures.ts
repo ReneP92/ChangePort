@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createClerkClient, type ClerkClient } from "@clerk/backend";
+import type { Page } from "@playwright/test";
 
 /**
  * One run's Clerk users and organizations, and the customers of those
@@ -136,4 +137,22 @@ export function testTrialRequests(): {
     }[];
   };
   return requests.items.filter((r) => testEmailPattern.test(r.spec.email));
+}
+
+/**
+ * Marks the welcome page done for the run's customers in the page's
+ * browser, as for a returning customer, so that their users land on the
+ * overview: other tests may or may not have given customer A a topic yet,
+ * which decides where a newcomer lands (web/src/lib/onboarding.ts).
+ */
+export async function skipWelcome(page: Page): Promise<void> {
+  const { customers } = readFixtures();
+  await page.addInitScript(
+    (ids) => {
+      for (const id of ids) {
+        localStorage.setItem(`changeport.onboarding.${id}`, "done");
+      }
+    },
+    [customers.a.id, customers.b.id],
+  );
 }

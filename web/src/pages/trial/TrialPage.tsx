@@ -1,9 +1,10 @@
-import { OrganizationSwitcher, useClerk } from "@clerk/react";
+import { useClerk } from "@clerk/react";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
 import { errorText, type TrialRequest } from "@/api/client";
 import { useMe, useMyTrialRequests, useRequestTrial } from "@/api/queries";
 import { Notice } from "@/components/Notice";
+import { Button } from "@/components/ui/button";
 import { askAgainFrom } from "@/lib/trials";
 import { TrialForm } from "@/pages/trial/TrialForm";
 import { DeclinedRequest, PendingRequest } from "@/pages/trial/TrialStatus";
@@ -120,9 +121,17 @@ function OpenCluster({ request }: { request: TrialRequest }) {
     <main className="mx-auto flex max-w-xl flex-col gap-4 p-8">
       <h1 className="text-2xl font-semibold tracking-tight">Your trial is approved</h1>
       <p className="text-muted-foreground">
-        Your cluster belongs to the organization {request.company}. Switch to it to open it.
+        Your cluster belongs to the organization {request.company}, which could not be opened.
       </p>
-      <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/" />
+      <div>
+        <Button
+          onClick={() => {
+            window.location.assign("/");
+          }}
+        >
+          Open your cluster
+        </Button>
+      </div>
     </main>
   );
 }

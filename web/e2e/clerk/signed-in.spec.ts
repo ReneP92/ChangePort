@@ -1,11 +1,10 @@
 import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
-import { readFixtures, type UserFixture } from "./fixtures";
+import { readFixtures, skipWelcome, type UserFixture } from "./fixtures";
 
 // Signed in as this run's test users (clerk.setup.ts), against the console on
 // kind with a real Clerk development instance. Customers are looked for in the
-// page's main content: the organization switcher in the header shows the
-// names of organizations too.
+// page's main content: the header names the user's organization too.
 
 // Playwright loads this file before the setup project has run, so the
 // fixtures are read in the tests.
@@ -19,6 +18,7 @@ test.beforeAll(() => {
 
 /** Signs in as user through a Clerk sign-in ticket, and opens the console. */
 async function signIn(page: Page, user: UserFixture): Promise<void> {
+  await skipWelcome(page);
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: user.email });
   await page.goto("/");
@@ -57,6 +57,7 @@ async function call(request: APIRequestContext, path: string, token: string) {
 }
 
 test("a customer signs in with the form and sees their cluster", async ({ page }) => {
+  await skipWelcome(page);
   await setupClerkTestingToken({ page });
   await page.goto("/");
   await page.getByLabel(/email address/i).fill(fixtures.users.formA.email);

@@ -1,18 +1,12 @@
-import {
-  ClerkFailed,
-  ClerkLoading,
-  OrganizationSwitcher,
-  Show,
-  SignIn,
-  SignUp,
-  UserButton,
-} from "@clerk/react";
+import { ClerkFailed, ClerkLoading, Show, SignIn, SignUp, UserButton } from "@clerk/react";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router";
 import { ApiProvider } from "@/api/ApiProvider";
 import { useAlerts, useMe, useTrialRequests } from "@/api/queries";
 import { Notice } from "@/components/Notice";
+import { OrganizationButton } from "@/components/OrganizationButton";
 import { Home } from "@/pages/Home";
 import { AlertsPage } from "@/pages/alerts/AlertsPage";
+import { Welcome } from "@/pages/welcome/Welcome";
 import { ConsumerGroupPage } from "@/pages/consumer-groups/ConsumerGroupPage";
 import { OperatorCustomer } from "@/pages/operator/OperatorCustomer";
 import { OperatorCustomers } from "@/pages/operator/OperatorCustomers";
@@ -90,17 +84,14 @@ function SignedIn() {
           <CustomerNav />
           <OperatorNav />
           <div className="ml-auto flex min-w-0 items-center gap-3">
-            <OrganizationSwitcher
-              hidePersonal
-              afterSelectOrganizationUrl="/"
-              afterCreateOrganizationUrl="/"
-            />
+            <OrganizationButton />
             <UserButton />
           </div>
         </div>
       </header>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/welcome" element={<Welcome />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/topics/:name" element={<TopicPage />} />
         <Route path="/consumer-groups/:group" element={<ConsumerGroupPage />} />

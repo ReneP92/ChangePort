@@ -150,15 +150,20 @@ test("a visitor signs up, requests a trial, an operator approves, and the visito
     .poll(() => mailTo(email).subjects, { timeout: 20_000 })
     .toContain("Your Changeport trial is approved");
 
-  // The visitor's page moves on by itself, into their new organization,
-  // and their cluster is on a 14-day trial.
-  await expect(page.getByRole("main").getByText(company).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page).toHaveURL(/\/$/);
+  // The visitor's page moves on by itself, into their new organization's
+  // welcome page, which waits for their cluster, on a 14-day trial.
+  await expect(page.getByRole("heading", { name: "Welcome to Changeport" })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page).toHaveURL(/\/welcome$/);
+  await expect(page.getByRole("main").getByText(company).first()).toBeVisible();
   const trialNotice = page.getByRole("status").filter({ hasText: /Trial: / });
   await expect(trialNotice).toContainText("14 days left");
-  await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible({
+  await expect(page.getByRole("main").getByText("Your cluster is ready.")).toBeVisible({
     timeout: 4 * 60_000,
   });
+  await page.getByRole("button", { name: "Skip to the overview" }).click();
+  await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible();
 
   // The operator extends the trial by a month, which the visitor sees, and
   // then converts the customer, whose cluster stays.

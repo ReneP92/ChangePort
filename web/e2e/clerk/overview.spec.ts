@@ -57,16 +57,18 @@ test("an admin downloads client.properties and produces with it", async ({ page 
   await expect(row.getByText("Tiered")).toBeVisible();
 });
 
-// Organizations are customers, which operators create. The setup's users
-// get Clerk's default for new users, as invited customers do, so this checks
-// the instance's setting: "Allow user-created organizations" is off.
-test("an admin cannot create organizations", async ({ page }) => {
+// A user belongs to one organization, their company's: the header names
+// it and opens its settings, with no other organization to switch to or
+// create.
+test("the header names the user's one organization", async ({ page }) => {
   await openOverview(page, fixtures.users.adminA);
-  await page.locator(".cl-organizationSwitcherTrigger").click();
-  const switcher = page.locator(".cl-organizationSwitcherPopoverCard");
-  await expect(switcher).toBeVisible();
-  await expect(switcher.getByText(`E2E ${fixtures.run} A`)).toBeVisible();
-  await expect(switcher.getByText("Create organization")).toHaveCount(0);
+  const organization = page
+    .getByRole("banner")
+    .getByRole("button", { name: `E2E ${fixtures.run} A` });
+  await expect(organization).toBeVisible();
+  await expect(page.locator(".cl-organizationSwitcherTrigger")).toHaveCount(0);
+  await organization.click();
+  await expect(page.locator(".cl-organizationProfile-root")).toBeVisible({ timeout: 20_000 });
 });
 
 test("a member sees how to connect, but not the credentials", async ({ page }) => {

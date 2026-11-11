@@ -250,27 +250,6 @@ func (e ReceiverKind) Valid() bool {
 	}
 }
 
-// Defines values for SampleAppState.
-const (
-	SampleAppStateRunning  SampleAppState = "running"
-	SampleAppStateStarting SampleAppState = "starting"
-	SampleAppStateStopped  SampleAppState = "stopped"
-)
-
-// Valid indicates whether the value is a known member of the SampleAppState enum.
-func (e SampleAppState) Valid() bool {
-	switch e {
-	case SampleAppStateRunning:
-		return true
-	case SampleAppStateStarting:
-		return true
-	case SampleAppStateStopped:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SetupSQLRequestStep.
 const (
 	Role   SetupSQLRequestStep = "role"
@@ -976,24 +955,6 @@ type RetentionPreset struct {
 	Ms    int64  `json:"ms"`
 }
 
-// SampleApp defines model for SampleApp.
-type SampleApp struct {
-	// Group The consumer group that reads them
-	Group string `json:"group"`
-
-	// State Whether the sample app runs; it starts within a few minutes
-	State SampleAppState `json:"state"`
-
-	// StopsAt When the sample app stops on its own; absent while stopped
-	StopsAt *time.Time `json:"stopsAt,omitempty"`
-
-	// Topic The topic the sample app writes orders to
-	Topic string `json:"topic"`
-}
-
-// SampleAppState Whether the sample app runs; it starts within a few minutes
-type SampleAppState string
-
 // SecondsThreshold defines model for SecondsThreshold.
 type SecondsThreshold struct {
 	Enabled bool  `json:"enabled"`
@@ -1306,9 +1267,6 @@ type Topic struct {
 
 	// RetentionMs How long the topic keeps messages; absent for no limit
 	RetentionMs *int64 `json:"retentionMs,omitempty"`
-
-	// Sample Whether the sample app writes the topic, which keeps it from being deleted while the sample runs
-	Sample *bool `json:"sample,omitempty"`
 
 	// Source The Postgres source that writes the topic, which keeps it from being deleted
 	Source *string `json:"source,omitempty"`
@@ -1651,15 +1609,6 @@ type ServerInterface interface {
 	// GetHealth The brokers and the partitions' health
 	// (GET /api/customer/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
-	// StopSampleApp Stops the sample app, deleting its topic; for organization admins
-	// (DELETE /api/customer/sample)
-	StopSampleApp(w http.ResponseWriter, r *http.Request)
-	// GetSampleApp Whether the customer's sample app runs, for the guided first ten minutes
-	// (GET /api/customer/sample)
-	GetSampleApp(w http.ResponseWriter, r *http.Request)
-	// StartSampleApp Starts the sample app for an hour, or keeps it running for another hour from now; for organization admins
-	// (PUT /api/customer/sample)
-	StartSampleApp(w http.ResponseWriter, r *http.Request)
 	// GetSourceOptions What a new Postgres CDC source may be, and where Changeport connects from
 	// (GET /api/customer/source-options)
 	GetSourceOptions(w http.ResponseWriter, r *http.Request)
@@ -2054,48 +2003,6 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// StopSampleApp operation middleware
-func (siw *ServerInterfaceWrapper) StopSampleApp(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.StopSampleApp(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetSampleApp operation middleware
-func (siw *ServerInterfaceWrapper) GetSampleApp(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetSampleApp(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// StartSampleApp operation middleware
-func (siw *ServerInterfaceWrapper) StartSampleApp(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.StartSampleApp(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2984,9 +2891,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/customer/sources/{source}/catalog", wrapper.RequestSourceCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/alerts", wrapper.ListAlerts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/alerts/stream", wrapper.StreamAlerts)
-	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/sample", wrapper.StopSampleApp)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/sample", wrapper.GetSampleApp)
-	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/sample", wrapper.StartSampleApp)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/alert-settings", wrapper.GetAlertSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/alert-settings", wrapper.ChangeAlertSettings)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.RemoveAlertReceiver)
@@ -4196,245 +4100,6 @@ func (response GetHealth404JSONResponse) VisitGetHealthResponse(w http.ResponseW
 type GetHealth503JSONResponse struct{ NotConfiguredJSONResponse }
 
 func (response GetHealth503JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(503)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type StopSampleAppRequestObject struct {
-}
-
-type StopSampleAppResponseObject interface {
-	VisitStopSampleAppResponse(w http.ResponseWriter) error
-}
-
-type StopSampleApp204Response struct {
-}
-
-func (response StopSampleApp204Response) VisitStopSampleAppResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type StopSampleApp401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response StopSampleApp401JSONResponse) VisitStopSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type StopSampleApp403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response StopSampleApp403JSONResponse) VisitStopSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type StopSampleApp404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response StopSampleApp404JSONResponse) VisitStopSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type StopSampleApp503JSONResponse struct{ NotConfiguredJSONResponse }
-
-func (response StopSampleApp503JSONResponse) VisitStopSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(503)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetSampleAppRequestObject struct {
-}
-
-type GetSampleAppResponseObject interface {
-	VisitGetSampleAppResponse(w http.ResponseWriter) error
-}
-
-type GetSampleApp200JSONResponse SampleApp
-
-func (response GetSampleApp200JSONResponse) VisitGetSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetSampleApp401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response GetSampleApp401JSONResponse) VisitGetSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetSampleApp403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response GetSampleApp403JSONResponse) VisitGetSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetSampleApp404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response GetSampleApp404JSONResponse) VisitGetSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetSampleApp503JSONResponse struct{ NotConfiguredJSONResponse }
-
-func (response GetSampleApp503JSONResponse) VisitGetSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(503)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type StartSampleAppRequestObject struct {
-}
-
-type StartSampleAppResponseObject interface {
-	VisitStartSampleAppResponse(w http.ResponseWriter) error
-}
-
-type StartSampleApp200JSONResponse SampleApp
-
-func (response StartSampleApp200JSONResponse) VisitStartSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type StartSampleApp401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response StartSampleApp401JSONResponse) VisitStartSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type StartSampleApp403JSONResponse struct{ ForbiddenJSONResponse }
-
-func (response StartSampleApp403JSONResponse) VisitStartSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(403)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type StartSampleApp404JSONResponse struct{ NotFoundJSONResponse }
-
-func (response StartSampleApp404JSONResponse) VisitStartSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(404)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type StartSampleApp409JSONResponse struct{ ConflictJSONResponse }
-
-func (response StartSampleApp409JSONResponse) VisitStartSampleAppResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(409)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type StartSampleApp503JSONResponse struct{ NotConfiguredJSONResponse }
-
-func (response StartSampleApp503JSONResponse) VisitStartSampleAppResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -7440,15 +7105,6 @@ type StrictServerInterface interface {
 	// GetHealth The brokers and the partitions' health
 	// (GET /api/customer/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
-	// StopSampleApp Stops the sample app, deleting its topic; for organization admins
-	// (DELETE /api/customer/sample)
-	StopSampleApp(ctx context.Context, request StopSampleAppRequestObject) (StopSampleAppResponseObject, error)
-	// GetSampleApp Whether the customer's sample app runs, for the guided first ten minutes
-	// (GET /api/customer/sample)
-	GetSampleApp(ctx context.Context, request GetSampleAppRequestObject) (GetSampleAppResponseObject, error)
-	// StartSampleApp Starts the sample app for an hour, or keeps it running for another hour from now; for organization admins
-	// (PUT /api/customer/sample)
-	StartSampleApp(ctx context.Context, request StartSampleAppRequestObject) (StartSampleAppResponseObject, error)
 	// GetSourceOptions What a new Postgres CDC source may be, and where Changeport connects from
 	// (GET /api/customer/source-options)
 	GetSourceOptions(ctx context.Context, request GetSourceOptionsRequestObject) (GetSourceOptionsResponseObject, error)
@@ -7941,78 +7597,6 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// StopSampleApp operation middleware
-func (sh *strictHandler) StopSampleApp(w http.ResponseWriter, r *http.Request) {
-	var request StopSampleAppRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.StopSampleApp(ctx, request.(StopSampleAppRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "StopSampleApp")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(StopSampleAppResponseObject); ok {
-		if err := validResponse.VisitStopSampleAppResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetSampleApp operation middleware
-func (sh *strictHandler) GetSampleApp(w http.ResponseWriter, r *http.Request) {
-	var request GetSampleAppRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetSampleApp(ctx, request.(GetSampleAppRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetSampleApp")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetSampleAppResponseObject); ok {
-		if err := validResponse.VisitGetSampleAppResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// StartSampleApp operation middleware
-func (sh *strictHandler) StartSampleApp(w http.ResponseWriter, r *http.Request) {
-	var request StartSampleAppRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.StartSampleApp(ctx, request.(StartSampleAppRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "StartSampleApp")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(StartSampleAppResponseObject); ok {
-		if err := validResponse.VisitStartSampleAppResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

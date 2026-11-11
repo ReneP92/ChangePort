@@ -76,7 +76,7 @@ web-check: web-install
 # Run the web app's Playwright tests in Chromium against a production build
 [group('Web (web/, run by the pinned Bun in bin/)')]
 web-e2e: web-install
-    hack/bun.sh x playwright install {{ if env("CI", "") != "" { "--with-deps" } else { "" } }} chromium
+    hack/playwright-install.sh
     hack/bun.sh run e2e
 
 # Install the landing site's dependencies exactly as site/bun.lock pins them
@@ -99,7 +99,7 @@ site-build: site-install
 site-check: site-build
     BUN_DIR=site hack/bun.sh run typecheck
     BUN_DIR=site hack/bun.sh run format:check
-    BUN_DIR=site hack/bun.sh x playwright install {{ if env("CI", "") != "" { "--with-deps" } else { "" } }} chromium
+    BUN_DIR=site hack/playwright-install.sh
     BUN_DIR=site hack/bun.sh run test
     BUN_DIR=site hack/bun.sh run lighthouse
 

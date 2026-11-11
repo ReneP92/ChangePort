@@ -2,7 +2,7 @@
 # Customer into its dedicated Kafka cluster from the one template, in the
 # changeport namespace, and the admission policies that protect customers
 # with deletion protection. The CRDs of Customers, PostgresSources,
-# AlertSettings, TrialRequests and SampleApps are written by just generate from
+# AlertSettings and TrialRequests are written by just generate from
 # api/v1alpha1. Overlays choose the platform (-platform); on EKS, the
 # controller will also need an IAM role through EKS Pod Identity for the
 # brokers' Pod Identity associations (#58).
@@ -16,6 +16,5 @@ resources:
   - changeport.io_postgressources.yaml
   - changeport.io_alertsettings.yaml
   - changeport.io_trialrequests.yaml
-  - changeport.io_sampleapps.yaml
   - provisioner.yaml
   - deletion-protection.yaml

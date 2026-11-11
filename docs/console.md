@@ -21,47 +21,41 @@ Signing in, through Clerk.
 
 ![Sign-in](screenshots/01-sign-in-desktop.png)
 
-A new customer's cluster getting ready, part by part.
-
-![A customer's cluster getting ready](screenshots/02-customer-starting-desktop.png)
-
 ### Getting started
 
-A new cluster's overview starts with a guide through the first ten minutes,
-in three steps, each ticked off as it is done.
+A new customer lands on a welcome page instead of the overview, while their
+cluster is still being created or has no topics yet. It takes them from
+their cluster to their own first message in four steps, and **Skip to the
+overview** is always there. Once they finish or skip it, this browser
+remembers, and the Connection card's "Open the getting started guide"
+brings it back.
 
-![The getting started guide](screenshots/47-get-started-desktop.png)
+1. **Your cluster.** What a topic, a producer and a consumer group are, in
+   plain words, and the cluster's progress, part by part, while it is being
+   created.
 
-**Watch Kafka at work.** An admin starts a sample app: a coffee shop whose
-checkout writes an order event to the topic `sample.orders` a few times a
-second, keyed by order ID, and whose email service reads each one as the
-consumer group `sample.order-emails`. It runs in the customer's cluster for
-an hour, or another hour from when an admin keeps it running, and stopping
-it deletes its topic with its orders. While it runs, the data flow map,
-throughput, the topic's messages and the group's lag show it like any app
-of the customer's, and its topic is marked Sample and cannot be deleted on
-its own. Members see the steps, and are asked to have an admin start it.
+   ![The welcome page while the cluster is created](screenshots/02-customer-starting-desktop.png)
 
-![The sample app running](screenshots/48-get-started-sample-desktop.png)
+2. **A topic**, created in the usual form with its guardrails, or one the
+   customer has.
 
-**Create a topic for your data**, in the usual dialog with its guardrails.
+   ![Creating a topic](screenshots/47-welcome-topic-desktop.png)
 
-**Connect your app.** The guide's download saves `client.properties` under
-the name the examples read it by. Then come the variables the examples
-read, with the bootstrap address, the user and the topic filled in and the
-password read from `client.properties`, and the examples of the
-[connection guide](connecting.md) in Java, Python, Go, Node.js and on the
-command line, which `hack/connecting-guide-test.sh` runs against kind. The
-step is done once data arrives on one of the customer's own topics, a
-Postgres source's included, a consumer group of theirs reads one, or one
-holds data, so that an app gone quiet still counts, whatever the client's
-language.
+3. **Connect.** The download saves `client.properties` under the name the
+   examples read it by. Then come the variables the examples read, with the
+   bootstrap address, the user and the topic filled in and the password
+   read from `client.properties`, and the examples of the
+   [connection guide](connecting.md) in Python, Go and JavaScript (Node.js),
+   which `hack/connecting-guide-test.sh` runs against kind.
 
-![Connecting an app](screenshots/49-get-started-connect-desktop.png)
+   ![Connecting an app](screenshots/48-welcome-connect-desktop.png)
 
-**Hide** puts the guide away in this browser, and the Connection card's
-"Show the getting started guide" brings it back. It also stays away once
-the customer has a topic and an app of their own, and no sample runs.
+4. **First message.** The customer runs their example, and the page shows
+   their message as it arrives, from the topic's live messages, then the
+   consumer group that read it back. Members, who cannot read messages,
+   see it arrive by the topic's traffic.
+
+   ![The first message arriving](screenshots/49-welcome-first-message-desktop.png)
 
 The overview of a ready cluster: its active alerts; how to connect, with
 `client.properties` for admins; the brokers' health; throughput, with what

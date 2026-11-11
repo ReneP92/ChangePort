@@ -1,3 +1,5 @@
+import type { TopicPolicy } from "@/api/client";
+
 const byteUnits = ["B", "KB", "MB", "GB", "TB", "PB"];
 
 /** Formats a number of bytes for people, in powers of 1,000: 1.5 MB. */
@@ -122,4 +124,11 @@ export function durationTicks(max: number): number[] {
 /** A time of day in the viewer's locale, such as "10:42 AM". */
 export function formatTime(at: string): string {
   return new Date(at).toLocaleTimeString(undefined, { timeStyle: "short" });
+}
+
+/** How many copies of every partition the cluster's plan keeps, for people. */
+export function formatCopies(policy: TopicPolicy): string {
+  const count =
+    policy.replicationFactor === 1 ? "one copy" : `${String(policy.replicationFactor)} copies`;
+  return `Your cluster's plan keeps ${count} of every partition.`;
 }

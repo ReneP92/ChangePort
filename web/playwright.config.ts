@@ -43,6 +43,13 @@ export default defineConfig({
   forbidOnly: ci,
   // Flaky tests get fixed, not retried.
   retries: 0,
+  // The signed-in tests share one kind cluster, and each starts Kafka
+  // clients of its own, a JVM apiece, next to the customers' clusters they
+  // provision: at half of a 12-core machine, 6 at once, the cluster ran out
+  // of CPU (CPU pressure over 80% in the Docker VM), and its API and
+  // provisioning slowed past the tests' timeouts. CI's runners run 2 per
+  // shard, Playwright's default for their cores.
+  workers: ci ? undefined : 3,
   reporter: ci ? [["list"], ["html", { open: "never" }]] : "list",
   use: { baseURL, trace: "retain-on-failure" },
   projects,
