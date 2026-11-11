@@ -1,4 +1,5 @@
 import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
+import { isClerkAPIResponseError } from "@clerk/backend/errors";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { clerkClient, kubectl, readFixtures, testEmail } from "./fixtures";
 import { expectNoSidewaysScroll } from "./helpers";
@@ -19,7 +20,13 @@ test.afterAll(async () => {
   const clerkAPI = clerkClient();
   for (const id of visitors) {
     kubectl(["delete", "trialrequests", "-l", `changeport.io/clerk-user=${id}`, "--wait=false"]);
-    await clerkAPI.users.deleteUser(id);
+    // A visitor already gone is as good as deleted: once, the signed-up
+    // visitor was gone before this ran, though nothing here deletes it.
+    await clerkAPI.users.deleteUser(id).catch((error: unknown) => {
+      if (!isClerkAPIResponseError(error) || error.status !== 404) {
+        throw error;
+      }
+    });
   }
 });
 
