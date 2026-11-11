@@ -32,11 +32,6 @@ const (
 	ExternalPort = 9094
 	// InternalPort is the port of the internal mTLS listener.
 	InternalPort = 9093
-	// ScramPort is the port of the internal listener for customer
-	// applications the platform runs inside the cluster, such as the sample
-	// app: they connect with a username and password like customers do over
-	// the public listener, so they show as the customer's own clients.
-	ScramPort = 9095
 	// AdminUser is the KafkaUser customers connect as; its Secret holds the
 	// SCRAM password.
 	AdminUser = "admin"
@@ -73,24 +68,6 @@ const (
 	// Connect worker, the schema registry, their users and NetworkPolicies
 	// (docs/cdc.md).
 	PartCDC = "cdc"
-	// PartSample is the part of customers running the console's sample app:
-	// its user, its topic and its Deployment.
-	PartSample = "sample"
-	// SampleApp names the sample app's Deployment.
-	SampleApp = "changeport-sample"
-	// SampleUser is the KafkaUser the sample app connects as, on the
-	// ScramPort listener. It may only write and read SampleTopic, in
-	// consumer groups whose names start with SampleGroupPrefix.
-	SampleUser = "sample"
-	// SampleTopic is the topic the sample app writes order events to.
-	SampleTopic = "sample.orders"
-	// SampleGroupPrefix starts the names of the sample app's consumer groups.
-	SampleGroupPrefix = "sample."
-	// SampleGroup is the consumer group that reads the sample's orders.
-	SampleGroup = SampleGroupPrefix + "order-emails"
-	// SampleTopicRetentionMs keeps the sample's orders for an hour, as long
-	// as the sample runs.
-	SampleTopicRetentionMs = 3600000
 	// ConnectCluster names the KafkaConnect of a customer's sources.
 	ConnectCluster = "changeport-connect"
 	// ConnectUser is the KafkaUser of the Connect worker on the internal mTLS
@@ -155,9 +132,6 @@ type Spec struct {
 	// Sources are the customer's Postgres CDC sources, by name. While there
 	// are any, the template renders what they run on.
 	Sources []Source
-	// Sample runs the console's sample app, on a platform with a Changeport
-	// Kafka image, which holds it.
-	Sample bool
 	// KubernetesAPI are the addresses of the Kubernetes API server, as
 	// host:port, which the Connect worker reads its certificates from
 	// through Strimzi's config provider. The provisioner looks them up when
@@ -342,10 +316,6 @@ func (s Spec) Validate() error {
 // Postgres CDC sources: when they have any, on a platform with a Connect
 // image.
 func (s Spec) CDC() bool { return len(s.Sources) > 0 && s.Platform.ConnectImage != "" }
-
-// SampleApp reports whether the template renders the sample app: when the
-// customer runs it, on a platform with the Changeport Kafka image.
-func (s Spec) SampleApp() bool { return s.Sample && s.Platform.KafkaImage != "" }
 
 // RegistryHost is the public name customers reach their schema registry at,
 // through the registry gateway.

@@ -5,10 +5,7 @@
 #   /opt/kafka/plugins/tiered-storage/ (the classPath of the template's
 #   tieredStorage), and
 # - Strimzi's metrics reporter built with KIP-714 client telemetry, in place of
-#   the release Strimzi ships in /opt/kafka/libs/, and
-# - the console's sample app (sample/SampleShop.java) in
-#   /opt/changeport/sample-shop.jar, which runs on the Kafka client in
-#   /opt/kafka/libs/.
+#   the release Strimzi ships in /opt/kafka/libs/.
 # Build it with just kafka-image.
 
 # Strimzi 1.3.0 with Kafka 4.3.1 (internal/provisioning.KafkaVersion),
@@ -26,8 +23,6 @@ ARG TIERED_STORAGE_COMMIT=7574b41af141726cdd7aa27cdb66572201a6e09d
 # clients_* series. No release has it yet (the latest, 0.4.0, is what Strimzi
 # 1.3.0 ships), so this commit is swapped for the first release that does.
 ARG METRICS_REPORTER_COMMIT=1f2ca5d07ef35c75c33fa1b9c65d6aaadf807b85
-
-FROM ${STRIMZI_KAFKA_IMAGE} AS strimzi
 
 # Java bytecode is the same on every architecture, so the plugin is built once
 # on the build machine's own platform.
@@ -81,14 +76,7 @@ RUN mkdir /libs \
          cp -- "$jar" "/libs/$(echo "$name" | sed -E 's/^[a-z0-9.]*\.([a-z])/\1/')"; \
        done
 
-# The sample app, compiled against the Kafka client it runs on.
-FROM --platform=$BUILDPLATFORM eclipse-temurin:21-jdk@sha256:23cc5734ff46e776f51ce66eb9ee08444fd47caabec0a95b7eb6e94be2d3696d AS sample
-COPY --from=strimzi /opt/kafka/libs/kafka-clients-*.jar /libs/
-COPY sample/SampleShop.java /src/
-RUN javac --release 21 -Xlint:all -Werror -cp '/libs/*' -d /classes /src/SampleShop.java \
-    && jar --create --file /sample-shop.jar -C /classes .
-
-FROM strimzi
+FROM ${STRIMZI_KAFKA_IMAGE}
 ARG TIERED_STORAGE_COMMIT
 ARG METRICS_REPORTER_COMMIT
 LABEL org.opencontainers.image.title="Changeport Kafka" \
@@ -97,7 +85,6 @@ LABEL org.opencontainers.image.title="Changeport Kafka" \
       io.changeport.metrics-reporter.commit="${METRICS_REPORTER_COMMIT}"
 COPY --from=tiered-storage /plugin/ /opt/kafka/plugins/tiered-storage/
 COPY --from=metrics-reporter /libs/ /opt/kafka/libs/
-COPY --from=sample /sample-shop.jar /opt/changeport/sample-shop.jar
 # The reporter Strimzi ships and the Prometheus client library it brings go,
 # and the build fails if /opt/kafka/libs/ still holds any library twice, as
 # when a new Strimzi image ships other versions than these. This is the one

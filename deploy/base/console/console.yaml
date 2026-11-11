@@ -26,11 +26,6 @@ rules:
   - apiGroups: [changeport.io]
     resources: [alertsettings]
     verbs: [get, create, update]
-  # Customers' sample apps, which the guided first ten minutes start, in
-  # their namespaces.
-  - apiGroups: [changeport.io]
-    resources: [sampleapps]
-    verbs: [get, create, update, delete]
   # Trial requests, which users make and operators decide through the
   # status. A request never changes once made; the console deletes only the
   # later of two a user made at once.

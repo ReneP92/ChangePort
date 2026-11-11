@@ -15,7 +15,6 @@ import (
 	"github.com/twmb/franz-go/pkg/kmsg"
 
 	"github.com/ReneP92/changeport/internal/events"
-	"github.com/ReneP92/changeport/internal/provisioning"
 	"github.com/ReneP92/changeport/internal/topics"
 )
 
@@ -167,10 +166,8 @@ func TakeSnapshot(ctx context.Context, admin ChangesAdmin) (Snapshot, error) {
 			return snapshot, fmt.Errorf("describe ACLs: %w", result.Err)
 		}
 		for _, acl := range result.Described {
-			// The platform's users are no change of the customer's: those
-			// that authenticate with certificates, and the console's sample
-			// app, whose user comes and goes with it.
-			if strings.HasPrefix(acl.Principal, "User:CN=") || acl.Principal == "User:"+provisioning.SampleUser {
+			// Only the platform's users authenticate with certificates.
+			if strings.HasPrefix(acl.Principal, "User:CN=") {
 				continue
 			}
 			snapshot.ACLs[describeACL(acl)] = true

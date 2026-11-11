@@ -130,22 +130,6 @@ spec:
         tls: true
         authentication:
           type: tls
-      # Customer applications the platform runs inside the cluster, such as
-      # the console's sample app. They connect with a username and password,
-      # like customers over the internet, so they show as the customer's own
-      # clients: the platform's connect with certificates. Only they may
-      # reach it, so the customer's password works nowhere else in the
-      # cluster.
-      - name: scram
-        port: 9095
-        type: internal
-        tls: true
-        authentication:
-          type: scram-sha-512
-        networkPolicyPeers:
-          - podSelector:
-              matchLabels:
-                app.kubernetes.io/name: changeport-sample
       # Customers, over the internet.
       - name: external
         port: 9094

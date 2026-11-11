@@ -420,25 +420,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/customer/sample": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Whether the customer's sample app runs, for the guided first ten minutes */
-        get: operations["getSampleApp"];
-        /** Starts the sample app for an hour, or keeps it running for another hour from now; for organization admins */
-        put: operations["startSampleApp"];
-        post?: never;
-        /** Stops the sample app, deleting its topic; for organization admins */
-        delete: operations["stopSampleApp"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/customer/alert-settings": {
         parameters: {
             query?: never;
@@ -807,24 +788,6 @@ export interface components {
             bytesOutPerSecond?: number;
             /** @description The Postgres source that writes the topic, which keeps it from being deleted */
             source?: string;
-            /** @description Whether the sample app writes the topic, which keeps it from being deleted while the sample runs */
-            sample?: boolean;
-        };
-        SampleApp: {
-            /**
-             * @description Whether the sample app runs; it starts within a few minutes
-             * @enum {string}
-             */
-            state: "stopped" | "starting" | "running";
-            /**
-             * Format: date-time
-             * @description When the sample app stops on its own; absent while stopped
-             */
-            stopsAt?: string;
-            /** @description The topic the sample app writes orders to */
-            topic: string;
-            /** @description The consumer group that reads them */
-            group: string;
         };
         TopicPolicy: {
             maxNameLength: number;
@@ -2231,77 +2194,6 @@ export interface operations {
                 content: {
                     "text/event-stream": string;
                 };
-            };
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            503: components["responses"]["NotConfigured"];
-        };
-    };
-    getSampleApp: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The sample app */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SampleApp"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            503: components["responses"]["NotConfigured"];
-        };
-    };
-    startSampleApp: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The sample app */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SampleApp"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            503: components["responses"]["NotConfigured"];
-        };
-    };
-    stopSampleApp: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The sample app stops */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

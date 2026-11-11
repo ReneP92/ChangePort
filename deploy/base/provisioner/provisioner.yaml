@@ -39,14 +39,6 @@ rules:
   - apiGroups: [changeport.io]
     resources: [alertsettings]
     verbs: [get, list, watch]
-  # The console's sample app, which runs until its stop time: the controller
-  # then deletes it.
-  - apiGroups: [changeport.io]
-    resources: [sampleapps]
-    verbs: [get, list, watch, delete]
-  - apiGroups: [changeport.io]
-    resources: [sampleapps/status]
-    verbs: [get, patch, update]
   - apiGroups: [changeport.io]
     resources: [postgressources/status]
     verbs: [get, patch, update]

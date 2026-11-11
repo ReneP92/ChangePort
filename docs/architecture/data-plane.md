@@ -71,12 +71,6 @@ Consumers that set `client.rack` read from the copy in their own zone.
 | --- | --- | --- | --- |
 | `external` | 9094 | Customers' applications, over the internet | TLS with SCRAM-SHA-512 |
 | `tls` | 9093 | The platform: the agent and the console, inside the EKS cluster | Mutual TLS |
-| `scram` | 9095 | Customer applications the platform runs inside the EKS cluster: the console's sample app | TLS with SCRAM-SHA-512 |
-
-The platform's own clients sign in with certificates, and customers' with a
-password, so the console tells them apart by the principal: the data flow
-map shows the sample app like the customer's own clients, and the
-platform's never.
 
 The external listener has a Network Load Balancer for the bootstrap address
 and one per broker:

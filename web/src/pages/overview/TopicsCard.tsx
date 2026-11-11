@@ -65,14 +65,6 @@ export function TopicsCard({ admin }: { admin: boolean }) {
                           {topic.name}
                         </Link>
                         <AlertBadge alerts={alertsAbout(alerts.data, { topic: topic.name })} />
-                        {topic.sample && (
-                          <Badge
-                            variant="outline"
-                            title="The sample app writes this topic, and deletes it when it stops"
-                          >
-                            Sample
-                          </Badge>
-                        )}
                         {topic.source && (
                           <Badge variant="outline" asChild>
                             <Link
@@ -118,9 +110,8 @@ export function TopicsCard({ admin }: { admin: boolean }) {
                     </td>
                     {admin && (
                       <td className="py-1 text-right">
-                        {/* A source's topics go with its table, and the sample's
-                            with the sample, not on their own. */}
-                        {!topic.source && !topic.sample && <DeleteTopicDialog topic={topic.name} />}
+                        {/* A source's topics go with its table, not on their own. */}
+                        {!topic.source && <DeleteTopicDialog topic={topic.name} />}
                       </td>
                     )}
                   </tr>

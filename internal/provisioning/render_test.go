@@ -44,16 +44,6 @@ func TestRenderYAMLWithSourcesMatchesGoldenFiles(t *testing.T) {
 	}
 }
 
-// TestRenderYAMLWithSampleMatchesGoldenFiles renders customers running the
-// console's sample app: on kind, and on EKS with a published Kafka image.
-func TestRenderYAMLWithSampleMatchesGoldenFiles(t *testing.T) {
-	for _, spec := range withSampleGoldenSpecs() {
-		t.Run(spec.Platform.Name+"/"+spec.Profile.Name, func(t *testing.T) {
-			testGoldenFile(t, spec)
-		})
-	}
-}
-
 // sources are the CDC sources of the golden files with sources: app
 // streams, with its credentials in place, and billing's have not reached
 // the Connect worker yet.
@@ -75,10 +65,9 @@ var (
 	eksAPIServer  = []netip.AddrPort{netip.MustParseAddrPort("10.0.31.17:443"), netip.MustParseAddrPort("10.0.88.204:443")}
 )
 
-// publishedConnectImage, publishedGatewayImage and publishedKafkaImage stand
-// in for the images once they are published to ECR.
+// publishedConnectImage stands in for the Connect image once it is published
+// to ECR.
 const (
-	publishedKafkaImage   = "123456789012.dkr.ecr.us-east-1.amazonaws.com/changeport/kafka@sha256:00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 	publishedConnectImage = "123456789012.dkr.ecr.us-east-1.amazonaws.com/changeport/connect@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	publishedGatewayImage = "123456789012.dkr.ecr.us-east-1.amazonaws.com/changeport/registry-gateway@sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
 )
@@ -92,22 +81,10 @@ func withSourcesGoldenSpecs() []Spec {
 	}
 }
 
-func withSampleGoldenSpecs() []Spec {
-	eks := EKSProdPlatform
-	eks.KafkaImage = publishedKafkaImage
-	return []Spec{
-		{CustomerID: "acme", Profile: DevProfile, Platform: KindPlatform, Sample: true},
-		{CustomerID: "acme", Profile: ProductionProfile, Platform: eks, Sample: true, DeletionProtection: true},
-	}
-}
-
 func goldenFile(spec Spec) string {
 	name := spec.Platform.Name + "-" + spec.Profile.Name
 	if len(spec.Sources) > 0 {
 		name += "-sources"
-	}
-	if spec.Sample {
-		name += "-sample"
 	}
 	return filepath.Join("testdata", name+".golden.yaml")
 }
@@ -156,7 +133,7 @@ func TestNoStaleGoldenFiles(t *testing.T) {
 				known = known || filepath.Base(file) == platform+"-"+profile+".golden.yaml"
 			}
 		}
-		for _, spec := range slices.Concat(withSourcesGoldenSpecs(), withSampleGoldenSpecs()) {
+		for _, spec := range withSourcesGoldenSpecs() {
 			known = known || file == goldenFile(spec)
 		}
 		if !known {

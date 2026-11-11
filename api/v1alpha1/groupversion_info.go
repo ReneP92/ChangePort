@@ -23,7 +23,7 @@ var (
 )
 
 func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(GroupVersion, &Customer{}, &CustomerList{}, &PostgresSource{}, &PostgresSourceList{}, &AlertSettings{}, &AlertSettingsList{}, &TrialRequest{}, &TrialRequestList{}, &SampleApp{}, &SampleAppList{})
+	scheme.AddKnownTypes(GroupVersion, &Customer{}, &CustomerList{}, &PostgresSource{}, &PostgresSourceList{}, &AlertSettings{}, &AlertSettingsList{}, &TrialRequest{}, &TrialRequestList{})
 	metav1.AddToGroupVersion(scheme, GroupVersion)
 	return nil
 }
