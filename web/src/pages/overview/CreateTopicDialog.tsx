@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ApiError, type NewTopic, type TopicPolicy } from "@/api/client";
 import { useCreateTopic, useTopicPolicy } from "@/api/queries";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { formatCopies } from "@/lib/format";
 import { topicNameProblem } from "@/lib/topicName";
 
 /** A button that opens the dialog to create a topic within the guardrails. */
@@ -44,6 +45,24 @@ export function CreateTopicDialog({ existing }: { existing: string[] }) {
             onCreated={() => {
               setOpen(false);
             }}
+            header={
+              <DialogHeader>
+                <DialogTitle>Create a topic</DialogTitle>
+                <DialogDescription>{formatCopies(policy.data)}</DialogDescription>
+              </DialogHeader>
+            }
+            footer={(creating) => (
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">
+                    Cancel
+                  </Button>
+                </DialogClose>
+                <Button type="submit" disabled={creating}>
+                  {creating ? "Creating" : "Create topic"}
+                </Button>
+              </DialogFooter>
+            )}
           />
         )}
       </DialogContent>
@@ -51,14 +70,23 @@ export function CreateTopicDialog({ existing }: { existing: string[] }) {
   );
 }
 
-function CreateTopicForm({
+/**
+ * The form that creates a topic within the guardrails, between a header and
+ * a footer with its submit button, which its place provides: a dialog, or
+ * the welcome page. onCreated gets the new topic's name.
+ */
+export function CreateTopicForm({
   policy,
   existing,
   onCreated,
+  header,
+  footer,
 }: {
   policy: TopicPolicy;
   existing: string[];
-  onCreated: () => void;
+  onCreated: (name: string) => void;
+  header: ReactNode;
+  footer: (creating: boolean) => ReactNode;
 }) {
   const create = useCreateTopic();
   const [topic, setTopic] = useState<NewTopic>({
@@ -86,21 +114,16 @@ function CreateTopicForm({
     if (nameProblem || partitionsProblem) {
       return;
     }
-    create.mutate(topic, { onSuccess: onCreated });
+    create.mutate(topic, {
+      onSuccess: () => {
+        onCreated(topic.name);
+      },
+    });
   };
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-5" noValidate>
-      <DialogHeader>
-        <DialogTitle>Create a topic</DialogTitle>
-        <DialogDescription>
-          Your cluster&apos;s plan keeps{" "}
-          {policy.replicationFactor === 1
-            ? "one copy"
-            : `${String(policy.replicationFactor)} copies`}{" "}
-          of every partition.
-        </DialogDescription>
-      </DialogHeader>
+      {header}
 
       <Field
         id="topic-name"
@@ -184,16 +207,7 @@ function CreateTopicForm({
           {create.error.message}
         </p>
       )}
-      <DialogFooter>
-        <DialogClose asChild>
-          <Button type="button" variant="outline">
-            Cancel
-          </Button>
-        </DialogClose>
-        <Button type="submit" disabled={create.isPending}>
-          {create.isPending ? "Creating" : "Create topic"}
-        </Button>
-      </DialogFooter>
+      {footer(create.isPending)}
     </form>
   );
 }
@@ -207,7 +221,7 @@ function Field({
   id: string;
   label: string;
   problem: string | null;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -222,15 +236,7 @@ function Field({
   );
 }
 
-function Choice({
-  value,
-  title,
-  children,
-}: {
-  value: string;
-  title: string;
-  children: React.ReactNode;
-}) {
+function Choice({ value, title, children }: { value: string; title: string; children: ReactNode }) {
   const id = `cleanup-${value}`;
   return (
     <div className="flex items-start gap-3">

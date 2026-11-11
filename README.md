@@ -371,8 +371,9 @@ In the Clerk dashboard (Organizations, Settings), in every instance:
 
 - Turn off **Allow user-created organizations**: organizations are
   customers, which only operators create, in the operator console or by
-  approving a trial request. Otherwise Clerk offers every user to create one
-  in the organization switcher.
+  approving a trial request. A user belongs to one organization, their
+  company's, so the console offers no way to create or switch to another,
+  and neither may Clerk.
 - Make membership optional (turn off **Membership required**): someone who
   signs up at `/trial` has no organization until an operator approves their
   request, and with membership required Clerk stops them at "You must belong

@@ -187,7 +187,9 @@ test("every screen of the console", async ({ browser }) => {
     userId: ada.id,
     role: "org:admin",
   });
+  // She lands on the welcome page, which shows it.
   const admin = await signIn(browser, { id: ada.id, email: testEmail(fixtures.run, "ada") }, "/");
+  await expect(admin).toHaveURL(/\/welcome$/, { timeout: 20_000 });
   await expect(admin.getByRole("list", { name: "Progress" })).toBeVisible({ timeout: 20_000 });
   await shot(admin, "02-customer-starting");
 
@@ -200,22 +202,57 @@ test("every screen of the console", async ({ browser }) => {
   });
   await shot(operator, "13-operator-customer-ready");
 
-  // A new cluster: the getting started guide, with the sample app.
-  await admin.reload();
+  // Ada goes through the welcome page: a topic, how her apps connect, and
+  // her first message, as the Python example sends it and reads it back.
   const main = admin.getByRole("main");
-  await expect(main.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 30_000 });
-  const guide = main.getByRole("region", { name: "Get started" });
-  await expect(guide.getByRole("button", { name: "Start the sample" })).toBeVisible();
-  await shot(admin, "47-get-started");
-  await guide.getByRole("button", { name: "Start the sample" }).click();
-  await expect(guide.getByText(/The sample runs until/)).toBeVisible({ timeout: 4 * 60_000 });
-  // Once the brokers have the sample's metrics, the map shows it.
-  const map = main.getByRole("group", { name: "Topology map" });
-  await expect(map.getByTitle(/^sample-shop: sample, /)).toBeVisible({ timeout: 4 * 60_000 });
-  await expect(map.getByRole("link", { name: /^sample\.order-emails/ })).toBeVisible({
+  await expect(main.getByText("Your cluster is ready.")).toBeVisible({ timeout: 60_000 });
+  await main.getByRole("button", { name: "Next", exact: true }).click();
+  await main.getByLabel("Name").fill("orders");
+  await main.getByLabel("Partitions").fill("6");
+  await main.getByRole("combobox", { name: "Retention" }).click();
+  await admin.getByRole("option", { name: "7 days" }).click();
+  await shot(admin, "47-welcome-topic");
+  await main.getByRole("button", { name: "Create topic" }).click();
+  await expect(main.getByText("Your apps send their messages to orders.")).toBeVisible();
+  await main.getByRole("button", { name: "Next", exact: true }).click();
+  const welcomeProperties = test.info().outputPath("welcome-client.properties");
+  const downloading = admin.waitForEvent("download");
+  await main.getByRole("button", { name: "Download client.properties" }).click();
+  await (await downloading).saveAs(welcomeProperties);
+  await shot(admin, "48-welcome-connect");
+  await main.getByRole("button", { name: "Next", exact: true }).click();
+  kafka(
+    acme.id,
+    welcomeProperties,
+    "kafka-console-producer.sh",
+    [...connect(acme.id), "--topic", "orders", "--reader-property", "parse.key=true"],
+    "order-1\thello from Python\n",
+  );
+  kafka(acme.id, welcomeProperties, "kafka-console-consumer.sh", [
+    ...connect(acme.id),
+    "--topic",
+    "orders",
+    "--group",
+    "example-python",
+    "--from-beginning",
+    "--max-messages",
+    "1",
+    "--timeout-ms",
+    "30000",
+  ]);
+  await expect(main.getByText("Consumer group example-python read it.")).toBeVisible({
     timeout: 2 * 60_000,
   });
-  await shot(admin, "48-get-started-sample");
+  await shot(admin, "49-welcome-first-message");
+  // The example's group would fall behind the traffic to come.
+  kafka(acme.id, welcomeProperties, "kafka-consumer-groups.sh", [
+    ...connect(acme.id),
+    "--delete",
+    "--group",
+    "example-python",
+  ]);
+  await main.getByRole("button", { name: "Go to your cluster" }).click();
+  await expect(main.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 30_000 });
 
   // Ada creates topics within the guardrails.
   const createTopic = async (
@@ -240,18 +277,9 @@ test("every screen of the console", async ({ browser }) => {
     await dialog.getByRole("button", { name: "Create topic" }).click();
     await expect(dialog).toBeHidden();
   };
-  await createTopic("orders", 6, "7 days", false, "04-create-topic");
-  await createTopic("payments", 3, "30 days", false);
+  await createTopic("payments", 3, "30 days", false, "04-create-topic");
   await createTopic("customer-addresses", 3, "7 days", true);
   await createTopic("clickstream", 6, "1 hour", false);
-
-  // With a topic of her own, the guide shows how her apps connect, then
-  // she stops the sample.
-  await guide.getByRole("tab", { name: "Python" }).click();
-  await expect(guide.getByText("export TOPIC=clickstream")).toBeVisible();
-  await shot(admin, "49-get-started-connect");
-  await guide.getByRole("button", { name: "Stop the sample" }).click();
-  await expect(guide.getByRole("button", { name: "Start the sample" })).toBeVisible();
 
   // The guardrails, as Ada types.
   await card(admin, "Topics").getByRole("button", { name: "Create topic" }).click();

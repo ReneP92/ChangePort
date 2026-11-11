@@ -1,7 +1,8 @@
-import { OrganizationSwitcher } from "@clerk/react";
 import { Link, Navigate } from "react-router";
-import { useMe } from "@/api/queries";
+import { useCustomer, useMe, useTopics } from "@/api/queries";
 import { Notice } from "@/components/Notice";
+import { onboardingDone, shouldWelcome } from "@/lib/onboarding";
+import { useOrganizationState } from "@/lib/organization";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { Overview } from "@/pages/overview/Overview";
 
@@ -20,28 +21,46 @@ export function Home() {
     case "customer":
       return <CustomerHome />;
     default:
-      if (me.data.organizationID) {
-        // An organization without a cluster, such as one deprovisioned.
-        return (
-          <main className="mx-auto flex max-w-xl flex-col gap-4 p-8">
-            <h1 className="text-2xl font-semibold tracking-tight">No Kafka cluster yet</h1>
-            <p className="text-muted-foreground">
-              Your organization has no Changeport cluster. If you belong to another organization,
-              switch to it.
-            </p>
-            <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/" />
-            <TrialLink />
-          </main>
-        );
-      }
+      return <NoCustomer organization={me.data.organizationID !== undefined} />;
+  }
+}
+
+/**
+ * A user who sees no cluster: their organization has none, such as one
+ * deprovisioned, or they belong to none yet. A user belongs to one
+ * organization, which becomes their active one by itself.
+ */
+function NoCustomer({ organization }: { organization: boolean }) {
+  const state = useOrganizationState();
+  if (organization) {
+    return (
+      <main className="mx-auto flex max-w-xl flex-col gap-4 p-8">
+        <h1 className="text-2xl font-semibold tracking-tight">No Kafka cluster yet</h1>
+        <p className="text-muted-foreground">Your organization has no Changeport cluster.</p>
+        <TrialLink />
+      </main>
+    );
+  }
+  switch (state) {
+    case "loading":
+    case "activating":
+    case "active":
+      return <Notice title="Loading" busy />;
+    case "several":
+      return (
+        <Notice title="Your account belongs to several organizations">
+          A Changeport account belongs to one organization, its company&apos;s. Ask Changeport
+          support to remove it from the others.
+        </Notice>
+      );
+    case "none":
       return (
         <main className="mx-auto flex max-w-xl flex-col gap-4 p-8">
-          <h1 className="text-2xl font-semibold tracking-tight">Choose your organization</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">No organization yet</h1>
           <p className="text-muted-foreground">
-            Your Kafka cluster belongs to your company&apos;s organization. Switch to it, or ask a
-            colleague for an invitation.
+            Your Kafka cluster belongs to your company&apos;s organization. Ask a colleague for an
+            invitation.
           </p>
-          <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/" />
           <TrialLink />
         </main>
       );
@@ -60,7 +79,23 @@ function TrialLink() {
   );
 }
 
+/**
+ * A customer's overview, or the welcome page while their cluster is new:
+ * not ready yet, or without topics, unless the viewer is done with it.
+ */
 function CustomerHome() {
+  const customer = useCustomer();
+  const topics = useTopics(customer.data?.ready === true);
+  if (customer.data && !onboardingDone(customer.data.id)) {
+    if (shouldWelcome(false, customer.data.ready, topics.data)) {
+      return <Navigate to="/welcome" replace />;
+    }
+    if (topics.isPending) {
+      // Not knowing yet whether the cluster has topics, it waits rather
+      // than flash the overview.
+      return <Notice title="Loading" busy />;
+    }
+  }
   return (
     <CustomerArea>
       {(customer, admin) => <Overview customer={customer} admin={admin} />}

@@ -102,7 +102,7 @@ test("the screens of trial requests", async ({ browser }) => {
 
   // Signed in without an organization, home points to the trial.
   const initech = await visitor(browser, "initech", "/");
-  await expect(initech.getByRole("heading", { name: "Choose your organization" })).toBeVisible({
+  await expect(initech.getByRole("heading", { name: "No organization yet" })).toBeVisible({
     timeout: 20_000,
   });
   await shot(initech, "33-no-organization");
@@ -166,8 +166,8 @@ test("the screens of trial requests", async ({ browser }) => {
   ).toBeVisible({ timeout: 20_000 });
   await shot(hooli, "41-trial-declined");
 
-  // The operator approves Initech, which lands in its new cluster, on a
-  // 14-day trial.
+  // The operator approves Initech, which lands on the welcome page of its
+  // new cluster, on a 14-day trial.
   await item("I").getByRole("button", { name: "Approve" }).click();
   await operator.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
   await expect(operator.getByRole("dialog")).toBeHidden({ timeout: 30_000 });

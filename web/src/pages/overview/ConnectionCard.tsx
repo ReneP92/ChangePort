@@ -1,19 +1,11 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { useConnection, useDownloadClientProperties } from "@/api/queries";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-/**
- * How clients connect, and for admins the credentials to do so; with
- * onShowGuide, a link that shows the getting started guide again.
- */
-export function ConnectionCard({
-  admin,
-  onShowGuide,
-}: {
-  admin: boolean;
-  onShowGuide?: (() => void) | undefined;
-}) {
+/** How clients connect, and for admins the credentials to do so. */
+export function ConnectionCard({ admin }: { admin: boolean }) {
   const connection = useConnection();
   const download = useDownloadClientProperties();
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -81,19 +73,13 @@ export function ConnectionCard({
             {downloadError}
           </p>
         )}
-        {onShowGuide && (
-          <p className="text-muted-foreground">
-            New to Kafka?{" "}
-            <button
-              type="button"
-              className="text-foreground underline underline-offset-4"
-              onClick={onShowGuide}
-            >
-              Show the getting started guide
-            </button>
-            , with a sample app and examples in your language.
-          </p>
-        )}
+        <p className="text-muted-foreground">
+          New to Kafka?{" "}
+          <Link to="/welcome" className="text-foreground underline underline-offset-4">
+            Open the getting started guide
+          </Link>
+          , from a topic to your first message, with examples in Python, Go and JavaScript.
+        </p>
       </CardContent>
     </Card>
   );

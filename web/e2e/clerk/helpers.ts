@@ -2,10 +2,11 @@ import { execFileSync, spawn } from "node:child_process";
 import path from "node:path";
 import { clerk } from "@clerk/testing/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { env, kubectl, type UserFixture } from "./fixtures";
+import { env, kubectl, skipWelcome, type UserFixture } from "./fixtures";
 
 /** Signs user in and opens the overview of their ready cluster. */
 export async function openOverview(page: Page, user: UserFixture): Promise<void> {
+  await skipWelcome(page);
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: user.email });
   await page.goto("/");

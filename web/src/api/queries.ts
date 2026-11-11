@@ -238,13 +238,15 @@ export function useHealth() {
 }
 
 /** The topics of the active organization's cluster. */
-export function useTopics() {
+export function useTopics(enabled = true) {
   const api = useApi();
   const organization = useOrganizationKey();
   return useQuery({
     queryKey: ["customer", "topics", organization],
     queryFn: async () => unwrap(await api.GET("/api/customer/topics")).topics,
     refetchInterval: 15_000,
+    // A cluster being created has no topics to ask about yet.
+    enabled,
   });
 }
 
@@ -329,15 +331,16 @@ export function useConsumerGroupLag(group: string, range: ThroughputRange) {
 
 /**
  * The consumer groups' lag per topic, most behind first, with the last hour
- * of it. The agent measures it every 30 seconds.
+ * of it. The agent measures it every 30 seconds; a page waiting for a new
+ * group asks more often.
  */
-export function useConsumerGroups() {
+export function useConsumerGroups(refetchInterval = 30_000) {
   const api = useApi();
   const organization = useOrganizationKey();
   return useQuery({
     queryKey: ["customer", "consumer-groups", organization],
     queryFn: async () => unwrap(await api.GET("/api/customer/consumer-groups")).groups,
-    refetchInterval: 30_000,
+    refetchInterval,
   });
 }
 
@@ -416,53 +419,6 @@ export function useDeleteTopic() {
       }
     },
     onSuccess: () => queries.invalidateQueries({ queryKey: ["customer", "topics"] }),
-  });
-}
-
-/**
- * The customer's sample app of the guided first ten minutes; while it
- * starts, it is asked about more often.
- */
-export function useSample() {
-  const api = useApi();
-  const organization = useOrganizationKey();
-  return useQuery({
-    queryKey: ["customer", "sample", organization],
-    queryFn: async () => unwrap(await api.GET("/api/customer/sample")),
-    refetchInterval: (query) => (query.state.data?.state === "starting" ? 5_000 : 30_000),
-  });
-}
-
-/** Starts the sample app for an hour, or keeps it running another hour. */
-export function useStartSample() {
-  const api = useApi();
-  const organization = useOrganizationKey();
-  const queries = useQueryClient();
-  return useMutation({
-    mutationFn: async () => unwrap(await api.PUT("/api/customer/sample")),
-    onSuccess: (sample) => {
-      queries.setQueryData(["customer", "sample", organization], sample);
-      return queries.invalidateQueries({ queryKey: ["customer", "topics"] });
-    },
-  });
-}
-
-/** Stops the sample app, which deletes its topic. */
-export function useStopSample() {
-  const api = useApi();
-  const queries = useQueryClient();
-  return useMutation({
-    mutationFn: async () => {
-      const { error, response } = await api.DELETE("/api/customer/sample");
-      if (!response.ok) {
-        throw new ApiError(response.status, error);
-      }
-    },
-    onSuccess: () =>
-      Promise.all([
-        queries.invalidateQueries({ queryKey: ["customer", "sample"] }),
-        queries.invalidateQueries({ queryKey: ["customer", "topics"] }),
-      ]),
   });
 }
 
