@@ -16,7 +16,11 @@ export function ConnectionCard({ admin }: { admin: boolean }) {
           <h2>Connection</h2>
         </CardTitle>
         <CardDescription>
-          Kafka clients connect over TLS with a username and password.
+          Kafka clients connect over TLS with a username and password. New to Kafka?{" "}
+          <Link to="/welcome" className="text-foreground underline underline-offset-4">
+            Open the getting started guide
+          </Link>
+          .
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
@@ -73,13 +77,6 @@ export function ConnectionCard({ admin }: { admin: boolean }) {
             {downloadError}
           </p>
         )}
-        <p className="text-muted-foreground">
-          New to Kafka?{" "}
-          <Link to="/welcome" className="text-foreground underline underline-offset-4">
-            Open the getting started guide
-          </Link>
-          , from a topic to your first message, with examples in Python, Go and JavaScript.
-        </p>
       </CardContent>
     </Card>
   );
