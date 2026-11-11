@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readFixtures } from "./fixtures";
 import {
+  card,
   connect,
   downloadClientProperties,
   expectNoSidewaysScroll,
@@ -49,7 +50,7 @@ test("a config change and a rebalance appear on the timeline when they happened"
   const main = page.getByRole("main");
 
   // The admin creates the topic in the console, which names them.
-  await main.getByRole("button", { name: "Create topic" }).click();
+  await card(page, "Topics").getByRole("button", { name: "Create topic" }).click();
   const create = page.getByRole("dialog", { name: "Create a topic" });
   await create.getByLabel("Name").fill(topic);
   await create.getByLabel("Partitions").fill("2");

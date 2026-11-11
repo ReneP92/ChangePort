@@ -114,6 +114,10 @@ type Progress struct {
 	// customer has no sources. Ready does not include it, as clients can
 	// connect without it.
 	CDC Readiness
+	// Sample is the console's sample app: its user, its topic and its
+	// Deployment. It is ready when the customer runs none. Ready does not
+	// include it either.
+	Sample Readiness
 }
 
 // Ready reports whether every part clients need is ready.
@@ -161,14 +165,15 @@ func (p *Provisioner) Reconcile(ctx context.Context, spec Spec) (Progress, error
 		}
 		if !certificate.Ready {
 			waiting := Readiness{Status: "waiting for the listener certificate"}
-			return Progress{Certificate: certificate, Kafka: waiting, Users: waiting, Agent: waiting, CDC: waiting}, nil
+			return Progress{Certificate: certificate, Kafka: waiting, Users: waiting, Agent: waiting, CDC: waiting, Sample: waiting}, nil
 		}
 	}
 	if err := p.prune(ctx, spec, objects); err != nil {
 		return Progress{}, err
 	}
 	progress := Progress{Certificate: Readiness{Ready: true, Status: "Issued"}}
-	core, cdc := splitCDC(objects)
+	byPart := splitParts(objects)
+	core := byPart[""]
 	parts := []struct {
 		readiness *Readiness
 		objects   []*unstructured.Unstructured
@@ -184,7 +189,10 @@ func (p *Provisioner) Reconcile(ctx context.Context, spec Spec) (Progress, error
 			return Progress{}, err
 		}
 	}
-	if progress.CDC, err = p.observeCDC(ctx, spec, cdc); err != nil {
+	if progress.CDC, err = p.observeCDC(ctx, spec, byPart[PartCDC]); err != nil {
+		return Progress{}, err
+	}
+	if progress.Sample, err = p.observeSample(ctx, spec, byPart[PartSample]); err != nil {
 		return Progress{}, err
 	}
 	return progress, nil
@@ -226,17 +234,15 @@ func (p *Provisioner) kubernetesAPI(ctx context.Context) ([]netip.AddrPort, erro
 	return slices.Compact(addresses), nil
 }
 
-// splitCDC splits the rendered objects into those of the CDC runtime and the
-// rest.
-func splitCDC(objects []*unstructured.Unstructured) (core, cdc []*unstructured.Unstructured) {
+// splitParts splits the rendered objects by the optional part they belong
+// to (PartLabel); the core objects, which belong to none, are under "".
+func splitParts(objects []*unstructured.Unstructured) map[string][]*unstructured.Unstructured {
+	parts := map[string][]*unstructured.Unstructured{}
 	for _, obj := range objects {
-		if obj.GetLabels()[PartLabel] == PartCDC {
-			cdc = append(cdc, obj)
-		} else {
-			core = append(core, obj)
-		}
+		part := obj.GetLabels()[PartLabel]
+		parts[part] = append(parts[part], obj)
 	}
-	return core, cdc
+	return parts
 }
 
 // observeCDC reports how far the CDC runtime is: its users, then the Connect
@@ -266,6 +272,31 @@ func (p *Provisioner) observeCDC(ctx context.Context, spec Spec, objects []*unst
 		sources = "1 source"
 	}
 	return Readiness{Ready: true, Status: "Kafka Connect and the schema registry run for " + sources}, nil
+}
+
+// observeSample reports how far the sample app is: its user, its topic, then
+// its Deployment.
+func (p *Provisioner) observeSample(ctx context.Context, spec Spec, objects []*unstructured.Unstructured) (Readiness, error) {
+	switch {
+	case !spec.Sample:
+		return Readiness{Ready: true, Status: "No sample app"}, nil
+	case !spec.SampleApp():
+		return Readiness{Status: fmt.Sprintf("The sample app does not run on platform %s yet: it has no Changeport Kafka image", spec.Platform.Name)}, nil
+	}
+	for _, part := range []struct {
+		kind  schema.GroupVersionKind
+		ready func(*unstructured.Unstructured) (bool, string)
+	}{
+		{kafkaUserGVK, strimziReady},
+		{topicGVK, strimziReady},
+		{deploymentGVK, deploymentReady},
+	} {
+		readiness, err := p.observe(ctx, objects, part.kind, part.ready)
+		if err != nil || !readiness.Ready {
+			return readiness, err
+		}
+	}
+	return Readiness{Ready: true, Status: "The sample app runs"}, nil
 }
 
 // prunedSelector selects the objects of the template's optional parts that

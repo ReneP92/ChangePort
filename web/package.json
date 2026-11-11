@@ -14,7 +14,7 @@
     "format:check": "prettier --check .",
     "test": "bun test",
     "e2e": "playwright test",
-    "generate": "openapi-typescript ../api/openapi.yaml --output src/api/schema.ts"
+    "generate": "openapi-typescript ../api/openapi.yaml --output src/api/schema.ts && bun scripts/connecting-examples.ts"
   },
   "dependencies": {
     "@clerk/react": "6.18.2",

@@ -1,0 +1,91 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.23.0
+  name: sampleapps.changeport.io
+spec:
+  group: changeport.io
+  names:
+    kind: SampleApp
+    listKind: SampleAppList
+    plural: sampleapps
+    singular: sampleapp
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.stopAt
+      name: Stop at
+      type: string
+    - jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    - jsonPath: .status.message
+      name: Message
+      priority: 1
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          SampleApp runs a sample shop in a customer's cluster, for the console's
+          guided first ten minutes: a producer writes order events to the topic
+          sample.orders, and the consumer group sample.order-emails reads them. A
+          customer has at most one, named sample, in its namespace; it stops at
+          spec.stopAt.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: SampleAppSpec is how long a customer's sample app runs.
+            properties:
+              stopAt:
+                description: |-
+                  StopAt is when the sample app stops on its own: its Kafka user, its
+                  topic with the messages in it and its Deployment are removed, and so
+                  is the SampleApp.
+                format: date-time
+                type: string
+            required:
+            - stopAt
+            type: object
+          status:
+            description: SampleAppStatus is how far a sample app is.
+            properties:
+              message:
+                description: |-
+                  Message says how far the sample app is, for operators, such as what
+                  it waits for, or why it cannot run on the platform.
+                type: string
+              ready:
+                description: |-
+                  Ready is whether the sample app runs: its Kafka user, its topic and its
+                  Deployment are ready.
+                type: boolean
+            type: object
+        required:
+        - spec
+        type: object
+        x-kubernetes-validations:
+        - message: a customer's sample app is named sample
+          rule: self.metadata.name == 'sample'
+    served: true
+    storage: true
+    subresources:
+      status: {}

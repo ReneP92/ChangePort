@@ -257,6 +257,7 @@ type fixture struct {
 	// settings.
 	alerts        *fakeAlerts
 	alertSettings *fakeAlertSettings
+	sampleApps    *fakeSampleApps
 	trialRequests *fakeTrialRequests
 	mail          *fakeMail
 	// log is what the server logged, as JSON lines.
@@ -284,6 +285,7 @@ func newFixture(t *testing.T) *fixture {
 		recorded:      &fakeRecorder{},
 		messages:      &fakeMessages{},
 		alertSettings: &fakeAlertSettings{settings: map[string]*v1alpha1.AlertSettings{}},
+		sampleApps:    &fakeSampleApps{apps: map[string]*v1alpha1.SampleApp{}},
 		trialRequests: newFakeTrialRequests(),
 		mail:          &fakeMail{},
 		log:           &bytes.Buffer{},
@@ -309,6 +311,7 @@ func newFixture(t *testing.T) *fixture {
 		Messages:      f.messages,
 		Users:         fakeUsers{"user_3": "Ada Lovelace"},
 		AlertSettings: f.alertSettings,
+		SampleApps:    f.sampleApps,
 		Receivers:     Receivers{Resolver: resolver{netip.MustParseAddr("93.184.215.14")}},
 		AlertPoll:     20 * time.Millisecond,
 		// The NAT gateways' addresses of the platform.
@@ -422,6 +425,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 	routes["/api/customer/topic-policy"] = customerRoute(`"max":12`, `"replicationFactor":1`, `"maxNameLength":200`)
 	routes["/api/customer/alerts"] = customerRoute(`"summary":"acme-billing is behind"`, `"consumerGroup":"acme-billing"`, `{"alerts":[]}`)
 	routes["/api/customer/alert-settings"] = customerRoute(`"consumerLag":{"enabled":true,"seconds":600}`, `"receivers":{}`, `"percent":5`)
+	routes["/api/customer/sample"] = customerRoute(`"state":"stopped"`, `"topic":"sample.orders"`, `"group":"sample.order-emails"`)
 	routes["/api/customer/topology"] = customerRoute(`"name":"acme-orders"`, `"group":"billing"`, `"name":"globex-orders"`)
 	routes["/api/customer/events"] = customerRoute(`"message":"Topic acme-orders was created`, `"kind":"broker.restarted"`, `"events":[]`)
 	routes["/api/customer/consumer-groups/billing/lag"] = customerRoute(`"topic":"acme-orders"`, `"lagSeconds":[{`, `"topic":"globex-orders"`)

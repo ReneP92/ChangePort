@@ -344,7 +344,8 @@ export function useConsumerGroups() {
 /** Downloads the admin user's client.properties as a file. */
 export function useDownloadClientProperties() {
   const api = useApi();
-  return async () => {
+  /** Saves the file under the name the console gives it, or as saveAs. */
+  return async (saveAs?: string) => {
     const { data, error, response } = await api.GET("/api/customer/client-properties", {
       parseAs: "text",
     });
@@ -357,7 +358,7 @@ export function useDownloadClientProperties() {
     const url = URL.createObjectURL(new Blob([data], { type: "text/plain" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = name;
+    link.download = saveAs ?? name;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -415,6 +416,53 @@ export function useDeleteTopic() {
       }
     },
     onSuccess: () => queries.invalidateQueries({ queryKey: ["customer", "topics"] }),
+  });
+}
+
+/**
+ * The customer's sample app of the guided first ten minutes; while it
+ * starts, it is asked about more often.
+ */
+export function useSample() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["customer", "sample", organization],
+    queryFn: async () => unwrap(await api.GET("/api/customer/sample")),
+    refetchInterval: (query) => (query.state.data?.state === "starting" ? 5_000 : 30_000),
+  });
+}
+
+/** Starts the sample app for an hour, or keeps it running another hour. */
+export function useStartSample() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async () => unwrap(await api.PUT("/api/customer/sample")),
+    onSuccess: (sample) => {
+      queries.setQueryData(["customer", "sample", organization], sample);
+      return queries.invalidateQueries({ queryKey: ["customer", "topics"] });
+    },
+  });
+}
+
+/** Stops the sample app, which deletes its topic. */
+export function useStopSample() {
+  const api = useApi();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { error, response } = await api.DELETE("/api/customer/sample");
+      if (!response.ok) {
+        throw new ApiError(response.status, error);
+      }
+    },
+    onSuccess: () =>
+      Promise.all([
+        queries.invalidateQueries({ queryKey: ["customer", "sample"] }),
+        queries.invalidateQueries({ queryKey: ["customer", "topics"] }),
+      ]),
   });
 }
 

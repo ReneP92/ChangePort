@@ -4,6 +4,7 @@ import { clerk } from "@clerk/testing/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { clerkClient, kubectl, readFixtures, testEmail, type UserFixture } from "../clerk/fixtures";
 import {
+  card,
   connect,
   downloadClientProperties,
   expectStreaming,
@@ -199,10 +200,24 @@ test("every screen of the console", async ({ browser }) => {
   });
   await shot(operator, "13-operator-customer-ready");
 
-  // Ada creates topics within the guardrails.
+  // A new cluster: the getting started guide, with the sample app.
   await admin.reload();
   const main = admin.getByRole("main");
   await expect(main.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 30_000 });
+  const guide = main.getByRole("region", { name: "Get started" });
+  await expect(guide.getByRole("button", { name: "Start the sample" })).toBeVisible();
+  await shot(admin, "47-get-started");
+  await guide.getByRole("button", { name: "Start the sample" }).click();
+  await expect(guide.getByText(/The sample runs until/)).toBeVisible({ timeout: 4 * 60_000 });
+  // Once the brokers have the sample's metrics, the map shows it.
+  const map = main.getByRole("group", { name: "Topology map" });
+  await expect(map.getByTitle(/^sample-shop: sample, /)).toBeVisible({ timeout: 4 * 60_000 });
+  await expect(map.getByRole("link", { name: /^sample\.order-emails/ })).toBeVisible({
+    timeout: 2 * 60_000,
+  });
+  await shot(admin, "48-get-started-sample");
+
+  // Ada creates topics within the guardrails.
   const createTopic = async (
     name: string,
     partitions: number,
@@ -210,7 +225,7 @@ test("every screen of the console", async ({ browser }) => {
     compact: boolean,
     screenshot?: string,
   ) => {
-    await main.getByRole("button", { name: "Create topic" }).click();
+    await card(admin, "Topics").getByRole("button", { name: "Create topic" }).click();
     const dialog = admin.getByRole("dialog", { name: "Create a topic" });
     await dialog.getByLabel("Name").fill(name);
     await dialog.getByLabel("Partitions").fill(String(partitions));
@@ -230,8 +245,16 @@ test("every screen of the console", async ({ browser }) => {
   await createTopic("customer-addresses", 3, "7 days", true);
   await createTopic("clickstream", 6, "1 hour", false);
 
+  // With a topic of her own, the guide shows how her apps connect, then
+  // she stops the sample.
+  await guide.getByRole("tab", { name: "Python" }).click();
+  await expect(guide.getByText("export TOPIC=clickstream")).toBeVisible();
+  await shot(admin, "49-get-started-connect");
+  await guide.getByRole("button", { name: "Stop the sample" }).click();
+  await expect(guide.getByRole("button", { name: "Start the sample" })).toBeVisible();
+
   // The guardrails, as Ada types.
-  await main.getByRole("button", { name: "Create topic" }).click();
+  await card(admin, "Topics").getByRole("button", { name: "Create topic" }).click();
   const guarded = admin.getByRole("dialog", { name: "Create a topic" });
   await guarded.getByLabel("Name").fill("__internal");
   await guarded.getByLabel("Partitions").fill("64");

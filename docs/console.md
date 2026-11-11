@@ -25,6 +25,44 @@ A new customer's cluster getting ready, part by part.
 
 ![A customer's cluster getting ready](screenshots/02-customer-starting-desktop.png)
 
+### Getting started
+
+A new cluster's overview starts with a guide through the first ten minutes,
+in three steps, each ticked off as it is done.
+
+![The getting started guide](screenshots/47-get-started-desktop.png)
+
+**Watch Kafka at work.** An admin starts a sample app: a coffee shop whose
+checkout writes an order event to the topic `sample.orders` a few times a
+second, keyed by order ID, and whose email service reads each one as the
+consumer group `sample.order-emails`. It runs in the customer's cluster for
+an hour, or another hour from when an admin keeps it running, and stopping
+it deletes its topic with its orders. While it runs, the data flow map,
+throughput, the topic's messages and the group's lag show it like any app
+of the customer's, and its topic is marked Sample and cannot be deleted on
+its own. Members see the steps, and are asked to have an admin start it.
+
+![The sample app running](screenshots/48-get-started-sample-desktop.png)
+
+**Create a topic for your data**, in the usual dialog with its guardrails.
+
+**Connect your app.** The guide's download saves `client.properties` under
+the name the examples read it by. Then come the variables the examples
+read, with the bootstrap address, the user and the topic filled in and the
+password read from `client.properties`, and the examples of the
+[connection guide](connecting.md) in Java, Python, Go, Node.js and on the
+command line, which `hack/connecting-guide-test.sh` runs against kind. The
+step is done once data arrives on one of the customer's own topics, a
+Postgres source's included, a consumer group of theirs reads one, or one
+holds data, so that an app gone quiet still counts, whatever the client's
+language.
+
+![Connecting an app](screenshots/49-get-started-connect-desktop.png)
+
+**Hide** puts the guide away in this browser, and the Connection card's
+"Show the getting started guide" brings it back. It also stays away once
+the customer has a topic and an app of their own, and no sample runs.
+
 The overview of a ready cluster: its active alerts; how to connect, with
 `client.properties` for admins; the brokers' health; throughput, with what
 changed meanwhile; how data flows from producers through topics to consumer
@@ -262,10 +300,3 @@ trial's customer is deprovisioned.
 ![Extending a trial](screenshots/45-operator-trial-extend-desktop.png)
 
 ![Converting a customer](screenshots/46-operator-trial-convert-desktop.png)
-
-## Still to design
-
-The first console is built and refined on the real UI. Still to design are
-the guided first ten minutes, from signing up to a live sample producer and
-consumer, and the live topology map of producers, topics and consumer
-groups; see [Open questions and next steps](PROJECT_PLAN.md#open-questions-and-next-steps).

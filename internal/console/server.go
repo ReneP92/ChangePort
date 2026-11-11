@@ -85,6 +85,7 @@ type Server struct {
 	alerts        Alerts
 	alertSettings AlertSettingsStore
 	receivers     Receivers
+	sampleApps    SampleApps
 	// alertPoll is how often alert streams ask for the alerts.
 	alertPoll time.Duration
 	// events reads the timeline, recorder keeps the changes users make
@@ -133,6 +134,9 @@ type Options struct {
 	Alerts        Alerts
 	AlertSettings AlertSettingsStore
 	Receivers     Receivers
+	// SampleApps keeps the customers' sample apps, which the guided first
+	// ten minutes start.
+	SampleApps SampleApps
 	// AlertPoll is how often alert streams ask for the alerts; the default
 	// is every 5 seconds.
 	AlertPoll time.Duration
@@ -177,6 +181,7 @@ func New(config Config, options Options) (*Server, error) {
 		alerts:        options.Alerts,
 		alertSettings: options.AlertSettings,
 		receivers:     options.Receivers,
+		sampleApps:    options.SampleApps,
 		alertPoll:     cmp.Or(options.AlertPoll, 5*time.Second),
 		events:        options.Events,
 		recorder:      options.Recorder,
@@ -931,6 +936,12 @@ func (s *Server) ListTopics(ctx context.Context, _ api.ListTopicsRequestObject) 
 	if err != nil {
 		return nil, err
 	}
+	// Without the sample app, its topic is listed as any other: the list
+	// matters more than the mark.
+	sample, err := s.sampleApps.Get(ctx, customer.Name)
+	if err != nil {
+		s.logger.Warn("could not tell whether the sample app runs", "tenant", customer.Name, "error", err)
+	}
 	list := api.ListTopics200JSONResponse{Topics: make([]api.Topic, 0, len(settings))}
 	for _, t := range settings {
 		// The platform's own topics, such as Kafka Connect's, are not the
@@ -944,6 +955,7 @@ func (s *Server) ListTopics(ctx context.Context, _ api.ListTopicsRequestObject) 
 		}
 		list.Topics = append(list.Topics, api.Topic{
 			Source:            source,
+			Sample:            ptr.To(sample != nil && t.Name == provisioning.SampleTopic),
 			Name:              t.Name,
 			Partitions:        t.Partitions,
 			ReplicationFactor: t.ReplicationFactor,
@@ -1252,6 +1264,16 @@ func (s *Server) DeleteTopic(ctx context.Context, request api.DeleteTopicRequest
 	if source, ok := owned[request.Topic]; ok {
 		return api.DeleteTopic409JSONResponse{NotReadyJSONResponse: api.NotReadyJSONResponse(problem(http.StatusConflict,
 			"The topic belongs to a Postgres source", fmt.Sprintf("Postgres source %s writes topic %s. Remove its table from the source first, and the topic is yours to delete.", source, request.Topic)))}, nil
+	}
+	if request.Topic == provisioning.SampleTopic {
+		sample, err := s.sampleApps.Get(ctx, customer.Name)
+		if err != nil {
+			return nil, err
+		}
+		if sample != nil {
+			return api.DeleteTopic409JSONResponse{NotReadyJSONResponse: api.NotReadyJSONResponse(problem(http.StatusConflict,
+				"The topic belongs to the sample app", "Stop the sample app, and its topic goes with it."))}, nil
+		}
 	}
 	err = s.clusters.DeleteTopic(ctx, customer.Name, request.Topic)
 	switch {

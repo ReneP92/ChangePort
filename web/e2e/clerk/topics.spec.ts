@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { kubectl, readFixtures } from "./fixtures";
 import {
+  card,
   connect,
   downloadClientProperties,
   expectNoSidewaysScroll,
@@ -23,7 +24,7 @@ test("an admin creates a tiered one-hour topic and deletes it", async ({ page },
   await openOverview(page, fixtures.users.adminA);
   const main = page.getByRole("main");
 
-  await main.getByRole("button", { name: "Create topic" }).click();
+  await card(page, "Topics").getByRole("button", { name: "Create topic" }).click();
   const create = page.getByRole("dialog", { name: "Create a topic" });
   await create.getByLabel("Name").fill(topic);
   await create.getByLabel("Partitions").fill("2");
@@ -115,7 +116,7 @@ test("an admin creates a tiered one-hour topic and deletes it", async ({ page },
 
 test("the create dialog applies the guardrails as you type", async ({ page }) => {
   await openOverview(page, fixtures.users.adminA);
-  await page.getByRole("main").getByRole("button", { name: "Create topic" }).click();
+  await card(page, "Topics").getByRole("button", { name: "Create topic" }).click();
   const create = page.getByRole("dialog", { name: "Create a topic" });
   const name = create.getByLabel("Name");
 

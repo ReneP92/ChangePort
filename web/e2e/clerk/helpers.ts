@@ -12,10 +12,23 @@ export async function openOverview(page: Page, user: UserFixture): Promise<void>
   await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 20_000 });
 }
 
+/**
+ * The card of the page with a heading, such as the overview's Topics: the
+ * getting started guide repeats some of the cards' buttons.
+ */
+export function card(page: Page, heading: string): Locator {
+  return page
+    .getByRole("main")
+    .locator('[data-slot="card"]')
+    .filter({ has: page.getByRole("heading", { name: heading, exact: true }) });
+}
+
 /** Downloads the admin user's client.properties from the overview into path. */
 export async function downloadClientProperties(page: Page, path: string): Promise<void> {
   const downloading = page.waitForEvent("download");
-  await page.getByRole("main").getByRole("button", { name: "Download client.properties" }).click();
+  await card(page, "Connection")
+    .getByRole("button", { name: "Download client.properties" })
+    .click();
   await (await downloading).saveAs(path);
 }
 

@@ -56,6 +56,10 @@ type templateValues struct {
 	ConsoleUser            string
 	TailUser               string
 	InternalPort           int
+	ScramPort              int
+	// SampleApp names the sample app's Deployment and pods, the only
+	// clients of the ScramPort listener.
+	SampleApp string
 	// ConsoleNamespace, ConsoleServiceAccount and ConsoleSecrets let the
 	// console read the Secrets it needs, by name.
 	ConsoleNamespace      string
@@ -80,6 +84,22 @@ type templateValues struct {
 	// CDC is the runtime of the customer's Postgres CDC sources; nil when
 	// the template renders none.
 	CDC *cdcValues
+	// Sample is the console's sample app; nil when the template renders
+	// none.
+	Sample *sampleValues
+}
+
+// sampleValues are the template's values for the console's sample app.
+type sampleValues struct {
+	PartLabel   string
+	Part        string
+	Name        string
+	Image       string
+	User        string
+	Topic       string
+	GroupPrefix string
+	Group       string
+	RetentionMs int
 }
 
 // cdcValues are the template's values for the runtime of a customer's
@@ -185,6 +205,14 @@ func RenderYAML(spec Spec) ([]byte, error) {
 		// The Connect worker and the registry share a node of their own.
 		nodes++
 	}
+	var sample *sampleValues
+	if spec.SampleApp() {
+		sample = &sampleValues{
+			PartLabel: PartLabel, Part: PartSample, Name: SampleApp, Image: spec.Platform.KafkaImage,
+			User: SampleUser, Topic: SampleTopic, GroupPrefix: SampleGroupPrefix, Group: SampleGroup,
+			RetentionMs: SampleTopicRetentionMs,
+		}
+	}
 	var buf bytes.Buffer
 	err := clusterTemplate.Execute(&buf, templateValues{
 		Tenant:          spec.CustomerID,
@@ -210,6 +238,8 @@ func RenderYAML(spec Spec) ([]byte, error) {
 		ConsoleUser:            ConsoleUser,
 		TailUser:               TailUser,
 		InternalPort:           InternalPort,
+		ScramPort:              ScramPort,
+		SampleApp:              SampleApp,
 
 		ConsoleNamespace:      ConsoleNamespace,
 		ConsoleServiceAccount: ConsoleServiceAccount,
@@ -224,7 +254,8 @@ func RenderYAML(spec Spec) ([]byte, error) {
 		DeletionProtection:      spec.DeletionProtection,
 		DeletionProtectionLabel: DeletionProtectionLabel,
 
-		CDC: cdc,
+		CDC:    cdc,
+		Sample: sample,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("render customer cluster template: %w", err)

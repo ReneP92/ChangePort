@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFixtures } from "./fixtures";
-import { connect, kafka, openOverview } from "./helpers";
+import { card, connect, kafka, openOverview } from "./helpers";
 
 // The overview of customer A's cluster, which the setup waits to be ready.
 
@@ -19,7 +19,9 @@ test("an admin downloads client.properties and produces with it", async ({ page 
   await expect(main.getByText("The broker is ready; every partition is in sync")).toBeVisible();
 
   const downloading = page.waitForEvent("download");
-  await main.getByRole("button", { name: "Download client.properties" }).click();
+  await card(page, "Connection")
+    .getByRole("button", { name: "Download client.properties" })
+    .click();
   const download = await downloading;
   expect(download.suggestedFilename()).toBe(`${a.id}-client.properties`);
   const properties = testInfo.outputPath("client.properties");
@@ -70,11 +72,12 @@ test("an admin cannot create organizations", async ({ page }) => {
 test("a member sees how to connect, but not the credentials", async ({ page }) => {
   await openOverview(page, fixtures.users.memberA);
   const main = page.getByRole("main");
+  const connection = card(page, "Connection");
   await expect(
-    main.getByText(`bootstrap.${fixtures.customers.a.id}.kafka.changeport.test:9094`),
+    connection.getByText(`bootstrap.${fixtures.customers.a.id}.kafka.changeport.test:9094`),
   ).toBeVisible();
   await expect(main.getByRole("button", { name: "Download client.properties" })).toHaveCount(0);
-  await expect(main.getByText("Ask an admin of your organization")).toBeVisible();
+  await expect(connection.getByText("Ask an admin of your organization")).toBeVisible();
 });
 
 test("the throughput chart switches ranges", async ({ page }) => {
