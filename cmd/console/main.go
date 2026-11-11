@@ -134,6 +134,7 @@ func run(ctx context.Context, args []string) error {
 			URL: *alertmanagerURL, HTTP: &http.Client{Timeout: 10 * time.Second},
 		},
 		AlertSettings: console.KubeAlertSettings{Client: kube},
+		SampleApps:    console.KubeSampleApps{Client: kube},
 		Events:        timeline,
 		Messages:      console.KubeMessages{Kafka: kafka},
 		Recorder:      recorder,

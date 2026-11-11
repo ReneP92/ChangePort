@@ -53,7 +53,8 @@ export function TopologyCard() {
     ),
   );
   return (
-    <Card>
+    // The getting started guide links here.
+    <Card id="data-flow" className="scroll-mt-6">
       <CardHeader>
         <CardTitle>
           <h2>Data flow</h2>

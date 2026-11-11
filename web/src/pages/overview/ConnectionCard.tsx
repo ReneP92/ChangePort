@@ -3,8 +3,17 @@ import { useConnection, useDownloadClientProperties } from "@/api/queries";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-/** How clients connect, and for admins the credentials to do so. */
-export function ConnectionCard({ admin }: { admin: boolean }) {
+/**
+ * How clients connect, and for admins the credentials to do so; with
+ * onShowGuide, a link that shows the getting started guide again.
+ */
+export function ConnectionCard({
+  admin,
+  onShowGuide,
+}: {
+  admin: boolean;
+  onShowGuide?: (() => void) | undefined;
+}) {
   const connection = useConnection();
   const download = useDownloadClientProperties();
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -70,6 +79,19 @@ export function ConnectionCard({ admin }: { admin: boolean }) {
         {downloadError && (
           <p className="text-destructive" role="alert">
             {downloadError}
+          </p>
+        )}
+        {onShowGuide && (
+          <p className="text-muted-foreground">
+            New to Kafka?{" "}
+            <button
+              type="button"
+              className="text-foreground underline underline-offset-4"
+              onClick={onShowGuide}
+            >
+              Show the getting started guide
+            </button>
+            , with a sample app and examples in your language.
           </p>
         )}
       </CardContent>

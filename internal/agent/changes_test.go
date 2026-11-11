@@ -200,7 +200,11 @@ func TestWatchRecordsChangesAfterItsBaseline(t *testing.T) {
 	retention = "86400000"
 	admin.classic["billing"] = kadm.DescribedGroup{Group: "billing", Members: []kadm.DescribedGroupMember{{MemberID: "m2", ClientID: "billing-1"}}}
 	admin.classic["changeport-connect-x"] = kadm.DescribedGroup{Group: "changeport-connect-x", Members: []kadm.DescribedGroupMember{{MemberID: "c2"}}}
-	admin.acls = append(admin.acls, kadm.DescribedACL{Principal: "User:CN=changeport-console", Host: "*", Type: kmsg.ACLResourceTypeGroup, Name: "*", Operation: kadm.OpRead})
+	admin.acls = append(admin.acls,
+		kadm.DescribedACL{Principal: "User:CN=changeport-console", Host: "*", Type: kmsg.ACLResourceTypeGroup, Name: "*", Operation: kadm.OpRead},
+		// The sample app's user comes and goes with the sample.
+		kadm.DescribedACL{Principal: "User:sample", Host: "*", Type: kmsg.ACLResourceTypeTopic, Name: "sample.orders", Operation: kadm.OpWrite, Permission: kmsg.ACLPermissionTypeAllow},
+	)
 	if err := changes.Watch(t.Context()); err != nil {
 		t.Fatal(err)
 	}

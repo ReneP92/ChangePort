@@ -624,3 +624,30 @@ func (m *recordedMail) to(address string) []string {
 	defer m.mu.Unlock()
 	return append([]string(nil), m.sent[address]...)
 }
+
+func TestSampleAppValidation(t *testing.T) {
+	requireEnv(t)
+	c, err := client.New(testEnv, client.Options{Scheme: testScheme(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "customer-samplecheck"}}
+	if err := c.Create(t.Context(), namespace); err != nil {
+		t.Fatal(err)
+	}
+	stopAt := metav1.NewTime(time.Now().Add(time.Hour))
+	other := &v1alpha1.SampleApp{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace.Name, Name: "shop"},
+		Spec:       v1alpha1.SampleAppSpec{StopAt: stopAt},
+	}
+	if err := c.Create(t.Context(), other); err == nil || !strings.Contains(err.Error(), "a customer's sample app is named sample") {
+		t.Errorf("create a sample app named shop = %v, want it refused", err)
+	}
+	sample := &v1alpha1.SampleApp{
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace.Name, Name: v1alpha1.SampleAppName},
+		Spec:       v1alpha1.SampleAppSpec{StopAt: stopAt},
+	}
+	if err := c.Create(t.Context(), sample); err != nil {
+		t.Errorf("create the sample app = %v", err)
+	}
+}

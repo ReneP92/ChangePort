@@ -82,14 +82,16 @@ func (r *CustomerReconciler) now() time.Time {
 }
 
 // SetupWithManager registers the reconciler with mgr. A change to a
-// PostgresSource reconciles the Customer of its namespace, whose template
-// renders what the sources run on.
+// PostgresSource or to the SampleApp reconciles the Customer of its
+// namespace, whose template renders what they run on.
 func (r *CustomerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.Customer{}).
 		Watches(&v1alpha1.PostgresSource{}, handler.EnqueueRequestsFromMapFunc(customerOfSource), builder.WithPredicates(sourceChanged)).
 		// A customer's alert settings set its alerts' thresholds.
 		Watches(&v1alpha1.AlertSettings{}, handler.EnqueueRequestsFromMapFunc(customerOfSource)).
+		// Its status, which the reconciler records, changes nothing.
+		Watches(&v1alpha1.SampleApp{}, handler.EnqueueRequestsFromMapFunc(customerOfSource), builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Named("customer").
 		WithOptions(controller.Options{MaxConcurrentReconciles: 4}).
 		Complete(r)
@@ -152,6 +154,11 @@ func (r *CustomerReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 	if spec.Sources, err = r.sources(ctx, spec); err != nil {
 		return ctrl.Result{}, err
 	}
+	sample, err := r.sampleApp(ctx, spec)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	spec.Sample = sample != nil
 	if err := r.ensureMetadata(ctx, &customer); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -220,8 +227,16 @@ func (r *CustomerReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	recordAlertThresholds(customer.Name, settings)
 	requeue := r.ResyncInterval
-	if !progress.Ready() || !progress.CDC.Ready {
+	if !progress.Ready() || !progress.CDC.Ready || !progress.Sample.Ready {
 		requeue = r.PollInterval
+	}
+	if sample != nil {
+		untilStop, err := r.recordSampleApp(ctx, sample, progress.Sample)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		// The sample app stops on time, not with the next resync.
+		requeue = min(requeue, max(untilStop, time.Second))
 	}
 	if onTrial {
 		// A trial's warning and end come on time, not with the next resync.

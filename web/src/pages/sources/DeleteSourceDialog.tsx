@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { wideDialog } from "@/pages/sources/AddTablesDialog";
-import { CodeBlock } from "@/pages/sources/SqlBlock";
+import { CodeBlock } from "@/components/CodeBlock";
 
 /**
  * A button that opens the dialog to delete a source, with its name typed.

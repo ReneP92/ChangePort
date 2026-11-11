@@ -24,8 +24,7 @@ func renderSpec(t *testing.T, spec Spec) []*unstructured.Unstructured {
 }
 
 func cdcObjects(objects []*unstructured.Unstructured) []*unstructured.Unstructured {
-	_, cdc := splitCDC(objects)
-	return cdc
+	return splitParts(objects)[PartCDC]
 }
 
 func TestRenderCDCRuntimeOnlyWithSources(t *testing.T) {

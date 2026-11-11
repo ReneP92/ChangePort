@@ -118,3 +118,8 @@ export function durationTicks(max: number): number[] {
   }
   return ticks;
 }
+
+/** A time of day in the viewer's locale, such as "10:42 AM". */
+export function formatTime(at: string): string {
+  return new Date(at).toLocaleTimeString(undefined, { timeStyle: "short" });
+}

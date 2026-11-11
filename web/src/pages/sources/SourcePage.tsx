@@ -22,7 +22,7 @@ import { EgressAddresses } from "@/pages/sources/EgressAddresses";
 import { PasswordDialog } from "@/pages/sources/PasswordDialog";
 import { PhaseBadge } from "@/pages/sources/PhaseBadge";
 import { RemoveTablesDialog } from "@/pages/sources/RemoveTablesDialog";
-import { CodeBlock } from "@/pages/sources/SqlBlock";
+import { CodeBlock } from "@/components/CodeBlock";
 
 /** One Postgres source: its tables' progress, its slot, and for admins its changes. */
 export function SourcePage() {

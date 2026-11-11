@@ -65,8 +65,9 @@ var (
 	creating    = provisioning.Readiness{Object: "Kafka customer-acme/acme", Status: "NotReady=True (Creating)"}
 	waiting     = provisioning.Readiness{Status: "waiting for the listener certificate"}
 	noSources   = provisioning.Readiness{Ready: true, Status: "No Postgres CDC sources"}
-	allReady    = provisioning.Progress{Certificate: issued, Kafka: readyPart, Users: readyPart, Agent: readyPart, CDC: noSources}
-	kafkaCreate = provisioning.Progress{Certificate: issued, Kafka: creating, Users: waiting, Agent: waiting, CDC: waiting}
+	noSample    = provisioning.Readiness{Ready: true, Status: "No sample app"}
+	allReady    = provisioning.Progress{Certificate: issued, Kafka: readyPart, Users: readyPart, Agent: readyPart, CDC: noSources, Sample: noSample}
+	kafkaCreate = provisioning.Progress{Certificate: issued, Kafka: creating, Users: waiting, Agent: waiting, CDC: waiting, Sample: waiting}
 )
 
 const (
@@ -92,7 +93,7 @@ func newReconciler(t *testing.T, provisioner Provisioner, objects ...client.Obje
 	c := fake.NewClientBuilder().
 		WithScheme(scheme).
 		WithObjects(objects...).
-		WithStatusSubresource(&v1alpha1.Customer{}).
+		WithStatusSubresource(&v1alpha1.Customer{}, &v1alpha1.SampleApp{}).
 		Build()
 	return &CustomerReconciler{
 		Client:         c,

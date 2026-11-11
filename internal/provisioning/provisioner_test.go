@@ -599,6 +599,7 @@ func TestReconcileReportsEachPart(t *testing.T) {
 				Users:       Readiness{Object: "KafkaUser customer-acme/admin", Status: "operator has not reconciled the latest spec"},
 				Agent:       Readiness{Object: "Deployment customer-acme/changeport-agent", Status: "0 of 1 replicas updated, 0 available"},
 				CDC:         Readiness{Ready: true, Status: "No Postgres CDC sources"},
+				Sample:      Readiness{Ready: true, Status: "No sample app"},
 			},
 		},
 		{
@@ -613,6 +614,7 @@ func TestReconcileReportsEachPart(t *testing.T) {
 				Users:       Readiness{Ready: true, Status: "Ready"},
 				Agent:       Readiness{Ready: true, Status: "Ready"},
 				CDC:         Readiness{Ready: true, Status: "No Postgres CDC sources"},
+				Sample:      Readiness{Ready: true, Status: "No sample app"},
 			},
 		},
 	}
