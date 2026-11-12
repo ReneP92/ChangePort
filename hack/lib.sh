@@ -559,11 +559,15 @@ prepare_kafka_client() {
 
 # Sets KAFKA_CLIENT, the docker run arguments of a Kafka client container on
 # the kind network that mounts dir at /config and resolves the customer's
-# public names to their load balancers.
+# public names to their load balancers. The tools run a few seconds each,
+# many at once in the tests, so their JVMs compile less and use one
+# processor's worth of threads rather than the whole Docker VM's: half the
+# CPU time of Kafka's defaults, and no slower.
 # Usage: kafka_client_container <customer> <dir>
 kafka_client_container() {
   local customer=$1 dir=$2 name address hosts=0
-  KAFKA_CLIENT=(--rm --network kind -e LOG_DIR=/tmp/kafka-logs -v "$dir:/config:ro")
+  KAFKA_CLIENT=(--rm --network kind -e LOG_DIR=/tmp/kafka-logs -v "$dir:/config:ro"
+    -e "KAFKA_JVM_PERFORMANCE_OPTS=-XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ActiveProcessorCount=1")
   while read -r name address; do
     [[ -n "$name" && -n "$address" ]] || die "a load balancer of customer $customer has no public name or address yet"
     KAFKA_CLIENT+=(--add-host "$name:$address")
