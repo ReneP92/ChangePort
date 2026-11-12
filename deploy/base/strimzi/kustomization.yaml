@@ -21,6 +21,11 @@ transformers:
       namespace: strimzi
     setRoleBindingSubjects: allServiceAccounts
 patches:
+  # Watches every namespace, and rides out a slow API server or a busy node.
+  # The operator exits whenever it cannot renew its leader lease, and each
+  # restart reconciles every customer's cluster again, so the lease
+  # tolerates stalls as long as cert-manager's (60 seconds rather than 15),
+  # and the probes give a busy JVM 5 seconds to answer rather than 1.
   - target:
       kind: Deployment
       name: strimzi-cluster-operator
@@ -38,6 +43,16 @@ patches:
                   - name: STRIMZI_NAMESPACE
                     value: "*"
                     valueFrom: null
+                  - name: STRIMZI_LEADER_ELECTION_LEASE_DURATION_MS
+                    value: "60000"
+                  - name: STRIMZI_LEADER_ELECTION_RENEW_DEADLINE_MS
+                    value: "40000"
+                  - name: STRIMZI_LEADER_ELECTION_RETRY_PERIOD_MS
+                    value: "15000"
+                livenessProbe:
+                  timeoutSeconds: 5
+                readinessProbe:
+                  timeoutSeconds: 5
   # Superseded by the ClusterRoleBindings in watch-all-namespaces.yaml.
   - target:
       kind: RoleBinding
