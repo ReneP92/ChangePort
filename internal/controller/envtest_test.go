@@ -368,6 +368,11 @@ func TestCustomerValidation(t *testing.T) {
 			customer.Spec.ClerkOrganizationID = "user_2abc"
 			return customer
 		}, "spec.clerkOrganizationID"},
+		{"an environment that is no DNS label", func() *v1alpha1.Customer {
+			customer := valid("environment-test")
+			customer.Spec.Environment = "Staging EU"
+			return customer
+		}, "spec.environment"},
 		{"a trial with deletion protection", func() *v1alpha1.Customer {
 			customer := valid("protected-trial")
 			customer.Spec.DeletionProtection = true
@@ -383,6 +388,21 @@ func TestCustomerValidation(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("an environment, production unless named, that cannot change", func(t *testing.T) {
+		customer := valid("environment-default")
+		if err := c.Create(t.Context(), customer); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = c.Delete(context.Background(), customer) })
+		if customer.Spec.Environment != v1alpha1.DefaultEnvironment {
+			t.Errorf("environment = %q, want %q by default", customer.Spec.Environment, v1alpha1.DefaultEnvironment)
+		}
+		customer.Spec.Environment = "staging"
+		if err := c.Update(t.Context(), customer); !apierrors.IsInvalid(err) || !strings.Contains(err.Error(), "the environment cannot change") {
+			t.Errorf("Update() error = %v, want the environment refused", err)
+		}
+	})
 
 	t.Run("a changed profile", func(t *testing.T) {
 		customer := valid("immutable-test")

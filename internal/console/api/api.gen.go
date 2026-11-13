@@ -139,6 +139,27 @@ func (e CustomerProfile) Valid() bool {
 	}
 }
 
+// Defines values for EnvironmentProfile.
+const (
+	EnvironmentProfileDev        EnvironmentProfile = "dev"
+	EnvironmentProfileDevHa      EnvironmentProfile = "dev-ha"
+	EnvironmentProfileProduction EnvironmentProfile = "production"
+)
+
+// Valid indicates whether the value is a known member of the EnvironmentProfile enum.
+func (e EnvironmentProfile) Valid() bool {
+	switch e {
+	case EnvironmentProfileDev:
+		return true
+	case EnvironmentProfileDevHa:
+		return true
+	case EnvironmentProfileProduction:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MeAccess.
 const (
 	MeAccessCustomer MeAccess = "customer"
@@ -178,6 +199,27 @@ func (e NewCustomerProfile) Valid() bool {
 	case NewCustomerProfileDevHa:
 		return true
 	case NewCustomerProfileProduction:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NewEnvironmentProfile.
+const (
+	NewEnvironmentProfileDev        NewEnvironmentProfile = "dev"
+	NewEnvironmentProfileDevHa      NewEnvironmentProfile = "dev-ha"
+	NewEnvironmentProfileProduction NewEnvironmentProfile = "production"
+)
+
+// Valid indicates whether the value is a known member of the NewEnvironmentProfile enum.
+func (e NewEnvironmentProfile) Valid() bool {
+	switch e {
+	case NewEnvironmentProfileDev:
+		return true
+	case NewEnvironmentProfileDevHa:
+		return true
+	case NewEnvironmentProfileProduction:
 		return true
 	default:
 		return false
@@ -774,7 +816,10 @@ type Customer struct {
 	Deleting           *bool  `json:"deleting,omitempty"`
 	DeletionProtection bool   `json:"deletionProtection"`
 	DisplayName        string `json:"displayName"`
-	Id                 string `json:"id"`
+
+	// Environment Which of its organization's environments the customer's cluster is, such as production
+	Environment string `json:"environment"`
+	Id          string `json:"id"`
 
 	// OrganizationID The Clerk organization whose members sign in as the customer, if any
 	OrganizationID *string         `json:"organizationID,omitempty"`
@@ -803,6 +848,17 @@ type CustomerTrial struct {
 	// EndsAt When the trial ends and the customer is deprovisioned; it is warned three days before
 	EndsAt time.Time `json:"endsAt"`
 }
+
+// Environment defines model for Environment.
+type Environment struct {
+	CustomerID string             `json:"customerID"`
+	Name       string             `json:"name"`
+	Profile    EnvironmentProfile `json:"profile"`
+	Ready      bool               `json:"ready"`
+}
+
+// EnvironmentProfile defines model for Environment.Profile.
+type EnvironmentProfile string
 
 // EventList defines model for EventList.
 type EventList struct {
@@ -835,8 +891,11 @@ type Me struct {
 	// Admin Whether the user is an admin of the active organization
 	Admin *bool `json:"admin,omitempty"`
 
-	// CustomerID The customer of the active organization, if any
+	// CustomerID The customer of the active organization's default environment, if any
 	CustomerID *string `json:"customerID,omitempty"`
+
+	// Environments The active organization's environments, each a cluster, the default first
+	Environments *[]Environment `json:"environments,omitempty"`
 
 	// OrganizationID The active Clerk organization, if any
 	OrganizationID *string `json:"organizationID,omitempty"`
@@ -863,6 +922,9 @@ type NewCustomer struct {
 	// DisplayName The customer's name, which also names its Clerk organization
 	DisplayName string `json:"displayName"`
 
+	// Environment The organization's first environment; production when left out
+	Environment *string `json:"environment,omitempty"`
+
 	// InviteEmail Who to invite as the organization's first admin, if anyone
 	InviteEmail *string            `json:"inviteEmail,omitempty"`
 	Profile     NewCustomerProfile `json:"profile"`
@@ -870,6 +932,18 @@ type NewCustomer struct {
 
 // NewCustomerProfile defines model for NewCustomer.Profile.
 type NewCustomerProfile string
+
+// NewEnvironment defines model for NewEnvironment.
+type NewEnvironment struct {
+	DeletionProtection bool `json:"deletionProtection"`
+
+	// Environment Its name, unique in the organization, such as staging
+	Environment string                `json:"environment"`
+	Profile     NewEnvironmentProfile `json:"profile"`
+}
+
+// NewEnvironmentProfile defines model for NewEnvironment.Profile.
+type NewEnvironmentProfile string
 
 // NewInvitation defines model for NewInvitation.
 type NewInvitation struct {
@@ -1629,6 +1703,9 @@ type CreateTopicJSONRequestBody = NewTopic
 // ProvisionCustomerJSONRequestBody defines body for ProvisionCustomer for application/json ContentType.
 type ProvisionCustomerJSONRequestBody = NewCustomer
 
+// AddEnvironmentJSONRequestBody defines body for AddEnvironment for application/json ContentType.
+type AddEnvironmentJSONRequestBody = NewEnvironment
+
 // ChangeTrialJSONRequestBody defines body for ChangeTrial for application/json ContentType.
 type ChangeTrialJSONRequestBody = TrialChange
 
@@ -1781,6 +1858,9 @@ type ServerInterface interface {
 	// GetOperatorCustomer One customer, for operators
 	// (GET /api/operator/customers/{customerID})
 	GetOperatorCustomer(w http.ResponseWriter, r *http.Request, customerID CustomerID)
+	// AddEnvironment Adds an environment, a cluster of its own, to the organization of a customer; for operators. Refused while the customer is on a trial.
+	// (POST /api/operator/customers/{customerID}/environments)
+	AddEnvironment(w http.ResponseWriter, r *http.Request, customerID string)
 	// ChangeTrial Extend a customer's trial, or convert the customer, for operators
 	// (PATCH /api/operator/customers/{customerID}/trial)
 	ChangeTrial(w http.ResponseWriter, r *http.Request, customerID CustomerID)
@@ -2820,6 +2900,32 @@ func (siw *ServerInterfaceWrapper) GetOperatorCustomer(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// AddEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) AddEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "customerID" -------------
+	var customerID string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "customerID", r.PathValue("customerID"), &customerID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "customerID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddEnvironment(w, r, customerID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ChangeTrial operation middleware
 func (siw *ServerInterfaceWrapper) ChangeTrial(w http.ResponseWriter, r *http.Request) {
 
@@ -3109,6 +3215,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/trial-requests/{trialRequestID}/decline", wrapper.DeclineTrialRequest)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/customers", wrapper.ListCustomers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/customers", wrapper.ProvisionCustomer)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/customers/{customerID}/environments", wrapper.AddEnvironment)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/operator/customers/{customerID}", wrapper.DeprovisionCustomer)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/customers/{customerID}", wrapper.GetOperatorCustomer)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/operator/customers/{customerID}/trial", wrapper.ChangeTrial)
@@ -7184,6 +7291,113 @@ func (response GetOperatorCustomer503JSONResponse) VisitGetOperatorCustomerRespo
 	return err
 }
 
+type AddEnvironmentRequestObject struct {
+	CustomerID string `json:"customerID"`
+	Body       *AddEnvironmentJSONRequestBody
+}
+
+type AddEnvironmentResponseObject interface {
+	VisitAddEnvironmentResponse(w http.ResponseWriter) error
+}
+
+type AddEnvironment201JSONResponse Customer
+
+func (response AddEnvironment201JSONResponse) VisitAddEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEnvironment400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response AddEnvironment400JSONResponse) VisitAddEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEnvironment401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response AddEnvironment401JSONResponse) VisitAddEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEnvironment403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response AddEnvironment403JSONResponse) VisitAddEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEnvironment404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response AddEnvironment404JSONResponse) VisitAddEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEnvironment409JSONResponse struct{ ConflictJSONResponse }
+
+func (response AddEnvironment409JSONResponse) VisitAddEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddEnvironment503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response AddEnvironment503JSONResponse) VisitAddEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ChangeTrialRequestObject struct {
 	CustomerID CustomerID `json:"customerID"`
 	Body       *ChangeTrialJSONRequestBody
@@ -7863,6 +8077,9 @@ type StrictServerInterface interface {
 	// GetOperatorCustomer One customer, for operators
 	// (GET /api/operator/customers/{customerID})
 	GetOperatorCustomer(ctx context.Context, request GetOperatorCustomerRequestObject) (GetOperatorCustomerResponseObject, error)
+	// AddEnvironment Adds an environment, a cluster of its own, to the organization of a customer; for operators. Refused while the customer is on a trial.
+	// (POST /api/operator/customers/{customerID}/environments)
+	AddEnvironment(ctx context.Context, request AddEnvironmentRequestObject) (AddEnvironmentResponseObject, error)
 	// ChangeTrial Extend a customer's trial, or convert the customer, for operators
 	// (PATCH /api/operator/customers/{customerID}/trial)
 	ChangeTrial(ctx context.Context, request ChangeTrialRequestObject) (ChangeTrialResponseObject, error)
@@ -9155,6 +9372,39 @@ func (sh *strictHandler) GetOperatorCustomer(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetOperatorCustomerResponseObject); ok {
 		if err := validResponse.VisitGetOperatorCustomerResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddEnvironment operation middleware
+func (sh *strictHandler) AddEnvironment(w http.ResponseWriter, r *http.Request, customerID string) {
+	var request AddEnvironmentRequestObject
+
+	request.CustomerID = customerID
+
+	var body AddEnvironmentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddEnvironment(ctx, request.(AddEnvironmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddEnvironment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddEnvironmentResponseObject); ok {
+		if err := validResponse.VisitAddEnvironmentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

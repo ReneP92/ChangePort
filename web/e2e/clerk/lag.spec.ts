@@ -82,8 +82,11 @@ test("the overview says how far behind a lagging consumer group is", async ({ pa
   await expect(cells(current).nth(2)).toHaveText("Caught up", { timeout: 150_000 });
   await expect(cells(current).nth(3)).toHaveText("0");
   await expect(cells(lagging).nth(2)).toHaveText(/^\d+ minutes? behind$/, { timeout: 150_000 });
-  // The most behind come first.
-  await expect(card.getByRole("row").nth(1)).toContainText(lagging);
+  // The most behind come first: the lagging group above the caught-up one.
+  // Other tests' groups share the table, and may be further behind.
+  const order = await card.getByRole("row").allTextContents();
+  const at = (group: string) => order.findIndex((text) => text.includes(group));
+  expect(at(lagging)).toBeLessThan(at(current));
   await expectNoSidewaysScroll(page);
 
   // The last hour shows the lag growing.

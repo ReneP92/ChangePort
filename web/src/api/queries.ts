@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, use, useEffect } from "react";
+import { useLocation } from "react-router";
 import {
   ApiError,
   unwrap,
@@ -9,6 +10,7 @@ import {
   type AlertThresholds,
   type ApiClient,
   type NewCustomer,
+  type NewEnvironment,
   type NewSource,
   type NewTopic,
   type NewTrialRequest,
@@ -23,6 +25,7 @@ import {
   type TrialApproval,
   type TrialChange,
 } from "@/api/client";
+import { environmentFromPath, environmentHeaders } from "@/lib/environments";
 import { readEvents } from "@/lib/sse";
 
 /** The API client of the signed-in user, which ApiProvider provides. */
@@ -37,11 +40,14 @@ function useApi(): ApiClient {
 }
 
 /**
- * Queries are per active organization: switching organization switches
- * customer, so every query is keyed by it.
+ * Queries are per active organization and environment, each a cluster of
+ * its own, so every query is keyed by both: switching environment never
+ * shows another's data.
  */
 function useOrganizationKey(): string {
-  return useAuth().orgId ?? "none";
+  const organization = useAuth().orgId ?? "none";
+  const environment = environmentFromPath(useLocation().pathname);
+  return environment === undefined ? organization : `${organization}/${environment}`;
 }
 
 /** The signed-in user and what they may see. */
@@ -104,6 +110,22 @@ export function useOperatorCustomer(id: string) {
 }
 
 /** Provisions a customer, then refreshes the customers. */
+/** Adds an environment, a cluster of its own, to a customer's organization. */
+export function useAddEnvironment(customerID: string) {
+  const api = useApi();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async (environment: NewEnvironment) =>
+      unwrap(
+        await api.POST("/api/operator/customers/{customerID}/environments", {
+          params: { path: { customerID } },
+          body: environment,
+        }),
+      ),
+    onSuccess: () => queries.invalidateQueries({ queryKey: ["operator", "customers"] }),
+  });
+}
+
 export function useProvisionCustomer() {
   const api = useApi();
   const queries = useQueryClient();
@@ -686,7 +708,11 @@ export function useLiveAlerts() {
         try {
           const token = await getToken();
           const response = await fetch(`${window.location.origin}/api/customer/alerts/stream`, {
-            headers: { Accept: "text/event-stream", Authorization: `Bearer ${token ?? ""}` },
+            headers: {
+              Accept: "text/event-stream",
+              Authorization: `Bearer ${token ?? ""}`,
+              ...environmentHeaders(),
+            },
             signal,
           });
           if (!response.ok || !response.body) {

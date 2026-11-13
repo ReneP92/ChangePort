@@ -8,6 +8,7 @@ afterEach(cleanup);
 const starting: Customer = {
   id: "acme",
   displayName: "Acme Corp",
+  environment: "production",
   profile: "dev",
   ready: false,
   deletionProtection: false,

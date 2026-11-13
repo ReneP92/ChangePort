@@ -15,6 +15,7 @@ const endsAt = new Date("2026-11-20T09:00:00").toISOString();
 const customer: Customer = {
   id: "c-7f3k2q",
   displayName: "Hooli",
+  environment: "production",
   profile: "dev",
   ready: true,
   deletionProtection: false,

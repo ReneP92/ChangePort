@@ -319,8 +319,24 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			writeProblem(w, http.StatusUnauthorized, "Sign in first", "")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalKey{}, principal)))
+		ctx := context.WithValue(r.Context(), principalKey{}, principal)
+		ctx = context.WithValue(ctx, environmentKey{}, r.Header.Get(EnvironmentHeader))
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// EnvironmentHeader names the environment a customer route acts on, as the
+// web app sends it from its URL: an organization has a customer, and a
+// cluster, per environment. Without it, a route acts on the organization's
+// default environment, production unless it has none.
+const EnvironmentHeader = "Changeport-Environment"
+
+type environmentKey struct{}
+
+// requestedEnvironment is the environment the request names, or "".
+func requestedEnvironment(ctx context.Context) string {
+	environment, _ := ctx.Value(environmentKey{}).(string)
+	return environment
 }
 
 // securityHeaders sets the headers every response carries.
@@ -419,38 +435,36 @@ func (s *Server) GetMe(ctx context.Context, _ api.GetMeRequestObject) (api.GetMe
 	if principal.OrganizationID == "" {
 		return me, nil
 	}
-	customer, err := s.customers.ByOrganization(ctx, principal.OrganizationID)
+	customers, err := s.customers.ByOrganization(ctx, principal.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
-	if customer != nil {
+	if len(customers) > 0 {
 		me.Access = api.MeAccessCustomer
-		me.CustomerID = ptr.To(customer.Name)
+		// The default environment's, for clients from before environments.
+		me.CustomerID = ptr.To(customers[0].Name)
+		environments := make([]api.Environment, 0, len(customers))
+		for i := range customers {
+			c := &customers[i]
+			environments = append(environments, api.Environment{
+				Name: environmentOf(c), CustomerID: c.Name, Profile: api.EnvironmentProfile(c.Spec.Profile), Ready: toAPI(c).Ready,
+			})
+		}
+		me.Environments = &environments
 	}
 	return me, nil
 }
 
 // GetCustomer implements api.StrictServerInterface.
 func (s *Server) GetCustomer(ctx context.Context, _ api.GetCustomerRequestObject) (api.GetCustomerResponseObject, error) {
-	principal, err := mustPrincipal(ctx)
-	if err != nil {
-		return nil, err
-	}
+	customer, _, refused, err := s.customerOf(ctx)
 	switch {
-	case principal.OrganizationID == "":
-		return api.GetCustomer403JSONResponse{ForbiddenJSONResponse: api.ForbiddenJSONResponse(problem(http.StatusForbidden,
-			"Choose an organization", "Customers are Clerk organizations; switch to yours to see its cluster."))}, nil
-	case s.operator(principal):
-		return api.GetCustomer403JSONResponse{ForbiddenJSONResponse: api.ForbiddenJSONResponse(problem(http.StatusForbidden,
-			"The staff organization is not a customer", "Operators see customers in the operator console."))}, nil
-	}
-	customer, err := s.customers.ByOrganization(ctx, principal.OrganizationID)
-	if err != nil {
+	case err != nil:
 		return nil, err
-	}
-	if customer == nil {
-		return api.GetCustomer404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(problem(http.StatusNotFound,
-			"No Kafka cluster yet", "Your organization has no Changeport cluster yet."))}, nil
+	case refused != nil && forbidden(refused):
+		return api.GetCustomer403JSONResponse{ForbiddenJSONResponse: api.ForbiddenJSONResponse(*refused)}, nil
+	case refused != nil:
+		return api.GetCustomer404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(*refused)}, nil
 	}
 	return api.GetCustomer200JSONResponse(toAPI(customer)), nil
 }
@@ -527,6 +541,13 @@ func (s *Server) ProvisionCustomer(ctx context.Context, request api.ProvisionCus
 	case email != "" && !validEmail(email):
 		return invalid("inviteEmail", "Enter an email address, such as ada@example.com, or leave it empty."), nil
 	}
+	environment := v1alpha1.DefaultEnvironment
+	if body.Environment != nil && strings.TrimSpace(*body.Environment) != "" {
+		environment = strings.TrimSpace(*body.Environment)
+		if !validEnvironment(environment) {
+			return invalid("environment", environmentRule), nil
+		}
+	}
 	// A person belongs to one organization, so the admin to invite belongs,
 	// and is invited, to none yet.
 	if email != "" {
@@ -542,6 +563,7 @@ func (s *Server) ProvisionCustomer(ctx context.Context, request api.ProvisionCus
 	customer := &v1alpha1.Customer{
 		Spec: v1alpha1.CustomerSpec{
 			DisplayName:        displayName,
+			Environment:        environment,
 			Profile:            string(body.Profile),
 			DeletionProtection: body.DeletionProtection,
 		},
@@ -718,6 +740,7 @@ func toAPI(c *v1alpha1.Customer) api.Customer {
 	out := api.Customer{
 		Id:                 c.Name,
 		DisplayName:        c.Spec.DisplayName,
+		Environment:        environmentOf(c),
 		Profile:            api.CustomerProfile(c.Spec.Profile),
 		DeletionProtection: c.Spec.DeletionProtection,
 		OrganizationID:     ptr.To(c.Spec.ClerkOrganizationID),
@@ -777,15 +800,32 @@ func (s *Server) customerOf(ctx context.Context) (*v1alpha1.Customer, Principal,
 		p := problem(http.StatusForbidden, "The staff organization is not a customer", "Operators see customers in the operator console.")
 		return nil, principal, &p, nil
 	}
-	customer, err := s.customers.ByOrganization(ctx, principal.OrganizationID)
+	customers, err := s.customers.ByOrganization(ctx, principal.OrganizationID)
 	if err != nil {
 		return nil, principal, nil, err
 	}
-	if customer == nil {
+	customer, p := chooseEnvironment(customers, requestedEnvironment(ctx))
+	return customer, principal, p, nil
+}
+
+// chooseEnvironment returns the customer of the requested environment among
+// an organization's, or its default, the first, when none is requested; or
+// the problem why there is none.
+func chooseEnvironment(customers []v1alpha1.Customer, requested string) (*v1alpha1.Customer, *api.Problem) {
+	if len(customers) == 0 {
 		p := problem(http.StatusNotFound, "No Kafka cluster yet", "Your organization has no Changeport cluster yet.")
-		return nil, principal, &p, nil
+		return nil, &p
 	}
-	return customer, principal, nil, nil
+	if requested == "" {
+		return &customers[0], nil
+	}
+	for i := range customers {
+		if environmentOf(&customers[i]) == requested {
+			return &customers[i], nil
+		}
+	}
+	p := problem(http.StatusNotFound, "No such environment", fmt.Sprintf("Your organization has no environment %q.", requested))
+	return nil, &p
 }
 
 // GetConnection implements api.StrictServerInterface.

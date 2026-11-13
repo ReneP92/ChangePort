@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/react";
 import { useEffect, useState } from "react";
 import { ApiError, type Problem, type TailMessage, type TailSkipped } from "@/api/client";
+import { environmentHeaders } from "@/lib/environments";
 import { readEvents } from "@/lib/sse";
 
 /** How many messages a tail keeps on screen; older ones scroll away. */
@@ -58,7 +59,11 @@ export function useTail(topic: string, running: boolean): TailState {
           const response = await fetch(
             `${window.location.origin}/api/customer/topics/${encodeURIComponent(topic)}/tail?${query.toString()}`,
             {
-              headers: { Accept: "text/event-stream", Authorization: `Bearer ${token ?? ""}` },
+              headers: {
+                Accept: "text/event-stream",
+                Authorization: `Bearer ${token ?? ""}`,
+                ...environmentHeaders(),
+              },
               signal,
             },
           );

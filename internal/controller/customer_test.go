@@ -298,6 +298,21 @@ func TestReconcileRefusesASpecThePlatformCannotRun(t *testing.T) {
 	}
 }
 
+func TestReconcileLabelsTheEnvironment(t *testing.T) {
+	staging := newCustomer()
+	staging.Name = "acme-staging"
+	staging.Spec.Environment = "staging"
+	r, c := newReconciler(t, &fakeProvisioner{progress: allReady}, newCustomer(), staging)
+	for name, want := range map[string]string{"acme": v1alpha1.DefaultEnvironment, "acme-staging": "staging"} {
+		if _, err := reconcile(t, r, name); err != nil {
+			t.Fatal(err)
+		}
+		if got := get(t, c, name).Labels[v1alpha1.EnvironmentLabel]; got != want {
+			t.Errorf("%s's environment label = %q, want %q", name, got, want)
+		}
+	}
+}
+
 func TestReconcileRemovesTheClerkLabelWithTheOrganization(t *testing.T) {
 	customer := newCustomer()
 	customer.Labels = map[string]string{v1alpha1.ClerkOrganizationLabel: "org_old", "team": "sales"}

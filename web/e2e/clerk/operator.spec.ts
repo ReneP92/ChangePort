@@ -58,8 +58,10 @@ test("an operator provisions a customer, watches it get ready, and deprovisions 
   await expect(page).toHaveURL(/\/operator\/customers\/c-[a-km-z2-9]{6}$/, { timeout: 30_000 });
   const id = new URL(page.url()).pathname.split("/").at(-1) ?? "";
   const main = page.getByRole("main");
-  await expect(main.getByText(displayName)).toBeVisible();
-  await expect(main.getByText(`Customer ${id}, dev cluster`)).toBeVisible();
+  await expect(main.getByText(displayName, { exact: true })).toBeVisible();
+  await expect(
+    main.getByText(`Customer ${id}, the production environment on a dev cluster`),
+  ).toBeVisible();
   await expect(main.getByRole("list", { name: "Progress" })).toBeVisible();
   await expect(main.getByText("Ready", { exact: true })).toBeVisible({ timeout: 6 * 60_000 });
 

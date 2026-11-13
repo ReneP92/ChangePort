@@ -21,7 +21,8 @@ export function Overview({ customer, admin }: { customer: Customer; admin: boole
           <StatusBadge customer={customer} />
         </div>
         <p className="text-sm text-muted-foreground">
-          Customer {customer.id}, {customer.profile} cluster
+          Customer {customer.id}, the {customer.environment} environment on a {customer.profile}{" "}
+          cluster
         </p>
       </header>
       <AlertsBanner />

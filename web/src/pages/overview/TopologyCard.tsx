@@ -12,6 +12,7 @@ import {
   type MapNode,
 } from "@/lib/topology";
 import { cn } from "@/lib/utils";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** The narrowest the map draws; on phones it scrolls sideways within the card. */
 const minWidth = 640;
@@ -176,6 +177,7 @@ function MapNodeBox({
   alerted: boolean;
   onFocus: (id: string | null) => void;
 }) {
+  const envPath = useEnvironmentPath();
   const behind = (node.lagSeconds ?? 0) >= 60;
   const className = cn(
     "absolute flex flex-col justify-center rounded-lg border bg-card px-2.5 text-left transition-opacity",
@@ -224,8 +226,8 @@ function MapNodeBox({
   if (node.kind === "topic" || node.kind === "group") {
     const path =
       node.kind === "topic"
-        ? `/topics/${encodeURIComponent(node.label)}`
-        : `/consumer-groups/${encodeURIComponent(node.label)}`;
+        ? envPath(`/topics/${encodeURIComponent(node.label)}`)
+        : envPath(`/consumer-groups/${encodeURIComponent(node.label)}`);
     return (
       <Link
         to={path}

@@ -75,7 +75,7 @@ function CustomerTable() {
                       {customer.displayName}
                     </Link>
                     <div className="text-muted-foreground">
-                      {customer.id}
+                      {customer.id} · {customer.environment}
                       {customer.deletionProtection && " · protected"}
                     </div>
                   </td>

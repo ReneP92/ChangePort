@@ -5,6 +5,7 @@ import { useAlerts } from "@/api/queries";
 import { Badge } from "@/components/ui/badge";
 import { formatSince, shortName } from "@/lib/alerts";
 import { cn } from "@/lib/utils";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** A badge for alerts about one thing, such as a topic; nothing without. */
 export function AlertBadge({ alerts }: { alerts: Alert[] }) {
@@ -45,6 +46,7 @@ export function AlertRows({ alerts, className }: { alerts: Alert[]; className?: 
  * while all is well.
  */
 export function AlertsBanner() {
+  const envPath = useEnvironmentPath();
   const alerts = useAlerts();
   if (!alerts.data || alerts.data.length === 0) {
     return null;
@@ -60,7 +62,7 @@ export function AlertsBanner() {
           <TriangleAlert aria-hidden className="size-4 shrink-0" />
           {count === 1 ? "1 alert" : `${String(count)} alerts`}
         </h2>
-        <Link to="/alerts" className="shrink-0 underline-offset-4 hover:underline">
+        <Link to={envPath("/alerts")} className="shrink-0 underline-offset-4 hover:underline">
           Alert settings
         </Link>
       </div>

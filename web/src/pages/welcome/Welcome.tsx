@@ -14,6 +14,7 @@ import { ConnectStep } from "@/pages/welcome/ConnectStep";
 import { FirstMessageStep } from "@/pages/welcome/FirstMessageStep";
 import { StepTitle } from "@/pages/welcome/StepTitle";
 import { TopicStep } from "@/pages/welcome/TopicStep";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
  * The welcome page: a new customer's way from their cluster to their own
@@ -44,6 +45,7 @@ export function Welcome() {
 const titles = ["Your cluster", "A topic", "Connect", "First message"];
 
 function Steps({ customer, admin }: { customer: Customer; admin: boolean }) {
+  const envPath = useEnvironmentPath();
   const navigate = useNavigate();
   const topics = useTopics(customer.ready);
   const [step, setStep] = useState(0);
@@ -51,7 +53,7 @@ function Steps({ customer, admin }: { customer: Customer; admin: boolean }) {
   const [arrived, setArrived] = useState(false);
   const finish = () => {
     finishOnboarding(customer.id);
-    void navigate("/");
+    void navigate(envPath("/"));
   };
   const done = [customer.ready, topic !== undefined, step > 2, arrived];
   const canGoOn = [customer.ready, topic !== undefined, true, true][step] ?? false;

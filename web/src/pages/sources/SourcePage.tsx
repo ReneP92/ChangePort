@@ -23,17 +23,24 @@ import { PasswordDialog } from "@/pages/sources/PasswordDialog";
 import { PhaseBadge } from "@/pages/sources/PhaseBadge";
 import { RemoveTablesDialog } from "@/pages/sources/RemoveTablesDialog";
 import { CodeBlock } from "@/components/CodeBlock";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** One Postgres source: its tables' progress, its slot, and for admins its changes. */
 export function SourcePage() {
   return <CustomerArea>{(_, admin) => <SourceDetails admin={admin} />}</CustomerArea>;
 }
 
-const back = (
-  <Link to="/sources" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
-    ← Sources
-  </Link>
-);
+function Back() {
+  const envPath = useEnvironmentPath();
+  return (
+    <Link
+      to={envPath("/sources")}
+      className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+    >
+      ← Sources
+    </Link>
+  );
+}
 
 function SourceDetails({ admin }: { admin: boolean }) {
   const { name = "" } = useParams();
@@ -47,7 +54,7 @@ function SourceDetails({ admin }: { admin: boolean }) {
     const gone = error instanceof ApiError && error.status === 404;
     return (
       <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-        {back}
+        <Back />
         <h1 className="text-2xl font-semibold tracking-tight">
           {gone ? `There is no source ${name}` : "The console is unavailable"}
         </h1>
@@ -63,7 +70,7 @@ function SourceDetails({ admin }: { admin: boolean }) {
   const deleting = s.deleting ?? false;
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      {back}
+      <Back />
       <header className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-semibold tracking-tight break-all">{s.name}</h1>

@@ -1210,6 +1210,41 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/operator/customers/{customerID}/environments:
+    parameters:
+      - name: customerID
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: addEnvironment
+      summary: Adds an environment, a cluster of its own, to the organization of a customer; for operators. Refused while the customer is on a trial.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewEnvironment"
+      responses:
+        "201":
+          description: The new environment's customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/operator/customers/{customerID}:
     get:
       operationId: getOperatorCustomer
@@ -1431,7 +1466,12 @@ components:
           description: Whether the user is an admin of the active organization
         customerID:
           type: string
-          description: The customer of the active organization, if any
+          description: The customer of the active organization's default environment, if any
+        environments:
+          type: array
+          description: The active organization's environments, each a cluster, the default first
+          items:
+            $ref: "#/components/schemas/Environment"
     Connection:
       type: object
       required: [username, securityProtocol, saslMechanism]
@@ -2561,6 +2601,33 @@ components:
           type: string
           format: date-time
           description: The trial's new end, to extend it
+    Environment:
+      type: object
+      required: [name, customerID, profile, ready]
+      properties:
+        name:
+          type: string
+        customerID:
+          type: string
+        profile:
+          type: string
+          enum: [dev, dev-ha, production]
+        ready:
+          type: boolean
+    NewEnvironment:
+      type: object
+      required: [environment, profile, deletionProtection]
+      properties:
+        environment:
+          type: string
+          description: Its name, unique in the organization, such as staging
+          minLength: 1
+          maxLength: 20
+        profile:
+          type: string
+          enum: [dev, dev-ha, production]
+        deletionProtection:
+          type: boolean
     NewCustomer:
       type: object
       required: [displayName, profile, deletionProtection]
@@ -2580,14 +2647,21 @@ components:
           type: string
           description: Who to invite as the organization's first admin, if anyone
           maxLength: 254
+        environment:
+          type: string
+          description: The organization's first environment; production when left out
+          maxLength: 20
     Customer:
       type: object
-      required: [id, displayName, profile, ready, status, conditions, deletionProtection, createdAt]
+      required: [id, displayName, environment, profile, ready, status, conditions, deletionProtection, createdAt]
       properties:
         id:
           type: string
         displayName:
           type: string
+        environment:
+          type: string
+          description: Which of its organization's environments the customer's cluster is, such as production
         profile:
           type: string
           enum: [dev, dev-ha, production]
