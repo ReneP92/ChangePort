@@ -4,7 +4,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import type { ThroughputRange } from "@/api/client";
 import { useAlerts, useConsumerGroupLag, useConsumerGroups, useEvents } from "@/api/queries";
 import { Notice } from "@/components/Notice";
-import { ChangeList } from "@/components/Timeline";
+import { ChangeList, EventMarkers } from "@/components/Timeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/chart";
 import { durationTicks, formatDuration, formatLag } from "@/lib/format";
 import { rangeMilliseconds, ranges } from "@/lib/ranges";
-import { eventMarkers, numberEvents } from "@/lib/timeline";
+import { numberEvents } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
 import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
 import { CustomerArea } from "@/pages/CustomerArea";
@@ -233,7 +233,7 @@ function LagCard({ group }: { group: string }) {
                 }
               />
               <ChartLegend content={<ChartLegendContent />} />
-              {eventMarkers(numbered, highlighted, start, end)}
+              <EventMarkers numbered={numbered} highlighted={highlighted} start={start} end={end} />
               {topics.map((topic, i) => (
                 <Line
                   key={topic.topic}

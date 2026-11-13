@@ -1,6 +1,4 @@
-import { ReferenceLine } from "recharts";
 import type { TimelineEvent } from "@/api/client";
-import { MarkerLabel } from "@/components/Timeline";
 
 /** An event on a chart, numbered from the oldest in its range. */
 export interface NumberedEvent {
@@ -21,39 +19,37 @@ export function numberEvents(events: TimelineEvent[], start: number, end: number
     .map((numbered, i) => ({ ...numbered, n: i + 1 }));
 }
 
+/** How far apart, in pixels, two numbered markers' centres stay: their circles are 16 across. */
+export const markerSpacing = 20;
+
 /**
- * A marker per event on a chart whose x axis runs from start to end, in
- * milliseconds: a dashed line, with the event's number on top where the
- * number has room. Of markers too close to number apart, the newest is
- * numbered, and the one pointed at in the list always is. A function rather
- * than a component, as the chart takes its children as they are.
+ * Which events' markers carry their number on a chart whose plot is width
+ * pixels across, from start to end in milliseconds: the one pointed at in
+ * the list always, then, newest first, every one whose number has room
+ * beside those already numbered. The others are dashed lines alone, still
+ * counted in the list under the chart.
  */
-export function eventMarkers(
+export function numberedMarkers(
   numbered: NumberedEvent[],
   highlighted: number | null,
   start: number,
   end: number,
-) {
-  const room = (end - start) / 24;
+  width: number,
+): Set<number> {
+  const x = (time: number) => (end > start ? ((time - start) / (end - start)) * width : 0);
   const labelled = new Set<number>();
-  let last = Infinity;
+  const taken: number[] = [];
+  const pointed = numbered.find(({ n }) => n === highlighted);
+  if (pointed) {
+    labelled.add(pointed.n);
+    taken.push(x(pointed.time));
+  }
   for (const { n, time } of numbered.toReversed()) {
-    if (last - time >= room) {
+    const at = x(time);
+    if (!labelled.has(n) && taken.every((other) => Math.abs(other - at) >= markerSpacing)) {
       labelled.add(n);
-      last = time;
+      taken.push(at);
     }
   }
-  return numbered.map(({ n, time, event }) => (
-    <ReferenceLine
-      key={event.id}
-      x={time}
-      stroke={n === highlighted ? "var(--foreground)" : "var(--muted-foreground)"}
-      strokeOpacity={n === highlighted ? 1 : 0.6}
-      strokeDasharray="3 3"
-      ifOverflow="hidden"
-      {...(labelled.has(n) || n === highlighted
-        ? { label: <MarkerLabel n={n} active={n === highlighted} /> }
-        : {})}
-    />
-  ));
+  return labelled;
 }
