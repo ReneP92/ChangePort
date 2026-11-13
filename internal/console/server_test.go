@@ -137,9 +137,16 @@ type fakeOrganizations struct {
 	// created and deleted are the organizations by ID; names by ID.
 	created, deleted []string
 	names            map[string]string
-	// invited are the admins invited, as organization/email, and admins the
-	// users made admins, as organization/user. Clerk knows no user_gone.
+	// invited are the invitations made, as organization/email/role, and
+	// admins the users made admins, as organization/user. Clerk knows no
+	// user_gone.
 	invited, admins []string
+	// memberships are the users' organizations, claimed the organizations
+	// of email addresses, members and invitations the organizations' teams.
+	memberships map[string][]Membership
+	claimed     map[string][]string
+	members     map[string][]Member
+	invitations map[string][]Invitation
 }
 
 func (f *fakeOrganizations) Create(_ context.Context, name string) (string, error) {
@@ -149,11 +156,51 @@ func (f *fakeOrganizations) Create(_ context.Context, name string) (string, erro
 	return id, nil
 }
 
-func (f *fakeOrganizations) InviteAdmin(_ context.Context, organizationID, email string) error {
+func (f *fakeOrganizations) Invite(_ context.Context, organizationID, email, role string) error {
 	if email == "refused@example.com" {
 		return fmt.Errorf("%w: this address is blocked", ErrInvitationRefused)
 	}
-	f.invited = append(f.invited, organizationID+"/"+email)
+	f.invited = append(f.invited, organizationID+"/"+email+"/"+role)
+	if f.invitations == nil {
+		f.invitations = map[string][]Invitation{}
+	}
+	f.invitations[organizationID] = append(f.invitations[organizationID],
+		Invitation{ID: fmt.Sprintf("orginv_%d", len(f.invited)), Email: email, Role: role, CreatedAt: time.Unix(int64(len(f.invited)), 0)})
+	return nil
+}
+
+func (f *fakeOrganizations) Memberships(_ context.Context, userID string) ([]Membership, error) {
+	return f.memberships[userID], nil
+}
+
+func (f *fakeOrganizations) Claimed(_ context.Context, email string) ([]string, error) {
+	return f.claimed[email], nil
+}
+
+func (f *fakeOrganizations) Members(_ context.Context, organizationID string) ([]Member, error) {
+	return f.members[organizationID], nil
+}
+
+func (f *fakeOrganizations) Invitations(_ context.Context, organizationID string) ([]Invitation, error) {
+	return f.invitations[organizationID], nil
+}
+
+func (f *fakeOrganizations) RevokeInvitation(_ context.Context, organizationID, invitationID string) error {
+	f.invitations[organizationID] = slices.DeleteFunc(f.invitations[organizationID], func(i Invitation) bool { return i.ID == invitationID })
+	return nil
+}
+
+func (f *fakeOrganizations) SetRole(_ context.Context, organizationID, userID, role string) error {
+	for i := range f.members[organizationID] {
+		if f.members[organizationID][i].UserID == userID {
+			f.members[organizationID][i].Role = role
+		}
+	}
+	return nil
+}
+
+func (f *fakeOrganizations) RemoveMember(_ context.Context, organizationID, userID string) error {
+	f.members[organizationID] = slices.DeleteFunc(f.members[organizationID], func(m Member) bool { return m.UserID == userID })
 	return nil
 }
 
@@ -422,6 +469,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 	routes["/api/customer/topic-policy"] = customerRoute(`"max":12`, `"replicationFactor":1`, `"maxNameLength":200`)
 	routes["/api/customer/alerts"] = customerRoute(`"summary":"acme-billing is behind"`, `"consumerGroup":"acme-billing"`, `{"alerts":[]}`)
 	routes["/api/customer/alert-settings"] = customerRoute(`"consumerLag":{"enabled":true,"seconds":600}`, `"receivers":{}`, `"percent":5`)
+	routes["/api/customer/team"] = customerRoute(`"members":[]`, `"invitations":[]`, `"members":[]`)
 	routes["/api/customer/topology"] = customerRoute(`"name":"acme-orders"`, `"group":"billing"`, `"name":"globex-orders"`)
 	routes["/api/customer/events"] = customerRoute(`"message":"Topic acme-orders was created`, `"kind":"broker.restarted"`, `"events":[]`)
 	routes["/api/customer/consumer-groups/billing/lag"] = customerRoute(`"topic":"acme-orders"`, `"lagSeconds":[{`, `"topic":"globex-orders"`)
@@ -1033,7 +1081,7 @@ func TestOperatorsProvisionCustomers(t *testing.T) {
 	if customer == nil || customer.Labels[v1alpha1.ClerkOrganizationLabel] != "org_new1" || customer.Spec.ClerkOrganizationID != "org_new1" {
 		t.Fatalf("the customer %s is not linked to its organization: %+v", created.Id, customer)
 	}
-	if f.organizations.names["org_new1"] != "Initech" || strings.Join(f.organizations.invited, ",") != "org_new1/ada@initech.example" {
+	if f.organizations.names["org_new1"] != "Initech" || strings.Join(f.organizations.invited, ",") != "org_new1/ada@initech.example/org:admin" {
 		t.Errorf("organizations %v, invited %v", f.organizations.names, f.organizations.invited)
 	}
 	if !strings.Contains(f.log.String(), `"msg":"customer provisioned","audit":true,"tenant":"`+created.Id+`","user":"user_6"`) {

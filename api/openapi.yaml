@@ -663,6 +663,134 @@ paths:
           $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/customer/team:
+    get:
+      operationId: getTeam
+      summary: The members of the customer's organization and its pending invitations
+      responses:
+        "200":
+          description: The team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/team/invitations:
+    post:
+      operationId: inviteTeammate
+      summary: Invites someone to the customer's organization; for organization admins. Refused for an address that belongs or is invited to an organization already.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewInvitation"
+      responses:
+        "201":
+          description: The team, with the invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/team/invitations/{invitationID}:
+    parameters:
+      - name: invitationID
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: revokeInvitation
+      summary: Revokes a pending invitation; for organization admins
+      responses:
+        "200":
+          description: The team, without the invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/team/members/{userID}:
+    parameters:
+      - name: userID
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      operationId: changeTeammateRole
+      summary: Makes a member an admin or a member; for organization admins. The organization keeps at least one admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleChange"
+      responses:
+        "200":
+          description: The team
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+    delete:
+      operationId: removeTeammate
+      summary: Removes a member from the organization; for organization admins. The organization keeps at least one admin.
+      responses:
+        "200":
+          description: The team, without the member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Team"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/customer/alert-settings:
     get:
       operationId: getAlertSettings
@@ -1292,11 +1420,12 @@ components:
           description: The active Clerk organization, if any
         access:
           type: string
-          enum: [none, customer, operator]
+          enum: [none, customer, operator, several]
           description: |
             What the user may see: their organization's customer, every
-            customer as an operator, or nothing until they choose an
-            organization that is a customer.
+            customer as an operator, nothing while their organization is no
+            customer, or nothing while they belong to several organizations,
+            as a user belongs to one.
         admin:
           type: boolean
           description: Whether the user is an admin of the active organization
@@ -1398,6 +1527,68 @@ components:
         source:
           type: string
           description: The Postgres source that writes the topic, which keeps it from being deleted
+    TeamRole:
+      type: string
+      enum: [admin, member]
+      description: Admins manage the cluster, its credentials and the team; members use the cluster
+    Team:
+      type: object
+      required: [members, invitations]
+      properties:
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/Teammate"
+        invitations:
+          type: array
+          items:
+            $ref: "#/components/schemas/PendingInvitation"
+    Teammate:
+      type: object
+      required: [userID, email, role, joinedAt, you]
+      properties:
+        userID:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/TeamRole"
+        joinedAt:
+          type: string
+          format: date-time
+        you:
+          type: boolean
+          description: Whether this member is the signed-in user
+    PendingInvitation:
+      type: object
+      required: [id, email, role, invitedAt]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        role:
+          $ref: "#/components/schemas/TeamRole"
+        invitedAt:
+          type: string
+          format: date-time
+    NewInvitation:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          maxLength: 254
+        role:
+          $ref: "#/components/schemas/TeamRole"
+    RoleChange:
+      type: object
+      required: [role]
+      properties:
+        role:
+          $ref: "#/components/schemas/TeamRole"
     TopicPolicy:
       type: object
       required: [maxNameLength, reservedPrefixes, partitions, replicationFactor, retentionPresets, defaultRetentionMs, cleanupPolicies]

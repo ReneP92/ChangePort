@@ -144,6 +144,7 @@ const (
 	MeAccessCustomer MeAccess = "customer"
 	MeAccessNone     MeAccess = "none"
 	MeAccessOperator MeAccess = "operator"
+	MeAccessSeveral  MeAccess = "several"
 )
 
 // Valid indicates whether the value is a known member of the MeAccess enum.
@@ -154,6 +155,8 @@ func (e MeAccess) Valid() bool {
 	case MeAccessNone:
 		return true
 	case MeAccessOperator:
+		return true
+	case MeAccessSeveral:
 		return true
 	default:
 		return false
@@ -391,6 +394,24 @@ func (e TailPayloadFormat) Valid() bool {
 	case Json:
 		return true
 	case Text:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TeamRole.
+const (
+	Admin  TeamRole = "admin"
+	Member TeamRole = "member"
+)
+
+// Valid indicates whether the value is a known member of the TeamRole enum.
+func (e TeamRole) Valid() bool {
+	switch e {
+	case Admin:
+		return true
+	case Member:
 		return true
 	default:
 		return false
@@ -806,8 +827,9 @@ type Health struct {
 // Me defines model for Me.
 type Me struct {
 	// Access What the user may see: their organization's customer, every
-	// customer as an operator, or nothing until they choose an
-	// organization that is a customer.
+	// customer as an operator, nothing while their organization is no
+	// customer, or nothing while they belong to several organizations,
+	// as a user belongs to one.
 	Access MeAccess `json:"access"`
 
 	// Admin Whether the user is an admin of the active organization
@@ -822,8 +844,9 @@ type Me struct {
 }
 
 // MeAccess What the user may see: their organization's customer, every
-// customer as an operator, or nothing until they choose an
-// organization that is a customer.
+// customer as an operator, nothing while their organization is no
+// customer, or nothing while they belong to several organizations,
+// as a user belongs to one.
 type MeAccess string
 
 // MillisecondsThreshold defines model for MillisecondsThreshold.
@@ -847,6 +870,14 @@ type NewCustomer struct {
 
 // NewCustomerProfile defines model for NewCustomer.Profile.
 type NewCustomerProfile string
+
+// NewInvitation defines model for NewInvitation.
+type NewInvitation struct {
+	Email string `json:"email"`
+
+	// Role Admins manage the cluster, its credentials and the team; members use the cluster
+	Role TeamRole `json:"role"`
+}
 
 // NewSource defines model for NewSource.
 type NewSource struct {
@@ -897,6 +928,16 @@ type PartitionRange struct {
 	Default int `json:"default"`
 	Max     int `json:"max"`
 	Min     int `json:"min"`
+}
+
+// PendingInvitation defines model for PendingInvitation.
+type PendingInvitation struct {
+	Email     string    `json:"email"`
+	Id        string    `json:"id"`
+	InvitedAt time.Time `json:"invitedAt"`
+
+	// Role Admins manage the cluster, its credentials and the team; members use the cluster
+	Role TeamRole `json:"role"`
 }
 
 // PercentThreshold defines model for PercentThreshold.
@@ -953,6 +994,12 @@ type ReceiverStatus struct {
 type RetentionPreset struct {
 	Label string `json:"label"`
 	Ms    int64  `json:"ms"`
+}
+
+// RoleChange defines model for RoleChange.
+type RoleChange struct {
+	// Role Admins manage the cluster, its credentials and the team; members use the cluster
+	Role TeamRole `json:"role"`
 }
 
 // SecondsThreshold defines model for SecondsThreshold.
@@ -1218,6 +1265,29 @@ type TailPayloadFormat string
 // TailSkipped How many messages the tail has skipped so far, to stay within its rate
 type TailSkipped struct {
 	Skipped int64 `json:"skipped"`
+}
+
+// Team defines model for Team.
+type Team struct {
+	Invitations []PendingInvitation `json:"invitations"`
+	Members     []Teammate          `json:"members"`
+}
+
+// TeamRole Admins manage the cluster, its credentials and the team; members use the cluster
+type TeamRole string
+
+// Teammate defines model for Teammate.
+type Teammate struct {
+	Email    string    `json:"email"`
+	JoinedAt time.Time `json:"joinedAt"`
+	Name     *string   `json:"name,omitempty"`
+
+	// Role Admins manage the cluster, its credentials and the team; members use the cluster
+	Role   TeamRole `json:"role"`
+	UserID string   `json:"userID"`
+
+	// You Whether this member is the signed-in user
+	You bool `json:"you"`
 }
 
 // Throughput defines model for Throughput.
@@ -1547,6 +1617,12 @@ type SetSourcePasswordJSONRequestBody = SourcePassword
 // GetSourceSQLJSONRequestBody defines body for GetSourceSQL for application/json ContentType.
 type GetSourceSQLJSONRequestBody = SourceSQLRequest
 
+// InviteTeammateJSONRequestBody defines body for InviteTeammate for application/json ContentType.
+type InviteTeammateJSONRequestBody = NewInvitation
+
+// ChangeTeammateRoleJSONRequestBody defines body for ChangeTeammateRole for application/json ContentType.
+type ChangeTeammateRoleJSONRequestBody = RoleChange
+
 // CreateTopicJSONRequestBody defines body for CreateTopic for application/json ContentType.
 type CreateTopicJSONRequestBody = NewTopic
 
@@ -1651,6 +1727,21 @@ type ServerInterface interface {
 	// GetSourceSQL The SQL for a change to a source's database, for organization admins
 	// (POST /api/customer/sources/{source}/sql)
 	GetSourceSQL(w http.ResponseWriter, r *http.Request, source SourceName)
+	// GetTeam The members of the customer's organization and its pending invitations
+	// (GET /api/customer/team)
+	GetTeam(w http.ResponseWriter, r *http.Request)
+	// InviteTeammate Invites someone to the customer's organization; for organization admins. Refused for an address that belongs or is invited to an organization already.
+	// (POST /api/customer/team/invitations)
+	InviteTeammate(w http.ResponseWriter, r *http.Request)
+	// RevokeInvitation Revokes a pending invitation; for organization admins
+	// (DELETE /api/customer/team/invitations/{invitationID})
+	RevokeInvitation(w http.ResponseWriter, r *http.Request, invitationID string)
+	// RemoveTeammate Removes a member from the organization; for organization admins. The organization keeps at least one admin.
+	// (DELETE /api/customer/team/members/{userID})
+	RemoveTeammate(w http.ResponseWriter, r *http.Request, userID string)
+	// ChangeTeammateRole Makes a member an admin or a member; for organization admins. The organization keeps at least one admin.
+	// (PUT /api/customer/team/members/{userID})
+	ChangeTeammateRole(w http.ResponseWriter, r *http.Request, userID string)
 	// GetThroughput Bytes in and out per second over the whole cluster, or one topic
 	// (GET /api/customer/throughput)
 	GetThroughput(w http.ResponseWriter, r *http.Request, params GetThroughputParams)
@@ -2320,6 +2411,112 @@ func (siw *ServerInterfaceWrapper) GetSourceSQL(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetTeam operation middleware
+func (siw *ServerInterfaceWrapper) GetTeam(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTeam(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// InviteTeammate operation middleware
+func (siw *ServerInterfaceWrapper) InviteTeammate(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.InviteTeammate(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeInvitation operation middleware
+func (siw *ServerInterfaceWrapper) RevokeInvitation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "invitationID" -------------
+	var invitationID string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invitationID", r.PathValue("invitationID"), &invitationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invitationID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeInvitation(w, r, invitationID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveTeammate operation middleware
+func (siw *ServerInterfaceWrapper) RemoveTeammate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userID" -------------
+	var userID string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userID", r.PathValue("userID"), &userID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveTeammate(w, r, userID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeTeammateRole operation middleware
+func (siw *ServerInterfaceWrapper) ChangeTeammateRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "userID" -------------
+	var userID string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "userID", r.PathValue("userID"), &userID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "userID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeTeammateRole(w, r, userID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetThroughput operation middleware
 func (siw *ServerInterfaceWrapper) GetThroughput(w http.ResponseWriter, r *http.Request) {
 
@@ -2891,6 +3088,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/customer/sources/{source}/catalog", wrapper.RequestSourceCatalog)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/alerts", wrapper.ListAlerts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/alerts/stream", wrapper.StreamAlerts)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/team", wrapper.GetTeam)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/customer/team/invitations", wrapper.InviteTeammate)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/team/invitations/{invitationID}", wrapper.RevokeInvitation)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/team/members/{userID}", wrapper.RemoveTeammate)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/team/members/{userID}", wrapper.ChangeTeammateRole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/alert-settings", wrapper.GetAlertSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/alert-settings", wrapper.ChangeAlertSettings)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.RemoveAlertReceiver)
@@ -5383,6 +5585,466 @@ func (response GetSourceSQL503JSONResponse) VisitGetSourceSQLResponse(w http.Res
 	return err
 }
 
+type GetTeamRequestObject struct {
+}
+
+type GetTeamResponseObject interface {
+	VisitGetTeamResponse(w http.ResponseWriter) error
+}
+
+type GetTeam200JSONResponse Team
+
+func (response GetTeam200JSONResponse) VisitGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTeam401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetTeam401JSONResponse) VisitGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTeam403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetTeam403JSONResponse) VisitGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTeam404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetTeam404JSONResponse) VisitGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTeam503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response GetTeam503JSONResponse) VisitGetTeamResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InviteTeammateRequestObject struct {
+	Body *InviteTeammateJSONRequestBody
+}
+
+type InviteTeammateResponseObject interface {
+	VisitInviteTeammateResponse(w http.ResponseWriter) error
+}
+
+type InviteTeammate201JSONResponse Team
+
+func (response InviteTeammate201JSONResponse) VisitInviteTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InviteTeammate400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response InviteTeammate400JSONResponse) VisitInviteTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InviteTeammate401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response InviteTeammate401JSONResponse) VisitInviteTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InviteTeammate403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response InviteTeammate403JSONResponse) VisitInviteTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InviteTeammate404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response InviteTeammate404JSONResponse) VisitInviteTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InviteTeammate409JSONResponse struct{ ConflictJSONResponse }
+
+func (response InviteTeammate409JSONResponse) VisitInviteTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type InviteTeammate503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response InviteTeammate503JSONResponse) VisitInviteTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeInvitationRequestObject struct {
+	InvitationID string `json:"invitationID"`
+}
+
+type RevokeInvitationResponseObject interface {
+	VisitRevokeInvitationResponse(w http.ResponseWriter) error
+}
+
+type RevokeInvitation200JSONResponse Team
+
+func (response RevokeInvitation200JSONResponse) VisitRevokeInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeInvitation401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RevokeInvitation401JSONResponse) VisitRevokeInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeInvitation403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RevokeInvitation403JSONResponse) VisitRevokeInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeInvitation404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RevokeInvitation404JSONResponse) VisitRevokeInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeInvitation503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response RevokeInvitation503JSONResponse) VisitRevokeInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTeammateRequestObject struct {
+	UserID string `json:"userID"`
+}
+
+type RemoveTeammateResponseObject interface {
+	VisitRemoveTeammateResponse(w http.ResponseWriter) error
+}
+
+type RemoveTeammate200JSONResponse Team
+
+func (response RemoveTeammate200JSONResponse) VisitRemoveTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTeammate401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RemoveTeammate401JSONResponse) VisitRemoveTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTeammate403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RemoveTeammate403JSONResponse) VisitRemoveTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTeammate404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RemoveTeammate404JSONResponse) VisitRemoveTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTeammate409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RemoveTeammate409JSONResponse) VisitRemoveTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveTeammate503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response RemoveTeammate503JSONResponse) VisitRemoveTeammateResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTeammateRoleRequestObject struct {
+	UserID string `json:"userID"`
+	Body   *ChangeTeammateRoleJSONRequestBody
+}
+
+type ChangeTeammateRoleResponseObject interface {
+	VisitChangeTeammateRoleResponse(w http.ResponseWriter) error
+}
+
+type ChangeTeammateRole200JSONResponse Team
+
+func (response ChangeTeammateRole200JSONResponse) VisitChangeTeammateRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTeammateRole400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ChangeTeammateRole400JSONResponse) VisitChangeTeammateRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTeammateRole401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ChangeTeammateRole401JSONResponse) VisitChangeTeammateRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTeammateRole403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ChangeTeammateRole403JSONResponse) VisitChangeTeammateRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTeammateRole404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ChangeTeammateRole404JSONResponse) VisitChangeTeammateRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTeammateRole409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ChangeTeammateRole409JSONResponse) VisitChangeTeammateRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTeammateRole503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ChangeTeammateRole503JSONResponse) VisitChangeTeammateRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetThroughputRequestObject struct {
 	Params GetThroughputParams
 }
@@ -7147,6 +7809,21 @@ type StrictServerInterface interface {
 	// GetSourceSQL The SQL for a change to a source's database, for organization admins
 	// (POST /api/customer/sources/{source}/sql)
 	GetSourceSQL(ctx context.Context, request GetSourceSQLRequestObject) (GetSourceSQLResponseObject, error)
+	// GetTeam The members of the customer's organization and its pending invitations
+	// (GET /api/customer/team)
+	GetTeam(ctx context.Context, request GetTeamRequestObject) (GetTeamResponseObject, error)
+	// InviteTeammate Invites someone to the customer's organization; for organization admins. Refused for an address that belongs or is invited to an organization already.
+	// (POST /api/customer/team/invitations)
+	InviteTeammate(ctx context.Context, request InviteTeammateRequestObject) (InviteTeammateResponseObject, error)
+	// RevokeInvitation Revokes a pending invitation; for organization admins
+	// (DELETE /api/customer/team/invitations/{invitationID})
+	RevokeInvitation(ctx context.Context, request RevokeInvitationRequestObject) (RevokeInvitationResponseObject, error)
+	// RemoveTeammate Removes a member from the organization; for organization admins. The organization keeps at least one admin.
+	// (DELETE /api/customer/team/members/{userID})
+	RemoveTeammate(ctx context.Context, request RemoveTeammateRequestObject) (RemoveTeammateResponseObject, error)
+	// ChangeTeammateRole Makes a member an admin or a member; for organization admins. The organization keeps at least one admin.
+	// (PUT /api/customer/team/members/{userID})
+	ChangeTeammateRole(ctx context.Context, request ChangeTeammateRoleRequestObject) (ChangeTeammateRoleResponseObject, error)
 	// GetThroughput Bytes in and out per second over the whole cluster, or one topic
 	// (GET /api/customer/throughput)
 	GetThroughput(ctx context.Context, request GetThroughputRequestObject) (GetThroughputResponseObject, error)
@@ -7999,6 +8676,146 @@ func (sh *strictHandler) GetSourceSQL(w http.ResponseWriter, r *http.Request, so
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetSourceSQLResponseObject); ok {
 		if err := validResponse.VisitGetSourceSQLResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTeam operation middleware
+func (sh *strictHandler) GetTeam(w http.ResponseWriter, r *http.Request) {
+	var request GetTeamRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTeam(ctx, request.(GetTeamRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTeam")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTeamResponseObject); ok {
+		if err := validResponse.VisitGetTeamResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// InviteTeammate operation middleware
+func (sh *strictHandler) InviteTeammate(w http.ResponseWriter, r *http.Request) {
+	var request InviteTeammateRequestObject
+
+	var body InviteTeammateJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.InviteTeammate(ctx, request.(InviteTeammateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "InviteTeammate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(InviteTeammateResponseObject); ok {
+		if err := validResponse.VisitInviteTeammateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeInvitation operation middleware
+func (sh *strictHandler) RevokeInvitation(w http.ResponseWriter, r *http.Request, invitationID string) {
+	var request RevokeInvitationRequestObject
+
+	request.InvitationID = invitationID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeInvitation(ctx, request.(RevokeInvitationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeInvitation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeInvitationResponseObject); ok {
+		if err := validResponse.VisitRevokeInvitationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveTeammate operation middleware
+func (sh *strictHandler) RemoveTeammate(w http.ResponseWriter, r *http.Request, userID string) {
+	var request RemoveTeammateRequestObject
+
+	request.UserID = userID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveTeammate(ctx, request.(RemoveTeammateRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveTeammate")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveTeammateResponseObject); ok {
+		if err := validResponse.VisitRemoveTeammateResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeTeammateRole operation middleware
+func (sh *strictHandler) ChangeTeammateRole(w http.ResponseWriter, r *http.Request, userID string) {
+	var request ChangeTeammateRoleRequestObject
+
+	request.UserID = userID
+
+	var body ChangeTeammateRoleJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeTeammateRole(ctx, request.(ChangeTeammateRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeTeammateRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeTeammateRoleResponseObject); ok {
+		if err := validResponse.VisitChangeTeammateRoleResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

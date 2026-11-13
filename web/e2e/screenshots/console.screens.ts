@@ -418,6 +418,17 @@ test("every screen of the console", async ({ browser }) => {
   ).toBeVisible({ timeout: 4 * 60_000 });
   await shot(admin, "03-overview");
 
+  // Ada's team: herself, and a colleague she invites.
+  await nav.getByRole("link", { name: "Team" }).click();
+  await main.getByLabel("Email address").fill(testEmail(fixtures.run, "grace"));
+  await main.getByRole("button", { name: "Invite" }).click();
+  await expect(main.getByRole("list", { name: "Pending invitations" })).toContainText(
+    testEmail(fixtures.run, "grace"),
+  );
+  await shot(admin, "50-team");
+  await nav.getByRole("link", { name: "Cluster" }).click();
+  await expect(main.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 30_000 });
+
   // A topic's page and a consumer group's, with the changes over their
   // graphs: orders as Ada created it, and search-indexer, which started.
   await main.getByRole("link", { name: "orders", exact: true }).first().click();
