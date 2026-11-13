@@ -11,8 +11,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { TimelineEvent } from "@/api/client";
-import type { NumberedEvent } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
+import { ReferenceLine, usePlotArea } from "recharts";
+import { numberedMarkers, type NumberedEvent } from "@/lib/timeline";
 
 const icons: Record<TimelineEvent["kind"], LucideIcon> = {
   "topic.created": CirclePlus,
@@ -142,4 +143,36 @@ export function MarkerLabel({
       </text>
     </g>
   );
+}
+
+/**
+ * A marker per event on a chart whose x axis runs from start to end, in
+ * milliseconds: a dashed line, with the event's number on top where the
+ * number has room at the chart's width (numberedMarkers). It reads the plot's
+ * width from the chart it is in.
+ */
+export function EventMarkers({
+  numbered,
+  highlighted,
+  start,
+  end,
+}: {
+  numbered: NumberedEvent[];
+  highlighted: number | null;
+  start: number;
+  end: number;
+}) {
+  const width = usePlotArea()?.width ?? 0;
+  const labelled = numberedMarkers(numbered, highlighted, start, end, width);
+  return numbered.map(({ n, time, event }) => (
+    <ReferenceLine
+      key={event.id}
+      x={time}
+      stroke={n === highlighted ? "var(--foreground)" : "var(--muted-foreground)"}
+      strokeOpacity={n === highlighted ? 1 : 0.6}
+      strokeDasharray="3 3"
+      ifOverflow="hidden"
+      {...(labelled.has(n) ? { label: <MarkerLabel n={n} active={n === highlighted} /> } : {})}
+    />
+  ));
 }

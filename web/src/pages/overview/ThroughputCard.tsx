@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import type { ThroughputRange } from "@/api/client";
 import { useEvents, useThroughput } from "@/api/queries";
-import { ChangeList } from "@/components/Timeline";
+import { ChangeList, EventMarkers } from "@/components/Timeline";
 import { rangeMilliseconds, ranges } from "@/lib/ranges";
-import { eventMarkers, numberEvents } from "@/lib/timeline";
+import { numberEvents } from "@/lib/timeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -116,7 +116,7 @@ export function ThroughputCard({ topic }: { topic?: string }) {
                 }
               />
               <ChartLegend content={<ChartLegendContent />} />
-              {eventMarkers(numbered, highlighted, start, end)}
+              <EventMarkers numbered={numbered} highlighted={highlighted} start={start} end={end} />
               {/* Without animation: each refresh would draw the chart again from nothing. */}
               <Area
                 dataKey="bytesIn"

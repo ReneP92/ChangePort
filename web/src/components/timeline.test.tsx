@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { TimelineEvent } from "@/api/client";
 import { ChangeList } from "@/components/Timeline";
-import { eventMarkers, numberEvents } from "@/lib/timeline";
+import { markerSpacing, numberEvents, numberedMarkers } from "@/lib/timeline";
 
 afterEach(cleanup);
 
@@ -106,23 +106,46 @@ describe("ChangeList", () => {
   });
 });
 
-describe("eventMarkers", () => {
-  test("numbers the newest of markers too close to number apart, and the one pointed at", () => {
-    const numbered = numberEvents(
-      [
-        event("a", "2026-10-31T12:10:00Z"),
-        event("b", "2026-10-31T12:10:30Z"),
-        event("c", "2026-10-31T12:11:00Z"),
-        event("d", "2026-10-31T12:40:00Z"),
-      ],
-      start,
-      end,
-    );
-    const labelled = (highlighted: number | null) =>
-      eventMarkers(numbered, highlighted, start, end)
-        .filter((marker) => (marker.props as { label?: unknown }).label !== undefined)
-        .map((marker) => marker.key);
-    expect(labelled(null)).toEqual(["c", "d"]);
-    expect(labelled(1)).toEqual(["a", "c", "d"]);
+describe("numberedMarkers", () => {
+  // Changes over an hour, as on the overview: three a minute apart, one
+  // half an hour later.
+  const numbered = numberEvents(
+    [
+      event("a", "2026-10-31T12:10:00Z"),
+      event("b", "2026-10-31T12:11:00Z"),
+      event("c", "2026-10-31T12:12:00Z"),
+      event("d", "2026-10-31T12:40:00Z"),
+    ],
+    start,
+    end,
+  );
+  const ids = (labelled: Set<number>) =>
+    numbered.filter(({ n }) => labelled.has(n)).map(({ event }) => event.id);
+  const x = (n: number, width: number) =>
+    (((numbered[n - 1]?.time ?? start) - start) / (end - start)) * width;
+
+  test("numbers markers a minute apart on a wide chart", () => {
+    // 720 pixels for an hour: 12 a minute.
+    expect(ids(numberedMarkers(numbered, null, start, end, 720))).toEqual(["a", "c", "d"]);
+  });
+
+  test("numbers the newest of markers too close on a phone, and never overlaps two numbers", () => {
+    // 230 pixels for an hour, a phone: 4 a minute.
+    for (const highlighted of [null, 1, 2, 3, 4]) {
+      const labelled = [...numberedMarkers(numbered, highlighted, start, end, 230)];
+      for (const a of labelled) {
+        for (const b of labelled) {
+          if (a !== b) {
+            expect(Math.abs(x(a, 230) - x(b, 230))).toBeGreaterThanOrEqual(markerSpacing);
+          }
+        }
+      }
+    }
+    expect(ids(numberedMarkers(numbered, null, start, end, 230))).toEqual(["c", "d"]);
+  });
+
+  test("always numbers the one pointed at in the list", () => {
+    expect(ids(numberedMarkers(numbered, 1, start, end, 230))).toEqual(["a", "d"]);
+    expect(ids(numberedMarkers(numbered, 2, start, end, 230))).toEqual(["b", "d"]);
   });
 });
