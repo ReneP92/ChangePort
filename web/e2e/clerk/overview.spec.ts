@@ -58,17 +58,17 @@ test("an admin downloads client.properties and produces with it", async ({ page 
 });
 
 // A user belongs to one organization, their company's: the header names
-// it and opens its settings, with no other organization to switch to or
-// create.
+// it and leads to its team, with no other organization to switch to.
 test("the header names the user's one organization", async ({ page }) => {
   await openOverview(page, fixtures.users.adminA);
   const organization = page
     .getByRole("banner")
-    .getByRole("button", { name: `E2E ${fixtures.run} A` });
+    .getByRole("link", { name: `E2E ${fixtures.run} A` });
   await expect(organization).toBeVisible();
   await expect(page.locator(".cl-organizationSwitcherTrigger")).toHaveCount(0);
   await organization.click();
-  await expect(page.locator(".cl-organizationProfile-root")).toBeVisible({ timeout: 20_000 });
+  await expect(page).toHaveURL(/\/team$/);
+  await expect(page.getByRole("heading", { name: "Team", level: 1 })).toBeVisible();
 });
 
 test("a member sees how to connect, but not the credentials", async ({ page }) => {

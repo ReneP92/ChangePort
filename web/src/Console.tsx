@@ -6,6 +6,7 @@ import { Notice } from "@/components/Notice";
 import { OrganizationButton } from "@/components/OrganizationButton";
 import { Home } from "@/pages/Home";
 import { AlertsPage } from "@/pages/alerts/AlertsPage";
+import { TeamPage } from "@/pages/team/TeamPage";
 import { Welcome } from "@/pages/welcome/Welcome";
 import { ConsumerGroupPage } from "@/pages/consumer-groups/ConsumerGroupPage";
 import { OperatorCustomer } from "@/pages/operator/OperatorCustomer";
@@ -92,6 +93,7 @@ function SignedIn() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/welcome" element={<Welcome />} />
+        <Route path="/team" element={<TeamPage />} />
         <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/topics/:name" element={<TopicPage />} />
         <Route path="/consumer-groups/:group" element={<ConsumerGroupPage />} />
@@ -135,6 +137,9 @@ function CustomerNav() {
       <NavLink to="/alerts" className={navLink}>
         Alerts
         <AlertCount />
+      </NavLink>
+      <NavLink to="/team" className={navLink}>
+        Team
       </NavLink>
     </nav>
   );

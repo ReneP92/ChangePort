@@ -136,6 +136,21 @@ to them, an unknown page, and an organization without a cluster.
 
 ![No cluster](screenshots/09-no-cluster-desktop.png)
 
+### Team
+
+The organization's members and pending invitations, from the header's
+Team link or the organization's name. A person belongs to one
+organization, their company's, so an invitation to an address that
+belongs, or is invited, to another organization is refused, as is an
+operator's invitation of such an address as a new customer's admin, and a
+trial for someone whose organization has its cluster already. Admins
+invite colleagues as admins or members, revoke invitations, change roles
+and remove members; the organization keeps at least one admin. Members
+see the team and ask an admin to change it. Someone who ends up in several
+organizations anyway sees only that they do, until support sorts it out.
+
+![The team](screenshots/50-team-desktop.png)
+
 ## Trials
 
 Someone new signs up at `/trial`, which shows Clerk's sign-up; sign-in links

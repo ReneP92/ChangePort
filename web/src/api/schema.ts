@@ -420,6 +420,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/customer/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The members of the customer's organization and its pending invitations */
+        get: operations["getTeam"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/team/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invites someone to the customer's organization; for organization admins. Refused for an address that belongs or is invited to an organization already. */
+        post: operations["inviteTeammate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/team/invitations/{invitationID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitationID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revokes a pending invitation; for organization admins */
+        delete: operations["revokeInvitation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/team/members/{userID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Makes a member an admin or a member; for organization admins. The organization keeps at least one admin. */
+        put: operations["changeTeammateRole"];
+        post?: never;
+        /** Removes a member from the organization; for organization admins. The organization keeps at least one admin. */
+        delete: operations["removeTeammate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/customer/alert-settings": {
         parameters: {
             query?: never;
@@ -722,11 +795,12 @@ export interface components {
             organizationID?: string;
             /**
              * @description What the user may see: their organization's customer, every
-             *     customer as an operator, or nothing until they choose an
-             *     organization that is a customer.
+             *     customer as an operator, nothing while their organization is no
+             *     customer, or nothing while they belong to several organizations,
+             *     as a user belongs to one.
              * @enum {string}
              */
-            access: "none" | "customer" | "operator";
+            access: "none" | "customer" | "operator" | "several";
             /** @description Whether the user is an admin of the active organization */
             admin?: boolean;
             /** @description The customer of the active organization, if any */
@@ -788,6 +862,39 @@ export interface components {
             bytesOutPerSecond?: number;
             /** @description The Postgres source that writes the topic, which keeps it from being deleted */
             source?: string;
+        };
+        /**
+         * @description Admins manage the cluster, its credentials and the team; members use the cluster
+         * @enum {string}
+         */
+        TeamRole: "admin" | "member";
+        Team: {
+            members: components["schemas"]["Teammate"][];
+            invitations: components["schemas"]["PendingInvitation"][];
+        };
+        Teammate: {
+            userID: string;
+            name?: string;
+            email: string;
+            role: components["schemas"]["TeamRole"];
+            /** Format: date-time */
+            joinedAt: string;
+            /** @description Whether this member is the signed-in user */
+            you: boolean;
+        };
+        PendingInvitation: {
+            id: string;
+            email: string;
+            role: components["schemas"]["TeamRole"];
+            /** Format: date-time */
+            invitedAt: string;
+        };
+        NewInvitation: {
+            email: string;
+            role: components["schemas"]["TeamRole"];
+        };
+        RoleChange: {
+            role: components["schemas"]["TeamRole"];
         };
         TopicPolicy: {
             maxNameLength: number;
@@ -2198,6 +2305,145 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    getTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The team */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    inviteTeammate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewInvitation"];
+            };
+        };
+        responses: {
+            /** @description The team, with the invitation */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    revokeInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invitationID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The team, without the invitation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    changeTeammateRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleChange"];
+            };
+        };
+        responses: {
+            /** @description The team */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    removeTeammate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The team, without the member */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["NotConfigured"];
         };
     };

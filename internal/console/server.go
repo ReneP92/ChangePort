@@ -397,13 +397,26 @@ func (s *Server) GetMe(ctx context.Context, _ api.GetMeRequestObject) (api.GetMe
 		return nil, err
 	}
 	me := api.GetMe200JSONResponse{UserID: principal.UserID, Access: api.MeAccessNone}
-	if principal.OrganizationID == "" {
+	if principal.OrganizationID != "" {
+		me.OrganizationID = ptr.To(principal.OrganizationID)
+		me.Admin = ptr.To(principal.Admin())
+		if s.operator(principal) {
+			me.Access = api.MeAccessOperator
+			return me, nil
+		}
+	}
+	// A person belongs to one organization: one who ended up in several,
+	// such as by accepting a second invitation, sees nothing until support
+	// sorts it out.
+	memberships, err := s.organizations.Memberships(ctx, principal.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if len(memberships) > 1 {
+		me.Access = api.MeAccessSeveral
 		return me, nil
 	}
-	me.OrganizationID = ptr.To(principal.OrganizationID)
-	me.Admin = ptr.To(principal.Admin())
-	if s.operator(principal) {
-		me.Access = api.MeAccessOperator
+	if principal.OrganizationID == "" {
 		return me, nil
 	}
 	customer, err := s.customers.ByOrganization(ctx, principal.OrganizationID)
@@ -514,6 +527,17 @@ func (s *Server) ProvisionCustomer(ctx context.Context, request api.ProvisionCus
 	case email != "" && !validEmail(email):
 		return invalid("inviteEmail", "Enter an email address, such as ada@example.com, or leave it empty."), nil
 	}
+	// A person belongs to one organization, so the admin to invite belongs,
+	// and is invited, to none yet.
+	if email != "" {
+		claimed, err := s.organizations.Claimed(ctx, email)
+		if err != nil {
+			return nil, err
+		}
+		if len(claimed) > 0 {
+			return invalid("inviteEmail", email+" belongs, or is invited, to an organization already, and a person belongs to one. Invite another address, or leave it empty."), nil
+		}
+	}
 
 	customer := &v1alpha1.Customer{
 		Spec: v1alpha1.CustomerSpec{
@@ -522,11 +546,11 @@ func (s *Server) ProvisionCustomer(ctx context.Context, request api.ProvisionCus
 			DeletionProtection: body.DeletionProtection,
 		},
 	}
-	_, err = s.provision(ctx, customer, func(organizationID string) error {
+	_, err = s.provision(ctx, customer, "", func(organizationID string) error {
 		if email == "" {
 			return nil
 		}
-		return s.organizations.InviteAdmin(ctx, organizationID, email)
+		return s.organizations.Invite(ctx, organizationID, email, adminRole)
 	})
 	if errors.Is(err, ErrInvitationRefused) {
 		return invalid("inviteEmail", err.Error()), nil
@@ -539,22 +563,27 @@ func (s *Server) ProvisionCustomer(ctx context.Context, request api.ProvisionCus
 	return api.ProvisionCustomer201JSONResponse(toAPI(customer)), nil
 }
 
-// provision creates a Clerk organization named after the customer, lets
-// admit give it its first admin, and creates the customer with a new ID,
-// filling in customer's name and organization. When a step fails, it
-// deletes the organization again and returns the error. On success, it
-// returns undo, which deletes both the customer and the organization, for a
-// caller whose own later step fails.
-func (s *Server) provision(ctx context.Context, customer *v1alpha1.Customer, admit func(organizationID string) error) (undo func(), err error) {
-	organizationID, err := s.organizations.Create(ctx, customer.Spec.DisplayName)
-	if err != nil {
-		return nil, err
-	}
+// provision creates a Clerk organization named after the customer, or
+// takes organizationID's, lets admit give it its first admin, and creates
+// the customer with a new ID, filling in customer's name and organization.
+// When a step fails, it deletes an organization it created again and
+// returns the error. On success, it returns undo, which deletes the
+// customer, and the organization if it created it, for a caller whose own
+// later step fails.
+func (s *Server) provision(ctx context.Context, customer *v1alpha1.Customer, organizationID string, admit func(organizationID string) error) (undo func(), err error) {
 	// Undoes even when the request is gone.
 	background := context.WithoutCancel(ctx)
-	deleteOrganization := func() {
-		if err := s.organizations.Delete(background, organizationID); err != nil {
-			s.logger.ErrorContext(ctx, "could not delete the organization of a failed provisioning", "organization", organizationID, "error", err)
+	deleteOrganization := func() {}
+	if organizationID == "" {
+		organizationID, err = s.organizations.Create(ctx, customer.Spec.DisplayName)
+		if err != nil {
+			return nil, err
+		}
+		created := organizationID
+		deleteOrganization = func() {
+			if err := s.organizations.Delete(background, created); err != nil {
+				s.logger.ErrorContext(ctx, "could not delete the organization of a failed provisioning", "organization", created, "error", err)
+			}
 		}
 	}
 	if err := admit(organizationID); err != nil {

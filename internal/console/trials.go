@@ -307,7 +307,18 @@ func (s *Server) ApproveTrialRequest(ctx context.Context, request api.ApproveTri
 			Contact: trial.Spec.Email,
 		},
 	}}
-	undo, err := s.provision(ctx, customer, func(organizationID string) error {
+	existing, p, err := s.trialOrganization(ctx, trial.Spec.ClerkUserID)
+	switch {
+	case err != nil:
+		return nil, err
+	case p != nil:
+		return api.ApproveTrialRequest409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(*p)}, nil
+	}
+	undo, err := s.provision(ctx, customer, existing, func(organizationID string) error {
+		// The requester is the admin of their own organization already.
+		if existing != "" {
+			return nil
+		}
 		return s.organizations.AddAdmin(ctx, organizationID, trial.Spec.ClerkUserID)
 	})
 	if err != nil {
@@ -502,4 +513,37 @@ func (s *Server) ChangeTrial(ctx context.Context, request api.ChangeTrialRequest
 		s.audit(ctx, principal, customer.Name, "trial extended", "trial_ends_at", trial.EndsAt.UTC())
 	}
 	return api.ChangeTrial200JSONResponse(toAPI(customer)), nil
+}
+
+// trialOrganization returns the organization a trial's cluster goes into,
+// as a person belongs to one: a new one for a requester without, "", or
+// the one they are the admin of when it has no cluster, such as one
+// deprovisioned. Otherwise it returns why the trial cannot be approved.
+func (s *Server) trialOrganization(ctx context.Context, userID string) (string, *api.Problem, error) {
+	memberships, err := s.organizations.Memberships(ctx, userID)
+	if err != nil {
+		return "", nil, err
+	}
+	refuse := func(detail string) (string, *api.Problem, error) {
+		p := problem(http.StatusConflict, "The requester has an organization", detail)
+		return "", &p, nil
+	}
+	switch {
+	case len(memberships) == 0:
+		return "", nil, nil
+	case len(memberships) > 1:
+		return refuse("The requester belongs to several organizations, and a person belongs to one. Ask support to remove them from the others first.")
+	}
+	membership := memberships[0]
+	customer, err := s.customers.ByOrganization(ctx, membership.OrganizationID)
+	if err != nil {
+		return "", nil, err
+	}
+	switch {
+	case customer != nil:
+		return refuse(fmt.Sprintf("The requester belongs to the organization of customer %s, which has its cluster already.", customer.Name))
+	case membership.Role != adminRole:
+		return refuse("The requester is a member, not an admin, of an organization without a cluster. Its admin asks for the trial instead.")
+	}
+	return membership.OrganizationID, nil, nil
 }

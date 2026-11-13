@@ -20,6 +20,8 @@ export function Home() {
       return <Navigate to="/operator" replace />;
     case "customer":
       return <CustomerHome />;
+    case "several":
+      return <SeveralOrganizations />;
     default:
       return <NoCustomer organization={me.data.organizationID !== undefined} />;
   }
@@ -47,12 +49,7 @@ function NoCustomer({ organization }: { organization: boolean }) {
     case "active":
       return <Notice title="Loading" busy />;
     case "several":
-      return (
-        <Notice title="Your account belongs to several organizations">
-          A Changeport account belongs to one organization, its company&apos;s. Ask Changeport
-          support to remove it from the others.
-        </Notice>
-      );
+      return <SeveralOrganizations />;
     case "none":
       return (
         <main className="mx-auto flex max-w-xl flex-col gap-4 p-8">
@@ -100,5 +97,15 @@ function CustomerHome() {
     <CustomerArea>
       {(customer, admin) => <Overview customer={customer} admin={admin} />}
     </CustomerArea>
+  );
+}
+
+/** A person belongs to one organization; one in several sees nothing. */
+function SeveralOrganizations() {
+  return (
+    <Notice title="Your account belongs to several organizations">
+      A Changeport account belongs to one organization, its company&apos;s. Ask Changeport support
+      to remove it from the others.
+    </Notice>
   );
 }

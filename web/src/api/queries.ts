@@ -17,6 +17,8 @@ import {
   type SourceChange,
   type SourceCheckRequest,
   type SourceSQLRequest,
+  type Team,
+  type TeamRole,
   type ThroughputRange,
   type TrialApproval,
   type TrialChange,
@@ -711,6 +713,68 @@ export function useLiveAlerts() {
       controller.abort();
     };
   }, [getToken, organization, queries]);
+}
+
+/** The members of the active organization and its pending invitations. */
+export function useTeam() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["customer", "team", organization],
+    queryFn: async () => unwrap(await api.GET("/api/customer/team")),
+  });
+}
+
+/** A change to the team, which answers with the team as it is after it. */
+function useTeamChange<T>(change: (api: ApiClient, input: T) => Promise<Team>) {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: (input: T) => change(api, input),
+    onSuccess: (team) => {
+      queries.setQueryData(["customer", "team", organization], team);
+    },
+  });
+}
+
+/** Invites someone to the organization, for admins. */
+export function useInviteTeammate() {
+  return useTeamChange(async (api, invitation: { email: string; role: TeamRole }) =>
+    unwrap(await api.POST("/api/customer/team/invitations", { body: invitation })),
+  );
+}
+
+/** Revokes a pending invitation, for admins. */
+export function useRevokeInvitation() {
+  return useTeamChange(async (api, invitationID: string) =>
+    unwrap(
+      await api.DELETE("/api/customer/team/invitations/{invitationID}", {
+        params: { path: { invitationID } },
+      }),
+    ),
+  );
+}
+
+/** Makes a member an admin or a member, for admins. */
+export function useChangeTeammateRole() {
+  return useTeamChange(async (api, change: { userID: string; role: TeamRole }) =>
+    unwrap(
+      await api.PUT("/api/customer/team/members/{userID}", {
+        params: { path: { userID: change.userID } },
+        body: { role: change.role },
+      }),
+    ),
+  );
+}
+
+/** Removes a member from the organization, for admins. */
+export function useRemoveTeammate() {
+  return useTeamChange(async (api, userID: string) =>
+    unwrap(
+      await api.DELETE("/api/customer/team/members/{userID}", { params: { path: { userID } } }),
+    ),
+  );
 }
 
 /** The thresholds of the customer's alerts, and its receivers. */
