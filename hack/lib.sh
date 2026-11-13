@@ -550,23 +550,27 @@ public_addresses() {
 # Prepares a Kafka client container for a customer's public listener on kind,
 # as a client outside the cluster would connect: it writes the admin user's
 # client.properties into dir (mounted at /config) and sets KAFKA_CLIENT, the
-# docker run arguments that resolve the public names to the load balancers on
-# the kind network. Usage: prepare_kafka_client <customer> <dir>
+# docker run arguments that resolve the public names to the load balancers.
+# Usage: prepare_kafka_client <customer> <dir>
 prepare_kafka_client() {
   provisioner credentials -customer "$1" >"$2/client.properties"
   kafka_client_container "$1" "$2"
 }
 
-# Sets KAFKA_CLIENT, the docker run arguments of a Kafka client container on
-# the kind network that mounts dir at /config and resolves the customer's
-# public names to their load balancers. The tools run a few seconds each,
-# many at once in the tests, so their JVMs compile less and use one
-# processor's worth of threads rather than the whole Docker VM's: half the
-# CPU time of Kafka's defaults, and no slower.
+# Sets KAFKA_CLIENT, the docker run arguments of a Kafka client container
+# that mounts dir at /config and resolves the customer's public names to
+# their load balancers. The tools run a few seconds each, many at once in the
+# tests, so their JVMs compile less and use one processor's worth of threads
+# rather than the whole Docker VM's: half the CPU time of Kafka's defaults,
+# and no slower. They share the Docker host's network, which reaches the load
+# balancers on the kind network as clients outside it would: a container on
+# a network of its own adds an interface to the host as it starts, which
+# Chrome takes for a change of network, failing the requests of the console
+# end-to-end tests' pages meanwhile with ERR_NETWORK_CHANGED.
 # Usage: kafka_client_container <customer> <dir>
 kafka_client_container() {
   local customer=$1 dir=$2 name address hosts=0
-  KAFKA_CLIENT=(--rm --network kind -e LOG_DIR=/tmp/kafka-logs -v "$dir:/config:ro"
+  KAFKA_CLIENT=(--rm --network host -e LOG_DIR=/tmp/kafka-logs -v "$dir:/config:ro"
     -e "KAFKA_JVM_PERFORMANCE_OPTS=-XX:+UseSerialGC -XX:TieredStopAtLevel=1 -XX:ActiveProcessorCount=1")
   while read -r name address; do
     [[ -n "$name" && -n "$address" ]] || die "a load balancer of customer $customer has no public name or address yet"
