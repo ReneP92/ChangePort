@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -34,21 +35,35 @@ func labelled(id, org string) *v1alpha1.Customer {
 
 func TestKubeCustomersByOrganization(t *testing.T) {
 	k := kubeCustomers(t, labelled("acme", "org_acme"), labelled("globex", "org_globex"))
-	customer, err := k.ByOrganization(t.Context(), "org_acme")
-	if err != nil || customer == nil || customer.Name != "acme" {
-		t.Errorf("ByOrganization(org_acme) = %v, %v, want acme", customer, err)
+	customers, err := k.ByOrganization(t.Context(), "org_acme")
+	if err != nil || len(customers) != 1 || customers[0].Name != "acme" {
+		t.Errorf("ByOrganization(org_acme) = %v, %v, want acme", customers, err)
 	}
 	for _, org := range []string{"org_unknown", "", "not a label value!"} {
-		if customer, err := k.ByOrganization(t.Context(), org); err != nil || customer != nil {
-			t.Errorf("ByOrganization(%q) = %v, %v, want none", org, customer, err)
+		if customers, err := k.ByOrganization(t.Context(), org); err != nil || len(customers) != 0 {
+			t.Errorf("ByOrganization(%q) = %v, %v, want none", org, customers, err)
 		}
 	}
 }
 
-func TestKubeCustomersRefuseSharedOrganizations(t *testing.T) {
-	k := kubeCustomers(t, labelled("acme", "org_shared"), labelled("globex", "org_shared"))
-	if customer, err := k.ByOrganization(t.Context(), "org_shared"); err == nil {
-		t.Errorf("ByOrganization() of an organization with two customers = %v, want an error", customer)
+// An organization has a customer per environment, production first.
+func TestKubeCustomersByOrganizationListsEnvironments(t *testing.T) {
+	inEnvironment := func(name, environment string) *v1alpha1.Customer {
+		customer := labelled(name, "org_acme")
+		customer.Spec.Environment = environment
+		return customer
+	}
+	k := kubeCustomers(t, inEnvironment("c-stage1", "staging"), inEnvironment("c-dev111", "dev"), inEnvironment("c-prod11", ""))
+	customers, err := k.ByOrganization(t.Context(), "org_acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for i := range customers {
+		names = append(names, environmentOf(&customers[i]))
+	}
+	if want := []string{"production", "dev", "staging"}; !slices.Equal(names, want) {
+		t.Errorf("environments = %v, want %v", names, want)
 	}
 }
 
@@ -114,13 +129,14 @@ func TestKubeCustomersFromTheWatch(t *testing.T) {
 	}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
-		got, err := customers.ByOrganization(ctx, "org_acme")
+		list, err := customers.ByOrganization(ctx, "org_acme")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got != nil {
-			if got.Name != "acme" || len(got.ManagedFields) != 0 {
-				t.Errorf("ByOrganization() = %s with %d managed fields, want acme without", got.Name, len(got.ManagedFields))
+		if len(list) > 0 {
+			got := list[0]
+			if len(list) != 1 || got.Name != "acme" || len(got.ManagedFields) != 0 {
+				t.Errorf("ByOrganization() = %d customers, %s with %d managed fields, want acme without", len(list), got.Name, len(got.ManagedFields))
 			}
 			break
 		}

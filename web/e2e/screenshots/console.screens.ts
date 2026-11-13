@@ -426,8 +426,33 @@ test("every screen of the console", async ({ browser }) => {
     testEmail(fixtures.run, "grace"),
   );
   await shot(admin, "50-team");
+
+  // The operator adds a staging environment to Acme, which Ada switches to.
+  await operator.goto(`/operator/customers/${acme.id}`);
+  await operator.getByRole("button", { name: "Add environment" }).click();
+  await operator
+    .getByRole("dialog", { name: /^Add an environment to / })
+    .getByRole("button", { name: "Add environment" })
+    .click();
+  await operator.waitForURL(
+    (url) => url.pathname.startsWith("/operator/customers/c-") && !url.pathname.endsWith(acme.id),
+    { timeout: 30_000 },
+  );
+  const staging = new URL(operator.url()).pathname.split("/").at(-1) ?? "";
+  created.customers.push(staging);
+  await expect(operator.getByRole("main").getByText("Ready", { exact: true })).toBeVisible({
+    timeout: 6 * 60_000,
+  });
   await nav.getByRole("link", { name: "Cluster" }).click();
   await expect(main.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 30_000 });
+  await admin.reload();
+  const switcher = admin.getByRole("banner").getByRole("combobox", { name: "Environment" });
+  await switcher.click();
+  await expect(admin.getByRole("option", { name: "staging" })).toBeVisible();
+  await shot(admin, "51-environments");
+  await admin.keyboard.press("Escape");
+  // Its cluster goes again, to spare the kind cluster's memory.
+  kubectl(["delete", "customer", staging, "--wait=false"]);
 
   // A topic's page and a consumer group's, with the changes over their
   // graphs: orders as Ada created it, and search-indexer, which started.

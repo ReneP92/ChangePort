@@ -41,6 +41,7 @@ import { EgressAddresses } from "@/pages/sources/EgressAddresses";
 import { SqlBlock } from "@/pages/sources/SqlBlock";
 import { tableKey, tableName } from "@/lib/tables";
 import { TablePicker } from "@/pages/sources/TablePicker";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** The wizard's steps, in order. */
 const steps = [
@@ -100,6 +101,7 @@ interface Draft {
 }
 
 function Wizard({ options }: { options: SourceOptions }) {
+  const envPath = useEnvironmentPath();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Draft>({
@@ -252,7 +254,7 @@ function Wizard({ options }: { options: SourceOptions }) {
             tables: draft.tables,
             retentionMs: draft.retentionMs,
           });
-          void navigate(`/sources/${source.name}`);
+          void navigate(envPath(`/sources/${source.name}`));
           return;
         }
       }
@@ -300,7 +302,7 @@ function Wizard({ options }: { options: SourceOptions }) {
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6 [&>*]:max-w-3xl">
       <Link
-        to="/sources"
+        to={envPath("/sources")}
         className="text-sm text-muted-foreground underline-offset-4 hover:underline"
       >
         ← Sources
@@ -643,7 +645,7 @@ function Wizard({ options }: { options: SourceOptions }) {
           <CardContent className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
             {step === 0 ? (
               <Button type="button" variant="outline" asChild>
-                <Link to="/sources">Cancel</Link>
+                <Link to={envPath("/sources")}>Cancel</Link>
               </Button>
             ) : (
               <Button

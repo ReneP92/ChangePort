@@ -448,19 +448,21 @@ func CredentialsVersion(source *v1alpha1.PostgresSource) string {
 }
 
 // ensureMetadata adds the finalizer, before anything is created that it must
-// delete, and keeps the Clerk organization label equal to the spec.
+// delete, and keeps the Clerk organization and environment labels equal to
+// the spec.
 func (r *CustomerReconciler) ensureMetadata(ctx context.Context, customer *v1alpha1.Customer) error {
 	original := customer.DeepCopy()
 	controllerutil.AddFinalizer(customer, v1alpha1.Finalizer)
 	labels := customer.GetLabels()
+	if labels == nil {
+		labels = map[string]string{}
+	}
 	if id := customer.Spec.ClerkOrganizationID; id != "" {
-		if labels == nil {
-			labels = map[string]string{}
-		}
 		labels[v1alpha1.ClerkOrganizationLabel] = id
 	} else {
 		delete(labels, v1alpha1.ClerkOrganizationLabel)
 	}
+	labels[v1alpha1.EnvironmentLabel] = cmp.Or(customer.Spec.Environment, v1alpha1.DefaultEnvironment)
 	customer.SetLabels(labels)
 	if equality.Semantic.DeepEqual(original.ObjectMeta, customer.ObjectMeta) {
 		return nil

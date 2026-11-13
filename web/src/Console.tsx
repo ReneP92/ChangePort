@@ -2,8 +2,10 @@ import { ClerkFailed, ClerkLoading, Show, SignIn, SignUp, UserButton } from "@cl
 import { Link, NavLink, Route, Routes, useLocation } from "react-router";
 import { ApiProvider } from "@/api/ApiProvider";
 import { useAlerts, useMe, useTrialRequests } from "@/api/queries";
+import { EnvironmentSwitcher } from "@/components/EnvironmentSwitcher";
 import { Notice } from "@/components/Notice";
 import { OrganizationButton } from "@/components/OrganizationButton";
+import { EnvironmentHome, EnvironmentLayout, ToEnvironment } from "@/pages/EnvironmentRoutes";
 import { Home } from "@/pages/Home";
 import { AlertsPage } from "@/pages/alerts/AlertsPage";
 import { TeamPage } from "@/pages/team/TeamPage";
@@ -18,6 +20,7 @@ import { Sources } from "@/pages/sources/Sources";
 import { TopicPage } from "@/pages/topics/TopicPage";
 import { TrialPage } from "@/pages/trial/TrialPage";
 import { cn } from "@/lib/utils";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** The console behind Clerk sign-in. */
 export function Console() {
@@ -86,20 +89,37 @@ function SignedIn() {
           <OperatorNav />
           <div className="ml-auto flex min-w-0 items-center gap-3">
             <OrganizationButton />
+            <EnvironmentSwitcher />
             <UserButton />
           </div>
         </div>
       </header>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/welcome" element={<Welcome />} />
+        {/* Each of an organization's environments, a cluster of its own. */}
+        <Route path="/e/:environment" element={<EnvironmentLayout />}>
+          <Route index element={<EnvironmentHome />} />
+          <Route path="welcome" element={<Welcome />} />
+          <Route path="alerts" element={<AlertsPage />} />
+          <Route path="topics/:name" element={<TopicPage />} />
+          <Route path="consumer-groups/:group" element={<ConsumerGroupPage />} />
+          <Route path="sources" element={<Sources />} />
+          <Route path="sources/new" element={<NewSource />} />
+          <Route path="sources/:name" element={<SourcePage />} />
+        </Route>
         <Route path="/team" element={<TeamPage />} />
-        <Route path="/alerts" element={<AlertsPage />} />
-        <Route path="/topics/:name" element={<TopicPage />} />
-        <Route path="/consumer-groups/:group" element={<ConsumerGroupPage />} />
-        <Route path="/sources" element={<Sources />} />
-        <Route path="/sources/new" element={<NewSource />} />
-        <Route path="/sources/:name" element={<SourcePage />} />
+        {/* Links from before environments open in the default one. */}
+        {[
+          "/welcome",
+          "/alerts",
+          "/topics/:name",
+          "/consumer-groups/:group",
+          "/sources",
+          "/sources/new",
+          "/sources/:name",
+        ].map((path) => (
+          <Route key={path} path={path} element={<ToEnvironment />} />
+        ))}
         <Route path="/trial" element={<TrialPage />} />
         <Route path="/operator" element={<OperatorCustomers />} />
         <Route path="/operator/trials" element={<OperatorTrialRequests />} />
@@ -118,6 +138,7 @@ const navLink = ({ isActive }: { isActive: boolean }) =>
 
 /** The pages of a customer's console, for its members. */
 function CustomerNav() {
+  const envPath = useEnvironmentPath();
   const me = useMe();
   if (me.data?.access !== "customer") {
     return null;
@@ -128,13 +149,13 @@ function CustomerNav() {
       aria-label="Console"
       className="flex items-center gap-1 max-sm:order-last max-sm:-ml-2 max-sm:w-full"
     >
-      <NavLink to="/" end className={navLink}>
+      <NavLink to={envPath("/")} end className={navLink}>
         Cluster
       </NavLink>
-      <NavLink to="/sources" className={navLink}>
+      <NavLink to={envPath("/sources")} className={navLink}>
         Sources
       </NavLink>
-      <NavLink to="/alerts" className={navLink}>
+      <NavLink to={envPath("/alerts")} className={navLink}>
         Alerts
         <AlertCount />
       </NavLink>

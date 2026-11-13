@@ -18,6 +18,9 @@ spec:
     - jsonPath: .spec.displayName
       name: Display name
       type: string
+    - jsonPath: .spec.environment
+      name: Environment
+      type: string
     - jsonPath: .spec.profile
       name: Profile
       type: string
@@ -84,6 +87,20 @@ spec:
                 maxLength: 100
                 minLength: 1
                 type: string
+              environment:
+                default: production
+                description: |-
+                  Environment names the customer's cluster among its organization's,
+                  such as production or staging: each environment is a Customer of its
+                  own, with its own cluster. It is unique within the organization, which
+                  the console checks, and cannot change.
+                maxLength: 20
+                minLength: 1
+                pattern: ^[a-z]([-a-z0-9]*[a-z0-9])?$
+                type: string
+                x-kubernetes-validations:
+                - message: the environment cannot change
+                  rule: self == oldSelf
               profile:
                 description: |-
                   Profile sizes the customer's dedicated Kafka cluster. It cannot change:

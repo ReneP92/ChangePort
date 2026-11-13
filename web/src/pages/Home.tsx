@@ -1,10 +1,8 @@
 import { Link, Navigate } from "react-router";
-import { useCustomer, useMe, useTopics } from "@/api/queries";
+import { useMe } from "@/api/queries";
 import { Notice } from "@/components/Notice";
-import { onboardingDone, shouldWelcome } from "@/lib/onboarding";
 import { useOrganizationState } from "@/lib/organization";
-import { CustomerArea } from "@/pages/CustomerArea";
-import { Overview } from "@/pages/overview/Overview";
+import { ToEnvironment } from "@/pages/EnvironmentRoutes";
 
 /** Where a signed-in user lands: their customer, or the operator console. */
 export function Home() {
@@ -19,7 +17,7 @@ export function Home() {
     case "operator":
       return <Navigate to="/operator" replace />;
     case "customer":
-      return <CustomerHome />;
+      return <ToEnvironment />;
     case "several":
       return <SeveralOrganizations />;
     default:
@@ -73,30 +71,6 @@ function TrialLink() {
         Request a trial
       </Link>
     </p>
-  );
-}
-
-/**
- * A customer's overview, or the welcome page while their cluster is new:
- * not ready yet, or without topics, unless the viewer is done with it.
- */
-function CustomerHome() {
-  const customer = useCustomer();
-  const topics = useTopics(customer.data?.ready === true);
-  if (customer.data && !onboardingDone(customer.data.id)) {
-    if (shouldWelcome(false, customer.data.ready, topics.data)) {
-      return <Navigate to="/welcome" replace />;
-    }
-    if (topics.isPending) {
-      // Not knowing yet whether the cluster has topics, it waits rather
-      // than flash the overview.
-      return <Notice title="Loading" busy />;
-    }
-  }
-  return (
-    <CustomerArea>
-      {(customer, admin) => <Overview customer={customer} admin={admin} />}
-    </CustomerArea>
   );
 }
 

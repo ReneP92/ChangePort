@@ -12,6 +12,16 @@ const (
 	// The provisioning controller keeps it equal to spec.clerkOrganizationID.
 	ClerkOrganizationLabel = "changeport.io/clerk-organization"
 
+	// EnvironmentLabel holds a Customer's environment, so the console finds an
+	// organization's environment with one label selector, beside
+	// ClerkOrganizationLabel. The provisioning controller keeps it equal to
+	// spec.environment.
+	EnvironmentLabel = "changeport.io/environment"
+
+	// DefaultEnvironment is the environment of a customer that names none:
+	// an organization's first, and every customer from before environments.
+	DefaultEnvironment = "production"
+
 	// Finalizer keeps a deleted Customer until the provisioning controller has
 	// deleted its Kafka cluster.
 	Finalizer = "changeport.io/deprovision"
@@ -114,6 +124,18 @@ type CustomerSpec struct {
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the profile cannot change"
 	Profile string `json:"profile"`
 
+	// Environment names the customer's cluster among its organization's,
+	// such as production or staging: each environment is a Customer of its
+	// own, with its own cluster. It is unique within the organization, which
+	// the console checks, and cannot change.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=20
+	// +kubebuilder:validation:Pattern=`^[a-z]([-a-z0-9]*[a-z0-9])?$`
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the environment cannot change"
+	// +kubebuilder:default=production
+	// +optional
+	Environment string `json:"environment,omitempty"`
+
 	// ClerkOrganizationID is the Clerk organization whose members sign in to
 	// the console as this customer, if any.
 	// +kubebuilder:validation:MaxLength=63
@@ -172,6 +194,7 @@ type CustomerStatus struct {
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Display name",type=string,JSONPath=`.spec.displayName`
+// +kubebuilder:printcolumn:name="Environment",type=string,JSONPath=`.spec.environment`
 // +kubebuilder:printcolumn:name="Profile",type=string,JSONPath=`.spec.profile`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].reason`

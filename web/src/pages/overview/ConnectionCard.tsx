@@ -3,9 +3,11 @@ import { Link } from "react-router";
 import { useConnection, useDownloadClientProperties } from "@/api/queries";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** How clients connect, and for admins the credentials to do so. */
 export function ConnectionCard({ admin }: { admin: boolean }) {
+  const envPath = useEnvironmentPath();
   const connection = useConnection();
   const download = useDownloadClientProperties();
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -17,7 +19,7 @@ export function ConnectionCard({ admin }: { admin: boolean }) {
         </CardTitle>
         <CardDescription>
           Kafka clients connect over TLS with a username and password. New to Kafka?{" "}
-          <Link to="/welcome" className="text-foreground underline underline-offset-4">
+          <Link to={envPath("/welcome")} className="text-foreground underline underline-offset-4">
             Open the getting started guide
           </Link>
           .

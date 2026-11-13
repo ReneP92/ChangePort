@@ -97,7 +97,7 @@ test("an admin creates a topic, connects, and sees their first message arrive", 
 
   // Done, the customer goes to their cluster, and stays there.
   await main.getByRole("button", { name: "Go to your cluster" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/e\/production$/);
   await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 20_000 });
@@ -114,7 +114,7 @@ test("the welcome page can be skipped, and the Connection card opens it again", 
 }) => {
   const main = await openWelcome(page, fixtures.users.adminA);
   await main.getByRole("button", { name: "Skip to the overview" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/e\/production$/);
   const connection = page.getByRole("heading", { name: "Connection" });
   await expect(connection).toBeVisible();
   await page.getByRole("link", { name: "Open the getting started guide" }).click();

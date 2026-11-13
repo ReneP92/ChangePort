@@ -732,6 +732,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/customers/{customerID}/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds an environment, a cluster of its own, to the organization of a customer; for operators. Refused while the customer is on a trial. */
+        post: operations["addEnvironment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/customers/{customerID}": {
         parameters: {
             query?: never;
@@ -803,8 +822,10 @@ export interface components {
             access: "none" | "customer" | "operator" | "several";
             /** @description Whether the user is an admin of the active organization */
             admin?: boolean;
-            /** @description The customer of the active organization, if any */
+            /** @description The customer of the active organization's default environment, if any */
             customerID?: string;
+            /** @description The active organization's environments, each a cluster, the default first */
+            environments?: components["schemas"]["Environment"][];
         };
         Connection: {
             /** @description Where clients bootstrap from, once the cluster has it */
@@ -1416,6 +1437,20 @@ export interface components {
              */
             endsAt?: string;
         };
+        Environment: {
+            name: string;
+            customerID: string;
+            /** @enum {string} */
+            profile: "dev" | "dev-ha" | "production";
+            ready: boolean;
+        };
+        NewEnvironment: {
+            /** @description Its name, unique in the organization, such as staging */
+            environment: string;
+            /** @enum {string} */
+            profile: "dev" | "dev-ha" | "production";
+            deletionProtection: boolean;
+        };
         NewCustomer: {
             /** @description The customer's name, which also names its Clerk organization */
             displayName: string;
@@ -1425,10 +1460,14 @@ export interface components {
             deletionProtection: boolean;
             /** @description Who to invite as the organization's first admin, if anyone */
             inviteEmail?: string;
+            /** @description The organization's first environment; production when left out */
+            environment?: string;
         };
         Customer: {
             id: string;
             displayName: string;
+            /** @description Which of its organization's environments the customer's cluster is, such as production */
+            environment: string;
             /** @enum {string} */
             profile: "dev" | "dev-ha" | "production";
             /** @description Where the customer's clients connect, once known */
@@ -2890,6 +2929,38 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    addEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewEnvironment"];
+            };
+        };
+        responses: {
+            /** @description The new environment's customer */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Customer"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["NotConfigured"];
         };
     };

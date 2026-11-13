@@ -136,6 +136,12 @@ to them, an unknown page, and an organization without a cluster.
 
 ![No cluster](screenshots/09-no-cluster-desktop.png)
 
+### Environments
+
+An organization has a cluster per environment, such as production, staging and dev, which operators add. The console shows one at a time, under `/e/<environment>/` in its URL, so a link opens the environment it was copied in. The header's switcher moves between them, landing on the chosen one's overview, and the console starts in the environment the viewer last used in that browser. Everything on a cluster's pages is the environment's own: its connection and credentials, topics, consumer groups, sources and alerts. The team and trials belong to the whole organization. A page from before environments, such as `/topics/orders`, opens in the default environment.
+
+![Switching environments](screenshots/51-environments-desktop.png)
+
 ### Team
 
 The organization's members and pending invitations, from the header's

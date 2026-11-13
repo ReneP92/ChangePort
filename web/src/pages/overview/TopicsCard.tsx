@@ -7,9 +7,11 @@ import { alertsAbout } from "@/lib/alerts";
 import { AlertBadge } from "@/pages/alerts/ActiveAlerts";
 import { CreateTopicDialog } from "@/pages/overview/CreateTopicDialog";
 import { DeleteTopicDialog } from "@/pages/overview/DeleteTopicDialog";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** The topics with their settings, size and throughput. */
 export function TopicsCard({ admin }: { admin: boolean }) {
+  const envPath = useEnvironmentPath();
   const topics = useTopics();
   const alerts = useAlerts();
   return (
@@ -59,7 +61,7 @@ export function TopicsCard({ admin }: { admin: boolean }) {
                     <td className="py-2 font-medium">
                       <span className="flex items-center gap-2">
                         <Link
-                          to={`/topics/${encodeURIComponent(topic.name)}`}
+                          to={envPath(`/topics/${encodeURIComponent(topic.name)}`)}
                           className="underline-offset-4 hover:underline"
                         >
                           {topic.name}
@@ -68,7 +70,7 @@ export function TopicsCard({ admin }: { admin: boolean }) {
                         {topic.source && (
                           <Badge variant="outline" asChild>
                             <Link
-                              to={`/sources/${topic.source}`}
+                              to={envPath(`/sources/${topic.source}`)}
                               title={`Postgres source ${topic.source} writes this topic`}
                             >
                               Source {topic.source}

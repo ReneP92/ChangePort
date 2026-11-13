@@ -1,9 +1,12 @@
 package console
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,8 +24,9 @@ import (
 
 // Customers reads, creates and deletes the Customer resources.
 type Customers interface {
-	// ByOrganization returns the customer of a Clerk organization, or nil.
-	ByOrganization(ctx context.Context, organizationID string) (*v1alpha1.Customer, error)
+	// ByOrganization returns the customers of a Clerk organization, one per
+	// environment, in environmentOrder.
+	ByOrganization(ctx context.Context, organizationID string) ([]v1alpha1.Customer, error)
 	// List returns every customer.
 	List(ctx context.Context) ([]v1alpha1.Customer, error)
 	// Get returns a customer by ID, or nil.
@@ -71,7 +75,7 @@ var _ Customers = KubeCustomers{}
 
 // ByOrganization implements Customers, through the organization label the
 // provisioning controller keeps on every Customer.
-func (k KubeCustomers) ByOrganization(ctx context.Context, organizationID string) (*v1alpha1.Customer, error) {
+func (k KubeCustomers) ByOrganization(ctx context.Context, organizationID string) ([]v1alpha1.Customer, error) {
 	if len(validation.IsValidLabelValue(organizationID)) > 0 {
 		return nil, nil
 	}
@@ -79,15 +83,32 @@ func (k KubeCustomers) ByOrganization(ctx context.Context, organizationID string
 	if err := k.reader().List(ctx, &list, client.MatchingLabels{v1alpha1.ClerkOrganizationLabel: organizationID}); err != nil {
 		return nil, fmt.Errorf("list the customers of organization %s: %w", organizationID, err)
 	}
-	switch len(list.Items) {
-	case 0:
-		return nil, nil
-	case 1:
-		return &list.Items[0], nil
-	default:
-		// One organization is one customer; anything else needs an operator.
-		return nil, fmt.Errorf("organization %s belongs to %d customers", organizationID, len(list.Items))
+	slices.SortFunc(list.Items, environmentOrder)
+	return list.Items, nil
+}
+
+// environmentOf returns a customer's environment, production for one from
+// before environments that the API server has not defaulted.
+func environmentOf(c *v1alpha1.Customer) string {
+	return cmp.Or(c.Spec.Environment, v1alpha1.DefaultEnvironment)
+}
+
+// environmentOrder sorts an organization's customers by environment:
+// production, the default, first, then by name.
+func environmentOrder(a, b v1alpha1.Customer) int {
+	ea, eb := environmentOf(&a), environmentOf(&b)
+	return cmp.Or(
+		cmp.Compare(boolRank(ea != v1alpha1.DefaultEnvironment), boolRank(eb != v1alpha1.DefaultEnvironment)),
+		strings.Compare(ea, eb),
+		strings.Compare(a.Name, b.Name),
+	)
+}
+
+func boolRank(b bool) int {
+	if b {
+		return 1
 	}
+	return 0
 }
 
 // List implements Customers.

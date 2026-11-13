@@ -1,5 +1,6 @@
 import createClient, { type Client, type Middleware } from "openapi-fetch";
 import type { components, paths } from "@/api/schema";
+import { environmentFromPath, environmentHeader } from "@/lib/environments";
 
 export type Customer = components["schemas"]["Customer"];
 export type Me = components["schemas"]["Me"];
@@ -11,6 +12,7 @@ export type Throughput = components["schemas"]["Throughput"];
 export type TopicPolicy = components["schemas"]["TopicPolicy"];
 export type NewTopic = components["schemas"]["NewTopic"];
 export type NewCustomer = components["schemas"]["NewCustomer"];
+export type NewEnvironment = components["schemas"]["NewEnvironment"];
 export type ConsumerGroupLag = components["schemas"]["ConsumerGroupLag"];
 export type Source = components["schemas"]["Source"];
 export type SourceOptions = components["schemas"]["SourceOptions"];
@@ -37,6 +39,7 @@ export type TimelineEvent = components["schemas"]["TimelineEvent"];
 export type TailMessage = components["schemas"]["TailMessage"];
 export type Topology = components["schemas"]["Topology"];
 export type Team = components["schemas"]["Team"];
+export type Environment = components["schemas"]["Environment"];
 export type TeamRole = components["schemas"]["TeamRole"];
 export type TailPayload = components["schemas"]["TailPayload"];
 export type TailSkipped = components["schemas"]["TailSkipped"];
@@ -74,6 +77,11 @@ export function createApiClient(getToken: () => Promise<string | null>): ApiClie
       const token = await getToken();
       if (token) {
         request.headers.set("Authorization", `Bearer ${token}`);
+      }
+      // The environment the page is in, whose cluster customer routes act on.
+      const environment = environmentFromPath(window.location.pathname);
+      if (environment !== undefined) {
+        request.headers.set(environmentHeader, environment);
       }
       return request;
     },

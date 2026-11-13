@@ -205,6 +205,14 @@ converting, if the customer needs it. The console may change nothing of a
 Customer but its trial: the admission policy
 `deploy/base/console/customer-trials.yaml` refuses the rest.
 
+## Environments
+
+An organization has a cluster per environment, such as production, staging and dev: each is a Customer of its own, with `spec.environment` naming it, sharing the organization's `spec.clerkOrganizationID`. Customers from before environments are production.
+
+- **Adding one:** on a customer's page in the operator console, **Add environment** names it, unique in the organization, and picks its profile and deletion protection. The organization's members see it in the console's environment switcher once its cluster is ready. A trial is one environment: convert the customer first.
+- **Removing one:** deprovision its customer, as any other. The organization and its other environments stay.
+- **Finding them:** `kubectl get customers -l changeport.io/clerk-organization=<org_...>` lists an organization's environments, with their names in the Environment column.
+
 ## Deletion protection
 
 A customer with deletion protection (`spec.deletionProtection` on its

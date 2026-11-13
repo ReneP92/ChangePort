@@ -6,6 +6,7 @@ import { Notice } from "@/components/Notice";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDay, trialLeft } from "@/lib/trials";
 import { DeprovisionDialog } from "@/pages/operator/DeprovisionDialog";
+import { EnvironmentsCard } from "@/pages/operator/EnvironmentsCard";
 import { OperatorsOnly } from "@/pages/operator/OperatorCustomers";
 import { ConvertTrialDialog, ExtendTrialDialog } from "@/pages/operator/TrialChangeDialogs";
 
@@ -74,6 +75,7 @@ function CustomerPage() {
           </CardContent>
         </Card>
       )}
+      {!c.deleting && <EnvironmentsCard customer={c} />}
       <Card>
         <CardHeader>
           <CardTitle>

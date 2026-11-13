@@ -7,6 +7,7 @@ import { formatDuration, formatLag } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { alertsAbout } from "@/lib/alerts";
 import { AlertBadge } from "@/pages/alerts/ActiveAlerts";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 const hour = 60 * 60 * 1000;
 
@@ -86,6 +87,7 @@ function GroupRow({
   start: number;
   end: number;
 }) {
+  const envPath = useEnvironmentPath();
   const caughtUp = group.lagMessages === 0;
   const points = group.history.map((point) => ({
     time: new Date(point.time).getTime(),
@@ -97,7 +99,7 @@ function GroupRow({
       <td className="py-2 font-medium">
         <span className="flex items-center gap-2">
           <Link
-            to={`/consumer-groups/${encodeURIComponent(group.group)}`}
+            to={envPath(`/consumer-groups/${encodeURIComponent(group.group)}`)}
             className="underline-offset-4 hover:underline"
           >
             {group.group}
@@ -107,7 +109,7 @@ function GroupRow({
       </td>
       <td className="py-2">
         <Link
-          to={`/topics/${encodeURIComponent(group.topic)}`}
+          to={envPath(`/topics/${encodeURIComponent(group.topic)}`)}
           className="underline-offset-4 hover:underline"
         >
           {group.topic}

@@ -90,11 +90,11 @@ func (s *Server) RequestTrial(ctx context.Context, request api.RequestTrialReque
 			"Not for operators", "Switch away from the Changeport staff organization to request a trial."))}, nil
 	}
 	if principal.OrganizationID != "" {
-		customer, err := s.customers.ByOrganization(ctx, principal.OrganizationID)
+		customers, err := s.customers.ByOrganization(ctx, principal.OrganizationID)
 		if err != nil {
 			return nil, err
 		}
-		if customer != nil {
+		if len(customers) > 0 {
 			return api.RequestTrial409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(problem(http.StatusConflict,
 				"Your organization has a cluster", "Switch to another organization, or none, to request a trial."))}, nil
 		}
@@ -535,13 +535,13 @@ func (s *Server) trialOrganization(ctx context.Context, userID string) (string, 
 		return refuse("The requester belongs to several organizations, and a person belongs to one. Ask support to remove them from the others first.")
 	}
 	membership := memberships[0]
-	customer, err := s.customers.ByOrganization(ctx, membership.OrganizationID)
+	customers, err := s.customers.ByOrganization(ctx, membership.OrganizationID)
 	if err != nil {
 		return "", nil, err
 	}
 	switch {
-	case customer != nil:
-		return refuse(fmt.Sprintf("The requester belongs to the organization of customer %s, which has its cluster already.", customer.Name))
+	case len(customers) > 0:
+		return refuse(fmt.Sprintf("The requester belongs to the organization of customer %s, which has its cluster already.", customers[0].Name))
 	case membership.Role != adminRole:
 		return refuse("The requester is a member, not an admin, of an organization without a cluster. Its admin asks for the trial instead.")
 	}

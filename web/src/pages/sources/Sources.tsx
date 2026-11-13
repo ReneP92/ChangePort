@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { formatBytes } from "@/lib/format";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { PhaseBadge } from "@/pages/sources/PhaseBadge";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** The customer's Postgres sources, and for admins adding one. */
 export function Sources() {
@@ -13,6 +14,7 @@ export function Sources() {
 }
 
 function SourceList({ admin }: { admin: boolean }) {
+  const envPath = useEnvironmentPath();
   const sources = useSources();
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
@@ -26,7 +28,7 @@ function SourceList({ admin }: { admin: boolean }) {
         </div>
         {admin && (
           <Button asChild className="shrink-0">
-            <Link to="/sources/new">Add source</Link>
+            <Link to={envPath("/sources/new")}>Add source</Link>
           </Button>
         )}
       </header>
@@ -68,7 +70,7 @@ function SourceList({ admin }: { admin: boolean }) {
                     <tr key={source.name} className="border-b last:border-0">
                       <td className="py-2 font-medium">
                         <Link
-                          to={`/sources/${source.name}`}
+                          to={envPath(`/sources/${source.name}`)}
                           className="underline-offset-4 hover:underline"
                         >
                           {source.name}

@@ -21,6 +21,7 @@ import { eventMarkers, numberEvents } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
 import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
 import { CustomerArea } from "@/pages/CustomerArea";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
  * One consumer group: how far behind it is on each topic it reads, over
@@ -32,6 +33,7 @@ export function ConsumerGroupPage() {
 }
 
 function ConsumerGroup({ group }: { group: string }) {
+  const envPath = useEnvironmentPath();
   const groups = useConsumerGroups();
   const alerts = useAlerts();
   if (groups.isPending) {
@@ -48,7 +50,7 @@ function ConsumerGroup({ group }: { group: string }) {
     <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
       <header className="flex flex-col gap-1">
         <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-          <Link to="/" className="underline-offset-4 hover:underline">
+          <Link to={envPath("/")} className="underline-offset-4 hover:underline">
             Cluster
           </Link>{" "}
           / Consumer groups
@@ -88,7 +90,7 @@ function ConsumerGroup({ group }: { group: string }) {
                 className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0"
               >
                 <Link
-                  to={`/topics/${encodeURIComponent(row.topic)}`}
+                  to={envPath(`/topics/${encodeURIComponent(row.topic)}`)}
                   className="font-medium underline-offset-4 [overflow-wrap:anywhere] hover:underline"
                 >
                   {row.topic}

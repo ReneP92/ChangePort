@@ -77,13 +77,15 @@ func newFakeCustomers() *fakeCustomers {
 	return &fakeCustomers{customers: []v1alpha1.Customer{customer("globex", "org_globex"), customer("acme", "org_acme")}}
 }
 
-func (f *fakeCustomers) ByOrganization(_ context.Context, organizationID string) (*v1alpha1.Customer, error) {
+func (f *fakeCustomers) ByOrganization(_ context.Context, organizationID string) ([]v1alpha1.Customer, error) {
+	var customers []v1alpha1.Customer
 	for i := range f.customers {
 		if f.customers[i].Spec.ClerkOrganizationID == organizationID {
-			return &f.customers[i], nil
+			customers = append(customers, f.customers[i])
 		}
 	}
-	return nil, nil
+	slices.SortFunc(customers, environmentOrder)
+	return customers, nil
 }
 
 func (f *fakeCustomers) List(context.Context) ([]v1alpha1.Customer, error) {

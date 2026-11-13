@@ -10,6 +10,7 @@ import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { ThroughputCard } from "@/pages/overview/ThroughputCard";
 import { TailCard } from "@/pages/topics/TailCard";
+import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
  * One topic: its settings, its traffic with what changed meanwhile, the
@@ -21,6 +22,7 @@ export function TopicPage() {
 }
 
 function Topic({ name, admin }: { name: string; admin: boolean }) {
+  const envPath = useEnvironmentPath();
   const topics = useTopics();
   const alerts = useAlerts();
   if (topics.isPending) {
@@ -34,7 +36,7 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
     return (
       <Notice title="There is no such topic">
         The cluster has no topic {name}.{" "}
-        <Link to="/" className="underline underline-offset-4">
+        <Link to={envPath("/")} className="underline underline-offset-4">
           Back to the cluster
         </Link>
       </Notice>
@@ -61,7 +63,7 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
     <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
       <header className="flex flex-col gap-1">
         <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-          <Link to="/" className="underline-offset-4 hover:underline">
+          <Link to={envPath("/")} className="underline-offset-4 hover:underline">
             Cluster
           </Link>{" "}
           / Topics
@@ -73,7 +75,7 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
           <AlertBadge alerts={alertsAbout(alerts.data, { topic: name })} />
           {topic.source && (
             <Badge variant="outline" asChild>
-              <Link to={`/sources/${topic.source}`}>Source {topic.source}</Link>
+              <Link to={envPath(`/sources/${topic.source}`)}>Source {topic.source}</Link>
             </Badge>
           )}
         </div>
@@ -112,6 +114,7 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
 
 /** The consumer groups that read the topic, and how far behind each is. */
 function ReadersCard({ topic }: { topic: string }) {
+  const envPath = useEnvironmentPath();
   const groups = useConsumerGroups();
   const readers = groups.data?.filter((group) => group.topic === topic) ?? [];
   return (
@@ -136,7 +139,7 @@ function ReadersCard({ topic }: { topic: string }) {
                 className="flex items-center justify-between gap-4 py-2 first:pt-0 last:pb-0"
               >
                 <Link
-                  to={`/consumer-groups/${encodeURIComponent(group.group)}`}
+                  to={envPath(`/consumer-groups/${encodeURIComponent(group.group)}`)}
                   className="font-medium underline-offset-4 [overflow-wrap:anywhere] hover:underline"
                 >
                   {group.group}

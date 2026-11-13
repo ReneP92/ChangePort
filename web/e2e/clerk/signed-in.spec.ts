@@ -75,7 +75,11 @@ test("a customer signs in with the form and sees their cluster", async ({ page }
   // Clerk's test addresses take this code instead of an email.
   await page.getByRole("textbox", { name: "Enter verification code" }).pressSequentially("424242");
   await expect(page.getByRole("main").getByText(a.displayName)).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("main").getByText(`Customer ${a.id}, dev cluster`)).toBeVisible();
+  await expect(
+    page
+      .getByRole("main")
+      .getByText(`Customer ${a.id}, the production environment on a dev cluster`),
+  ).toBeVisible();
 });
 
 test("a customer only ever sees their own cluster", async ({ page }) => {

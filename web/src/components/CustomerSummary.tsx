@@ -33,7 +33,8 @@ export function CustomerSummary({ customer }: { customer: Customer }) {
           <StatusBadge customer={customer} />
         </div>
         <CardDescription>
-          Customer {customer.id}, {customer.profile} cluster
+          Customer {customer.id}, the {customer.environment} environment on a {customer.profile}{" "}
+          cluster
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
