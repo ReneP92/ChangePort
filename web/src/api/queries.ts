@@ -9,6 +9,9 @@ import {
   type AlertList,
   type AlertThresholds,
   type ApiClient,
+  type EnvironmentChange,
+  type Environments,
+  type Me,
   type NewCustomer,
   type NewEnvironment,
   type NewSource,
@@ -25,7 +28,7 @@ import {
   type TrialApproval,
   type TrialChange,
 } from "@/api/client";
-import { environmentFromPath, environmentHeaders } from "@/lib/environments";
+import { environmentFromPath, environmentHeaders, meWithEnvironments } from "@/lib/environments";
 import { readEvents } from "@/lib/sse";
 
 /** The API client of the signed-in user, which ApiProvider provides. */
@@ -109,7 +112,6 @@ export function useOperatorCustomer(id: string) {
   });
 }
 
-/** Provisions a customer, then refreshes the customers. */
 /** Adds an environment, a cluster of its own, to a customer's organization. */
 export function useAddEnvironment(customerID: string) {
   const api = useApi();
@@ -126,6 +128,7 @@ export function useAddEnvironment(customerID: string) {
   });
 }
 
+/** Provisions a customer, then refreshes the customers. */
 export function useProvisionCustomer() {
   const api = useApi();
   const queries = useQueryClient();
@@ -799,6 +802,92 @@ export function useRemoveTeammate() {
   return useTeamChange(async (api, userID: string) =>
     unwrap(
       await api.DELETE("/api/customer/team/members/{userID}", { params: { path: { userID } } }),
+    ),
+  );
+}
+
+/**
+ * The environments of the active organization, each a cluster of its own.
+ * They are the whole organization's, so the key leaves out the environment
+ * the page is in. While one starts or is being removed, they are read
+ * again every few seconds.
+ */
+export function useEnvironments() {
+  const api = useApi();
+  const organization = useAuth().orgId ?? "none";
+  return useQuery({
+    queryKey: ["customer", "environments", organization],
+    queryFn: async () => unwrap(await api.GET("/api/customer/environments")),
+    refetchInterval: (query) =>
+      query.state.data?.environments.some((e) => !e.ready || e.deleting) ? 3_000 : false,
+  });
+}
+
+/**
+ * A change to the environments, which answers with them as they are after
+ * it. The viewer's environments follow at once, in every environment's
+ * page, including one that a rename just named.
+ */
+function useEnvironmentChange<T>(change: (api: ApiClient, input: T) => Promise<Environments>) {
+  const api = useApi();
+  const organization = useAuth().orgId ?? "none";
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: (input: T) => change(api, input),
+    onSuccess: (list) => {
+      // What was cached under a name the organization no longer uses, as
+      // after a rename, is another environment's should the name come back.
+      const live = (environments: Environments | undefined) =>
+        (environments?.environments ?? []).filter((e) => !e.deleting).map((e) => e.name);
+      const before = live(queries.getQueryData(["customer", "environments", organization]));
+      for (const name of before.filter((name) => !live(list).includes(name))) {
+        const key = `${organization}/${name}`;
+        queries.removeQueries({ predicate: (query) => query.queryKey.includes(key) });
+      }
+      queries.setQueryData(["customer", "environments", organization], list);
+      const cached = queries.getQueriesData<Me>({ queryKey: ["me"] });
+      const me = cached.find(([, data]) => data?.access === "customer")?.[1];
+      if (me === undefined) {
+        return;
+      }
+      const updated = meWithEnvironments(me, list);
+      for (const [key] of cached) {
+        queries.setQueryData(key, updated);
+      }
+      for (const environment of updated.environments ?? []) {
+        queries.setQueryData(["me", `${organization}/${environment.name}`], updated);
+      }
+    },
+  });
+}
+
+/** Adds an environment to the organization, for admins. */
+export function useCreateEnvironment() {
+  return useEnvironmentChange(async (api, environment: NewEnvironment) =>
+    unwrap(await api.POST("/api/customer/environments", { body: environment })),
+  );
+}
+
+/** Renames an environment, makes it the default or protects it, for admins. */
+export function useChangeEnvironment() {
+  return useEnvironmentChange(
+    async (api, { customerID, ...change }: EnvironmentChange & { customerID: string }) =>
+      unwrap(
+        await api.PATCH("/api/customer/environments/{customerID}", {
+          params: { path: { customerID } },
+          body: change,
+        }),
+      ),
+  );
+}
+
+/** Removes an environment, deleting its cluster, for admins. */
+export function useRemoveEnvironment() {
+  return useEnvironmentChange(async (api, customerID: string) =>
+    unwrap(
+      await api.DELETE("/api/customer/environments/{customerID}", {
+        params: { path: { customerID } },
+      }),
     ),
   );
 }

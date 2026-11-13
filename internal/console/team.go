@@ -22,17 +22,23 @@ var teamAdminsOnly = problem(http.StatusForbidden, "Admins only", "Ask an admin 
 var lastAdmin = problem(http.StatusConflict, "The last admin",
 	"Your organization keeps at least one admin, who manages its cluster and team. Make another member an admin first.")
 
-// teamCaller returns the caller's customer for the team's routes, or the
-// problem why there is none; admin asks for an organization admin.
+// teamCaller returns the caller's customer for the team's routes, the
+// default environment's, or the problem why there is none; admin asks for
+// an organization admin. The team is the whole organization's, so the
+// routes ignore the environment header.
 func (s *Server) teamCaller(ctx context.Context, admin bool) (*customerContext, *api.Problem, error) {
-	customer, principal, refused, err := s.customerOf(ctx)
+	organization, refused, err := s.organizationOf(ctx)
 	if err != nil || refused != nil {
 		return nil, refused, err
 	}
-	if admin && !principal.Admin() {
+	customer, refused := chooseEnvironment(organization.customers, "")
+	if refused != nil {
+		return nil, refused, nil
+	}
+	if admin && !organization.principal.Admin() {
 		return nil, &teamAdminsOnly, nil
 	}
-	return &customerContext{customer: customer, principal: principal}, nil, nil
+	return &customerContext{customer: customer, principal: organization.principal}, nil, nil
 }
 
 func toRole(role string) api.TeamRole {

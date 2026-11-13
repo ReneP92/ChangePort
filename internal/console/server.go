@@ -50,6 +50,22 @@ type Config struct {
 	// OperatorEmails are who is emailed about new trial requests; without
 	// any, nobody is.
 	OperatorEmails []string
+	// MaxEnvironments is the most environments an organization's admins
+	// may have, each a cluster; DefaultMaxEnvironments unless set.
+	// Operators add beyond it.
+	MaxEnvironments int
+}
+
+// DefaultMaxEnvironments is the most environments an organization's admins
+// may have unless the configuration says otherwise.
+const DefaultMaxEnvironments = 5
+
+// maxEnvironments is the configured limit, or DefaultMaxEnvironments.
+func (c Config) maxEnvironments() int {
+	if c.MaxEnvironments > 0 {
+		return c.MaxEnvironments
+	}
+	return DefaultMaxEnvironments
 }
 
 // missing lists the settings the configuration lacks.
@@ -443,12 +459,16 @@ func (s *Server) GetMe(ctx context.Context, _ api.GetMeRequestObject) (api.GetMe
 		me.Access = api.MeAccessCustomer
 		// The default environment's, for clients from before environments.
 		me.CustomerID = ptr.To(customers[0].Name)
+		// The environments to switch between: not those being removed,
+		// unless all are, as when a trial ends, whose page says so.
+		live := slices.ContainsFunc(customers, func(c v1alpha1.Customer) bool { return c.DeletionTimestamp.IsZero() })
 		environments := make([]api.Environment, 0, len(customers))
 		for i := range customers {
-			c := &customers[i]
-			environments = append(environments, api.Environment{
-				Name: environmentOf(c), CustomerID: c.Name, Profile: api.EnvironmentProfile(c.Spec.Profile), Ready: toAPI(c).Ready,
-			})
+			if !live || customers[i].DeletionTimestamp.IsZero() {
+				environment := toEnvironment(&customers[i])
+				environment.Default = len(environments) == 0
+				environments = append(environments, environment)
+			}
 		}
 		me.Environments = &environments
 	}
@@ -771,8 +791,12 @@ func toAPI(c *v1alpha1.Customer) api.Customer {
 			Since:   ptr.To(condition.LastTransitionTime.UTC()),
 		})
 		if conditionType == v1alpha1.ConditionReady {
-			// A condition about an older spec does not describe the cluster.
-			out.Ready = ready && condition.ObservedGeneration >= c.Generation
+			// A condition about an older spec does not describe the cluster
+			// until it was provisioned once. Since, no change of its spec
+			// changes what it runs: a profile cannot change, and renaming
+			// its environment, making it the default, protecting it or
+			// changing its trial leave the cluster as it is.
+			out.Ready = ready && (condition.ObservedGeneration >= c.Generation || c.Status.ProvisionedAt != nil)
 			out.Status = api.Status{Reason: condition.Reason, Message: condition.Message}
 		}
 	}
@@ -785,27 +809,50 @@ func toAPI(c *v1alpha1.Customer) api.Customer {
 	return out
 }
 
-// customerOf returns the customer of the principal's active organization
-// for the customer routes, or the problem why there is none to act on.
-func (s *Server) customerOf(ctx context.Context) (*v1alpha1.Customer, Principal, *api.Problem, error) {
+// organizationContext is the caller of an organization-wide route, such as
+// the team's or the environments', and its organization's customers, one
+// per environment, in environmentOrder: the default first.
+type organizationContext struct {
+	principal Principal
+	customers []v1alpha1.Customer
+}
+
+// organizationOf returns the caller's organization for the routes about all
+// of it, which ignore the environment header, or the problem why there is
+// none to act on.
+func (s *Server) organizationOf(ctx context.Context) (*organizationContext, *api.Problem, error) {
 	principal, err := mustPrincipal(ctx)
 	if err != nil {
-		return nil, principal, nil, err
+		return nil, nil, err
 	}
 	switch {
 	case principal.OrganizationID == "":
 		p := problem(http.StatusForbidden, "Choose an organization", "Customers are Clerk organizations; switch to yours to see its cluster.")
-		return nil, principal, &p, nil
+		return &organizationContext{principal: principal}, &p, nil
 	case s.operator(principal):
 		p := problem(http.StatusForbidden, "The staff organization is not a customer", "Operators see customers in the operator console.")
-		return nil, principal, &p, nil
+		return &organizationContext{principal: principal}, &p, nil
 	}
 	customers, err := s.customers.ByOrganization(ctx, principal.OrganizationID)
 	if err != nil {
-		return nil, principal, nil, err
+		return nil, nil, err
 	}
-	customer, p := chooseEnvironment(customers, requestedEnvironment(ctx))
-	return customer, principal, p, nil
+	return &organizationContext{principal: principal, customers: customers}, nil, nil
+}
+
+// customerOf returns the customer of the principal's active organization
+// for the customer routes, in the environment the request names, or the
+// problem why there is none to act on.
+func (s *Server) customerOf(ctx context.Context) (*v1alpha1.Customer, Principal, *api.Problem, error) {
+	organization, refused, err := s.organizationOf(ctx)
+	if err != nil {
+		return nil, Principal{}, nil, err
+	}
+	if refused != nil {
+		return nil, organization.principal, refused, nil
+	}
+	customer, p := chooseEnvironment(organization.customers, requestedEnvironment(ctx))
+	return customer, organization.principal, p, nil
 }
 
 // chooseEnvironment returns the customer of the requested environment among

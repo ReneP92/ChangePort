@@ -791,6 +791,105 @@ paths:
           $ref: "#/components/responses/Conflict"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/customer/environments:
+    get:
+      operationId: listEnvironments
+      summary: The environments of the customer's organization, each a cluster, the default first. It ignores the environment header.
+      responses:
+        "200":
+          description: The environments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environments"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+    post:
+      operationId: createEnvironment
+      summary: Adds an environment, a cluster of its own, to the organization; for organization admins. Refused while the organization is on a trial, at its limit, and for a name it has.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewEnvironment"
+      responses:
+        "201":
+          description: The environments, with the new one
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environments"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/environments/{customerID}:
+    parameters:
+      - name: customerID
+        in: path
+        required: true
+        description: The environment's customer, whose ID stays when the environment is renamed
+        schema:
+          type: string
+    patch:
+      operationId: changeEnvironment
+      summary: Renames an environment, makes it the default, or turns its deletion protection on or off; for organization admins
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnvironmentChange"
+      responses:
+        "200":
+          description: The environments, with the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environments"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+    delete:
+      operationId: removeEnvironment
+      summary: Removes an environment and deletes its cluster; for organization admins. Refused while it is protected, and for the organization's last environment.
+      responses:
+        "200":
+          description: The environments, with the removed one being deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environments"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/customer/alert-settings:
     get:
       operationId: getAlertSettings
@@ -1469,7 +1568,7 @@ components:
           description: The customer of the active organization's default environment, if any
         environments:
           type: array
-          description: The active organization's environments, each a cluster, the default first
+          description: The active organization's environments, each a cluster, the default first, without those being removed
           items:
             $ref: "#/components/schemas/Environment"
     Connection:
@@ -2603,7 +2702,7 @@ components:
           description: The trial's new end, to extend it
     Environment:
       type: object
-      required: [name, customerID, profile, ready]
+      required: [name, customerID, profile, ready, deleting, default, deletionProtection, trial]
       properties:
         name:
           type: string
@@ -2614,6 +2713,48 @@ components:
           enum: [dev, dev-ha, production]
         ready:
           type: boolean
+        deleting:
+          type: boolean
+          description: Whether the environment is being removed, its cluster deleted
+        default:
+          type: boolean
+          description: Whether the console opens this environment by default
+        deletionProtection:
+          type: boolean
+          description: Whether removing the environment is refused until protection is turned off
+        trial:
+          type: boolean
+          description: Whether the environment is a trial, which is the organization's one environment
+    Environments:
+      type: object
+      required: [environments, limit]
+      properties:
+        environments:
+          type: array
+          description: The organization's environments, the default first
+          items:
+            $ref: "#/components/schemas/Environment"
+        limit:
+          type: integer
+          description: The most environments the organization may add itself
+    EnvironmentChange:
+      type: object
+      description: One change to an environment; the fields not set stay as they are
+      properties:
+        name:
+          type: string
+          description: Its new name, unique in the organization
+          minLength: 1
+          maxLength: 20
+        default:
+          type: boolean
+          enum: [true]
+          description: Makes it the environment the console opens by default
+        deletionProtection:
+          type: boolean
+        confirm:
+          type: string
+          description: The environment's name, to turn its deletion protection off
     NewEnvironment:
       type: object
       required: [environment, profile, deletionProtection]

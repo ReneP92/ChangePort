@@ -467,8 +467,9 @@ reason the requester sees. Both are audited. The approved customer is on a
 14-day trial (`spec.trial`): three days before the end the provisioning
 controller warns it (the `TrialEnding` condition), and at the end deletes
 the Customer, which deprovisions it as usual. Operators extend a trial or
-convert the customer on its page; the console may change nothing else of a
-Customer, which an admission policy enforces. Operators and requesters are
+convert the customer on its page; besides, the console may change only an
+environment's name, the default and deletion protection, for an
+organization's admins, which an admission policy enforces. Operators and requesters are
 emailed at each step; on kind the email goes to Mailpit
 (`kubectl -n mail port-forward svc/mailpit 8025:http`, then
 <http://localhost:8025>), and [docs/runbook.md](docs/runbook.md#email) says

@@ -138,9 +138,23 @@ to them, an unknown page, and an organization without a cluster.
 
 ### Environments
 
-An organization has a cluster per environment, such as production, staging and dev, which operators add. The console shows one at a time, under `/e/<environment>/` in its URL, so a link opens the environment it was copied in. The header's switcher moves between them, landing on the chosen one's overview, and the console starts in the environment the viewer last used in that browser. Everything on a cluster's pages is the environment's own: its connection and credentials, topics, consumer groups, sources and alerts. The team and trials belong to the whole organization. A page from before environments, such as `/topics/orders`, opens in the default environment.
+An organization has a cluster per environment, such as production, staging and dev. The console shows one at a time, under `/e/<environment>/` in its URL, so a link opens the environment it was copied in. The header's switcher moves between them, landing on the chosen one's overview. Everything on a cluster's pages is the environment's own: its connection and credentials, topics, consumer groups, sources and alerts. The team and trials belong to the whole organization. A page from before environments, such as `/topics/orders`, opens in the default environment.
 
 ![Switching environments](screenshots/51-environments-desktop.png)
+
+The Environments page, from the header's Environments link or the switcher's **Manage environments**, lists them. Each shows its profile, whether its cluster is ready, starting or being removed, which one is the default, and which are protected. Members can see the page; admins change it:
+
+- **Add environment** names the new one, suggesting production, staging or dev when the organization lacks it, and picks its profile and deletion protection, which is on for production unless chosen otherwise. An organization has at most 5 environments (`-max-environments` on the console). Operators add more from the operator console. A trial is one environment.
+- **Rename** changes only its links. Its cluster, connection and credentials stay as they are, so its clients keep working.
+- **Make it the default** sets the environment the console opens first. A browser that used another environment last opens that one instead.
+- **Protect** turns deletion protection on. Turning it off takes the environment's name typed.
+- **Remove** takes the environment's name typed, and deletes its cluster with its data. It is refused while deletion protection is on, and for the organization's last environment: closing an account goes through Changeport.
+
+![The environments page](screenshots/52-environments-page-desktop.png)
+
+![Adding an environment](screenshots/53-add-environment-desktop.png)
+
+![Removing an environment](screenshots/54-remove-environment-desktop.png)
 
 ### Team
 

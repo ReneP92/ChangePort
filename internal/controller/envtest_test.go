@@ -389,7 +389,7 @@ func TestCustomerValidation(t *testing.T) {
 		})
 	}
 
-	t.Run("an environment, production unless named, that cannot change", func(t *testing.T) {
+	t.Run("an environment, production unless named, that can be renamed", func(t *testing.T) {
 		customer := valid("environment-default")
 		if err := c.Create(t.Context(), customer); err != nil {
 			t.Fatal(err)
@@ -399,8 +399,13 @@ func TestCustomerValidation(t *testing.T) {
 			t.Errorf("environment = %q, want %q by default", customer.Spec.Environment, v1alpha1.DefaultEnvironment)
 		}
 		customer.Spec.Environment = "staging"
-		if err := c.Update(t.Context(), customer); !apierrors.IsInvalid(err) || !strings.Contains(err.Error(), "the environment cannot change") {
-			t.Errorf("Update() error = %v, want the environment refused", err)
+		customer.Spec.DefaultEnvironment = true
+		if err := c.Update(t.Context(), customer); err != nil {
+			t.Errorf("renaming the environment: %v", err)
+		}
+		customer.Spec.Environment = "Staging EU"
+		if err := c.Update(t.Context(), customer); !apierrors.IsInvalid(err) || !strings.Contains(err.Error(), "spec.environment") {
+			t.Errorf("Update() error = %v, want a name that is no DNS label refused", err)
 		}
 	})
 

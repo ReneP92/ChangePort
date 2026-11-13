@@ -501,7 +501,7 @@ func (s *Server) ChangeTrial(ctx context.Context, request api.ChangeTrialRequest
 	if trial != nil {
 		trial.Contact = customer.Spec.Trial.Contact
 	}
-	if err := s.customers.SetTrial(ctx, customer, trial); errors.Is(err, ErrCustomerChanged) {
+	if err := s.customers.Change(ctx, customer, func(spec *v1alpha1.CustomerSpec) { spec.Trial = trial }); errors.Is(err, ErrCustomerChanged) {
 		return api.ChangeTrial409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(problem(http.StatusConflict,
 			"Changed meanwhile", fmt.Sprintf("Customer %s changed while you decided; nothing was changed. Reload it.", customer.Name)))}, nil
 	} else if err != nil {

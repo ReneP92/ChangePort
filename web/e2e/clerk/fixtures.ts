@@ -125,6 +125,36 @@ export function testCustomers(): {
   );
 }
 
+/**
+ * Deletes a test customer in the background, turning its deletion
+ * protection off first: a failed test may have left it on, which would
+ * refuse the deletion.
+ */
+export function deleteTestCustomer(name: string): void {
+  unprotectTestCustomer(name);
+  kubectl(["delete", "customer", name, "--wait=false", "--ignore-not-found"]);
+}
+
+/**
+ * Turns a test customer's deletion protection off, if it is still there: one
+ * being deleted may be gone by now.
+ */
+export function unprotectTestCustomer(name: string): void {
+  try {
+    kubectl([
+      "patch",
+      `customer/${name}`,
+      "--type=merge",
+      "-p",
+      '{"spec":{"deletionProtection":false}}',
+    ]);
+  } catch (error) {
+    if (!String(error).includes("NotFound") && !String(error).includes("not found")) {
+      throw error;
+    }
+  }
+}
+
 /** Every trial request a test user made, the users' addresses being test addresses. */
 export function testTrialRequests(): {
   metadata: { name: string; creationTimestamp: string };

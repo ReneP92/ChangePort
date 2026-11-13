@@ -74,6 +74,14 @@ spec:
                 maxLength: 63
                 pattern: ^org_[A-Za-z0-9]+$
                 type: string
+              defaultEnvironment:
+                description: |-
+                  DefaultEnvironment, when true, makes this the environment its
+                  organization's console opens by default. The console sets it on one
+                  of the organization's Customers and clears it on the others. Should
+                  two have it, as when two admins choose at once, the first in order
+                  wins until the next choice.
+                type: boolean
               deletionProtection:
                 description: |-
                   DeletionProtection, when true, keeps the customer's Kafka cluster when
@@ -93,14 +101,12 @@ spec:
                   Environment names the customer's cluster among its organization's,
                   such as production or staging: each environment is a Customer of its
                   own, with its own cluster. It is unique within the organization, which
-                  the console checks, and cannot change.
+                  the console checks. Renaming it changes only the console's URLs:
+                  everything the cluster runs is named by the customer ID.
                 maxLength: 20
                 minLength: 1
                 pattern: ^[a-z]([-a-z0-9]*[a-z0-9])?$
                 type: string
-                x-kubernetes-validations:
-                - message: the environment cannot change
-                  rule: self == oldSelf
               profile:
                 description: |-
                   Profile sizes the customer's dedicated Kafka cluster. It cannot change:

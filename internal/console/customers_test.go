@@ -181,10 +181,12 @@ type roundTripper func(*http.Request) (*http.Response, error)
 
 func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
-// TestConsoleChangesOnlyTrials patches Customers as the console's service
-// account: it may extend a trial and convert a customer, and the admission
-// policy changeport-console-customers refuses every other change.
-func TestConsoleChangesOnlyTrials(t *testing.T) {
+// TestConsoleChangesOnlyWhatItsUsersMay patches Customers as the console's
+// service account: it may extend a trial and convert a customer, and rename
+// an environment, choose the default and turn deletion protection on or
+// off; the admission policy changeport-console-customers refuses every
+// other change.
+func TestConsoleChangesOnlyWhatItsUsersMay(t *testing.T) {
 	admin, consoleClient, _ := startAPIServerAsTheConsole(t)
 	ctx := t.Context()
 	end := metav1.NewTime(time.Now().Add(14 * 24 * time.Hour).Truncate(time.Second))
@@ -217,8 +219,8 @@ func TestConsoleChangesOnlyTrials(t *testing.T) {
 		}
 	}
 	for what, change := range map[string]struct{ name, patch string }{
-		"turning deletion protection on": {"acme", `{"spec":{"trial":null,"deletionProtection":true}}`},
-		"renaming":                       {"acme", `{"spec":{"displayName":"Not Acme"}}`},
+		"renaming the customer":          {"globex", `{"spec":{"displayName":"Not Globex"}}`},
+		"moving to another organization": {"globex", `{"spec":{"clerkOrganizationID":"org_2evil"}}`},
 		"removing the finalizer":         {"acme", `{"metadata":{"finalizers":null}}`},
 		"labelling":                      {"acme", `{"metadata":{"labels":{"changeport.io/clerk-organization":"org_2evil"}}}`},
 		"putting a customer on a trial":  {"globex", `{"spec":{"trial":{"endsAt":"2030-01-01T00:00:00Z"}}}`},
@@ -235,17 +237,43 @@ func TestConsoleChangesOnlyTrials(t *testing.T) {
 	}
 	stale := acme.DeepCopy()
 	extended := metav1.NewTime(end.Add(7 * 24 * time.Hour))
-	if err := customers.SetTrial(ctx, acme, &v1alpha1.CustomerTrial{EndsAt: extended}); err != nil {
+	setTrial := func(customer *v1alpha1.Customer, trial *v1alpha1.CustomerTrial) error {
+		return customers.Change(ctx, customer, func(spec *v1alpha1.CustomerSpec) { spec.Trial = trial })
+	}
+	if err := setTrial(acme, &v1alpha1.CustomerTrial{EndsAt: extended}); err != nil {
 		t.Fatalf("extending the trial: %v", err)
 	}
-	if err := customers.SetTrial(ctx, stale, nil); !errors.Is(err, ErrCustomerChanged) {
+	if err := setTrial(stale, nil); !errors.Is(err, ErrCustomerChanged) {
 		t.Errorf("converting a customer read before the extension = %v, want ErrCustomerChanged", err)
 	}
-	if err := customers.SetTrial(ctx, acme, nil); err != nil {
+	if err := setTrial(acme, nil); err != nil {
 		t.Fatalf("converting: %v", err)
 	}
 	converted, err := customers.Get(ctx, "acme")
 	if err != nil || converted.Spec.Trial != nil || len(converted.Finalizers) != 1 {
 		t.Errorf("the converted customer = %+v, %v; want no trial and its finalizer", converted, err)
+	}
+
+	// An admin's changes to an environment.
+	for _, change := range []struct {
+		what   string
+		change func(*v1alpha1.CustomerSpec)
+	}{
+		{"renaming the environment", func(spec *v1alpha1.CustomerSpec) { spec.Environment = "staging" }},
+		{"making it the default", func(spec *v1alpha1.CustomerSpec) { spec.DefaultEnvironment = true }},
+		{"turning deletion protection on", func(spec *v1alpha1.CustomerSpec) { spec.DeletionProtection = true }},
+		{"turning it off", func(spec *v1alpha1.CustomerSpec) { spec.DeletionProtection = false }},
+	} {
+		globex, err := customers.Get(ctx, "globex")
+		if err != nil || globex == nil {
+			t.Fatalf("Get(globex) = %v, %v", globex, err)
+		}
+		if err := customers.Change(ctx, globex, change.change); err != nil {
+			t.Errorf("%s: %v", change.what, err)
+		}
+	}
+	globex, err := customers.Get(ctx, "globex")
+	if err != nil || globex.Spec.Environment != "staging" || !globex.Spec.DefaultEnvironment || globex.Spec.DeletionProtection {
+		t.Errorf("globex = %+v, %v; want staging, the default, unprotected", globex.Spec, err)
 	}
 }
