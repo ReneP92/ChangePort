@@ -167,8 +167,18 @@ include, so `Ready` keeps meaning that clients can connect.
       within five minutes was lost: Debezium reads signals every five
       seconds and answers at once. The controller then asks again, and the
       table's status says so meanwhile. Asking twice is safe, as rows
-      arrive at least once. It was seen once on kind under load, with
-      nothing logged.
+      arrive at least once.
+    - Debezium 3.7 loses a signal so now and then as it starts a table
+      after another. A heartbeat on the streaming thread races the signal's
+      thread over the snapshot's window, and the task fails with a
+      `ConcurrentModificationException`
+      ([debezium/dbz#1330](https://github.com/debezium/dbz/issues/1330)).
+      - Strimzi restarts the failed task within two minutes.
+      - Had Debezium announced the snapshot, the announcement carried the
+        snapshot in the task's offsets, which Kafka Connect commits even
+        for a failed task, and the restarted task resumes it.
+      - Otherwise the signal is lost, unanswered, and the controller asks
+        again five minutes after it first asked.
     - It follows the progress in the notification topic, decoding the
       notifications' Avro with their schemas from the registry.
     - Each table's status shows its snapshot, Pending, Running, Done or

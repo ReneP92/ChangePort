@@ -35,15 +35,17 @@ ensure_kubectl
 pg() { kubectl -n source-postgres exec -i deploy/postgres -- psql -U postgres -d app -v ON_ERROR_STOP=1 -qtA "$@"; }
 cdcsql() { go run ./cmd/cdcsql -source "$source_name" -id "$id" "$@"; }
 source_field() { kubectl -n "$namespace" get postgressource "$source_name" -o jsonpath="{$1}" 2>/dev/null; }
-# Waits until the source reaches a phase.
+# Waits until the source reaches a phase: within 10 minutes, as a snapshot
+# signal that Debezium lost with its failed task is asked for again only five
+# minutes after it was first (docs/cdc.md).
 wait_phase() {
   local phase
-  for _ in $(seq 90); do
+  for _ in $(seq 150); do
     phase=$(source_field .status.phase)
     [[ $phase == "$1" ]] && return
     sleep 4
   done
-  die "source $source_name is in phase \"$phase\", not $1, after 6 minutes: $(source_field '.status.conditions[?(@.type=="Ready")].message')"
+  die "source $source_name is in phase \"$phase\", not $1, after 10 minutes: $(source_field '.status.conditions[?(@.type=="Ready")].message')"
 }
 slot_active() { pg -c "SELECT active FROM pg_replication_slots WHERE slot_name = '$slot'"; }
 

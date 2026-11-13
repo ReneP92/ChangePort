@@ -170,10 +170,15 @@ test.describe("without JavaScript", () => {
     for (const panel of ["overview", "lag", "timeline", "topology"]) {
       await expect(page.locator(`#panel-${panel}`)).toBeVisible();
     }
-    const boxes = await Promise.all(
-      ["overview", "lag"].map((panel) => page.locator(`#panel-${panel}`).boundingBox()),
+    // Stacked, not on top of each other: the next panel starts where the
+    // first ends. Both are measured at once, as the page above them may
+    // still move by a pixel while its fonts load, and the edges meet at
+    // fractions of a pixel.
+    const [overview, lag] = await page.evaluate(() =>
+      ["overview", "lag"].map((panel) =>
+        document.getElementById(`panel-${panel}`)!.getBoundingClientRect().toJSON(),
+      ),
     );
-    // Stacked, not on top of each other.
-    expect((boxes[1]?.y ?? 0) >= (boxes[0]?.y ?? 0) + (boxes[0]?.height ?? 0)).toBe(true);
+    expect(lag.top).toBeGreaterThanOrEqual(overview.bottom - 1);
   });
 });
