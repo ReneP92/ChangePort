@@ -21,6 +21,7 @@ import (
 
 	"github.com/clerk/clerk-sdk-go/v2"
 	"github.com/clerk/clerk-sdk-go/v2/jwks"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/utils/ptr"
 
@@ -50,6 +51,9 @@ type Config struct {
 	// OperatorEmails are who is emailed about new trial requests; without
 	// any, nobody is.
 	OperatorEmails []string
+	// SupportEmail is where customers contact Changeport's support, which
+	// the console's help menu offers; without it, it offers no address.
+	SupportEmail string
 	// MaxEnvironments is the most environments an organization's admins
 	// may have, each a cluster; DefaultMaxEnvironments unless set.
 	// Operators add beyond it.
@@ -419,7 +423,11 @@ var _ api.StrictServerInterface = (*Server)(nil)
 
 // GetConfig implements api.StrictServerInterface.
 func (s *Server) GetConfig(context.Context, api.GetConfigRequestObject) (api.GetConfigResponseObject, error) {
-	return api.GetConfig200JSONResponse{ClerkPublishableKey: s.config.PublishableKey}, nil
+	config := api.GetConfig200JSONResponse{ClerkPublishableKey: s.config.PublishableKey}
+	if s.config.SupportEmail != "" {
+		config.SupportEmail = ptr.To(openapi_types.Email(s.config.SupportEmail))
+	}
+	return config, nil
 }
 
 // GetMe implements api.StrictServerInterface.

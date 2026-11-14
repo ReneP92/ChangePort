@@ -5,6 +5,7 @@ import type { Customer } from "@/api/client";
 import { useCustomer, useMe, useTopics } from "@/api/queries";
 import { ClusterProgress } from "@/components/CustomerSummary";
 import { Notice } from "@/components/Notice";
+import { Page } from "@/components/Page";
 import { TrialNotice } from "@/components/TrialNotice";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,7 +15,7 @@ import { ConnectStep } from "@/pages/welcome/ConnectStep";
 import { FirstMessageStep } from "@/pages/welcome/FirstMessageStep";
 import { StepTitle } from "@/pages/welcome/StepTitle";
 import { TopicStep } from "@/pages/welcome/TopicStep";
-import { useEnvironmentPath } from "@/lib/useEnvironment";
+import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
  * The welcome page: a new customer's way from their cluster to their own
@@ -46,6 +47,7 @@ const titles = ["Your cluster", "A topic", "Connect", "First message"];
 
 function Steps({ customer, admin }: { customer: Customer; admin: boolean }) {
   const envPath = useEnvironmentPath();
+  const crumbs = useEnvironmentCrumb();
   const navigate = useNavigate();
   const topics = useTopics(customer.ready);
   const [step, setStep] = useState(0);
@@ -58,19 +60,17 @@ function Steps({ customer, admin }: { customer: Customer; admin: boolean }) {
   const done = [customer.ready, topic !== undefined, step > 2, arrived];
   const canGoOn = [customer.ready, topic !== undefined, true, true][step] ?? false;
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Welcome to Changeport</h1>
-          <p className="text-sm text-muted-foreground">
-            From {customer.displayName}&apos;s new Kafka cluster to your first message, in about ten
-            minutes.
-          </p>
-        </div>
-        <Button variant="ghost" size="sm" className="shrink-0" onClick={finish}>
+    <Page
+      crumbs={crumbs}
+      title="Welcome to Changeport"
+      description={`From ${customer.displayName}'s new Kafka cluster to your first message, in about ten minutes.`}
+      actions={
+        <Button variant="ghost" size="sm" onClick={finish}>
           Skip to the overview
         </Button>
-      </header>
+      }
+      className="max-w-3xl"
+    >
       <ol aria-label="Steps" className="grid grid-cols-4 gap-2">
         {titles.map((title, i) => (
           <li
@@ -141,7 +141,7 @@ function Steps({ customer, admin }: { customer: Customer; admin: boolean }) {
           </footer>
         </CardContent>
       </Card>
-    </main>
+    </Page>
   );
 }
 

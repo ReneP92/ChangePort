@@ -34,11 +34,9 @@ function NoCustomer({ organization }: { organization: boolean }) {
   const state = useOrganizationState();
   if (organization) {
     return (
-      <main className="mx-auto flex max-w-xl flex-col gap-4 p-8">
-        <h1 className="text-2xl font-semibold tracking-tight">No Kafka cluster yet</h1>
-        <p className="text-muted-foreground">Your organization has no Changeport cluster.</p>
-        <TrialLink />
-      </main>
+      <Notice title="No Kafka cluster yet" footer={<TrialLink />}>
+        Your organization has no Changeport cluster.
+      </Notice>
     );
   }
   switch (state) {
@@ -50,14 +48,10 @@ function NoCustomer({ organization }: { organization: boolean }) {
       return <SeveralOrganizations />;
     case "none":
       return (
-        <main className="mx-auto flex max-w-xl flex-col gap-4 p-8">
-          <h1 className="text-2xl font-semibold tracking-tight">No organization yet</h1>
-          <p className="text-muted-foreground">
-            Your Kafka cluster belongs to your company&apos;s organization. Ask a colleague for an
-            invitation.
-          </p>
-          <TrialLink />
-        </main>
+        <Notice title="No organization yet" footer={<TrialLink />}>
+          Your Kafka cluster belongs to your company&apos;s organization. Ask a colleague for an
+          invitation.
+        </Notice>
       );
   }
 }
@@ -65,7 +59,7 @@ function NoCustomer({ organization }: { organization: boolean }) {
 /** Where someone without a cluster yet asks for one. */
 function TrialLink() {
   return (
-    <p className="mt-4 border-t pt-4 text-muted-foreground">
+    <p className="mt-3 border-t pt-4 text-muted-foreground">
       New to Changeport?{" "}
       <Link to="/trial" className="font-medium text-foreground underline underline-offset-4">
         Request a trial

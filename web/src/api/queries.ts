@@ -28,7 +28,12 @@ import {
   type TrialApproval,
   type TrialChange,
 } from "@/api/client";
-import { environmentFromPath, environmentHeaders, meWithEnvironments } from "@/lib/environments";
+import {
+  environmentFromPath,
+  environmentHeader,
+  environmentHeaders,
+  meWithEnvironments,
+} from "@/lib/environments";
 import { readEvents } from "@/lib/sse";
 
 /** The API client of the signed-in user, which ApiProvider provides. */
@@ -53,13 +58,18 @@ function useOrganizationKey(): string {
   return environment === undefined ? organization : `${organization}/${environment}`;
 }
 
-/** The signed-in user and what they may see. */
+/**
+ * The signed-in user and what they may see, refreshed often while one of
+ * their environments is starting, which the sidebar shows.
+ */
 export function useMe() {
   const api = useApi();
   const organization = useOrganizationKey();
   return useQuery({
     queryKey: ["me", organization],
     queryFn: async () => unwrap(await api.GET("/api/me")),
+    refetchInterval: (query) =>
+      query.state.data?.environments?.some((environment) => !environment.ready) ? 3_000 : false,
   });
 }
 
@@ -74,14 +84,18 @@ export function useCustomer() {
   });
 }
 
-/** Every customer, for operators. */
+/**
+ * Every customer, for operators, refreshed often while one is being created
+ * or deleted, so that lists of them keep up with a customer's own page.
+ */
 export function useCustomers() {
   const api = useApi();
   const organization = useOrganizationKey();
   return useQuery({
     queryKey: ["operator", "customers", organization],
     queryFn: async () => unwrap(await api.GET("/api/operator/customers")).customers,
-    refetchInterval: 10_000,
+    refetchInterval: (query) =>
+      query.state.data?.some((customer) => !customer.ready || customer.deleting) ? 2_000 : 10_000,
   });
 }
 
@@ -672,6 +686,27 @@ export function useAlerts() {
     queryKey: ["customer", "alerts", organization],
     queryFn: async (): Promise<Alert[]> => unwrap(await api.GET("/api/customer/alerts")).alerts,
     staleTime: Infinity,
+  });
+}
+
+/**
+ * The active alerts of one of the organization's environments, whichever
+ * the page is in: the sidebar counts each environment's. They share the
+ * cache of useAlerts, which the open environment's stream keeps current;
+ * the others are read again every minute.
+ */
+export function useEnvironmentAlerts(environment: string) {
+  const api = useApi();
+  const organization = useAuth().orgId ?? "none";
+  return useQuery({
+    queryKey: ["customer", "alerts", `${organization}/${environment}`],
+    queryFn: async (): Promise<Alert[]> =>
+      unwrap(
+        await api.GET("/api/customer/alerts", {
+          headers: { [environmentHeader]: environment },
+        }),
+      ).alerts,
+    refetchInterval: 60_000,
   });
 }
 

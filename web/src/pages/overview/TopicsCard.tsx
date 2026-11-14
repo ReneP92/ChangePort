@@ -15,7 +15,7 @@ export function TopicsCard({ admin }: { admin: boolean }) {
   const topics = useTopics();
   const alerts = useAlerts();
   return (
-    <Card>
+    <Card id="topics" className="scroll-mt-4">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <CardTitle>

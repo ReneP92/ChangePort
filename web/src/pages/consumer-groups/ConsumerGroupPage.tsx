@@ -4,6 +4,7 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import type { ThroughputRange } from "@/api/client";
 import { useAlerts, useConsumerGroupLag, useConsumerGroups, useEvents } from "@/api/queries";
 import { Notice } from "@/components/Notice";
+import { Page } from "@/components/Page";
 import { ChangeList, EventMarkers } from "@/components/Timeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +22,7 @@ import { numberEvents } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
 import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
 import { CustomerArea } from "@/pages/CustomerArea";
-import { useEnvironmentPath } from "@/lib/useEnvironment";
+import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
  * One consumer group: how far behind it is on each topic it reads, over
@@ -34,6 +35,7 @@ export function ConsumerGroupPage() {
 
 function ConsumerGroup({ group }: { group: string }) {
   const envPath = useEnvironmentPath();
+  const crumbs = useEnvironmentCrumb();
   const groups = useConsumerGroups();
   const alerts = useAlerts();
   if (groups.isPending) {
@@ -47,21 +49,11 @@ function ConsumerGroup({ group }: { group: string }) {
   const rows = groups.data.filter((row) => row.group === group);
   const groupAlerts = alerts.data?.filter((alert) => alert.consumerGroup === group) ?? [];
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      <header className="flex flex-col gap-1">
-        <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-          <Link to={envPath("/")} className="underline-offset-4 hover:underline">
-            Overview
-          </Link>{" "}
-          / Consumer groups
-        </nav>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-            {group}
-          </h1>
-          <AlertBadge alerts={groupAlerts} />
-        </div>
-      </header>
+    <Page
+      crumbs={[...crumbs, { label: "Consumer groups", to: envPath("/#consumer-groups") }]}
+      title={<span className="[overflow-wrap:anywhere]">{group}</span>}
+      badge={<AlertBadge alerts={groupAlerts} />}
+    >
       {groupAlerts.length > 0 && (
         <section
           aria-label="Alerts"
@@ -111,7 +103,7 @@ function ConsumerGroup({ group }: { group: string }) {
         </CardContent>
       </Card>
       <LagCard group={group} />
-    </main>
+    </Page>
   );
 }
 

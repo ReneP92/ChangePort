@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { errorText, type TrialRequest } from "@/api/client";
 import { useTrialRequests } from "@/api/queries";
 import { Notice } from "@/components/Notice";
+import { Page } from "@/components/Page";
 import { Badge } from "@/components/ui/badge";
 import { formatDay, retentionLabel, throughputLabel } from "@/lib/trials";
 import { OperatorsOnly } from "@/pages/operator/OperatorCustomers";
@@ -27,8 +28,7 @@ function TrialRequestList() {
   const pending = requests.data.filter((request) => request.phase === "Pending");
   const decided = requests.data.filter((request) => request.phase !== "Pending");
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-8 p-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Trial requests</h1>
+    <Page title="Trial requests" className="gap-8">
       <section aria-labelledby="pending-requests" className="flex flex-col gap-3">
         <h2 id="pending-requests" className="text-sm font-medium text-muted-foreground">
           Waiting for a decision
@@ -55,7 +55,7 @@ function TrialRequestList() {
           </ul>
         </section>
       )}
-    </main>
+    </Page>
   );
 }
 

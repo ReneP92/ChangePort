@@ -12,6 +12,7 @@ import {
   useRemoveAlertReceiver,
   useSetAlertReceiver,
 } from "@/api/queries";
+import { Page } from "@/components/Page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatDuration } from "@/lib/format";
+import { useEnvironmentCrumb } from "@/lib/useEnvironment";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { AlertRows } from "@/pages/alerts/ActiveAlerts";
 
@@ -44,15 +46,13 @@ function Alerts({ admin }: { admin: boolean }) {
   const settings = useAlertSettings();
   // Above the form, which saved settings renew, so that it can say it saved.
   const change = useChangeAlertSettings();
+  const crumbs = useEnvironmentCrumb();
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Alerts</h1>
-        <p className="text-sm text-muted-foreground">
-          Changeport watches how your applications use your cluster: consumer groups that fall
-          behind or stop, clients that are throttled, and requests that fail.
-        </p>
-      </header>
+    <Page
+      crumbs={crumbs}
+      title="Alerts"
+      description="Changeport watches how your applications use your cluster: consumer groups that fall behind or stop, clients that are throttled, and requests that fail."
+    >
       <ActiveCard />
       {settings.isPending && <p className="text-sm text-muted-foreground">Loading settings</p>}
       {settings.isError && <p className="text-sm text-destructive">{errorText(settings.error)}</p>}
@@ -68,7 +68,7 @@ function Alerts({ admin }: { admin: boolean }) {
           <ReceiversCard settings={settings.data} admin={admin} />
         </>
       )}
-    </main>
+    </Page>
   );
 }
 

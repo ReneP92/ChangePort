@@ -4,6 +4,7 @@ import { Link, Navigate, useNavigate } from "react-router";
 import { errorText, type TrialRequest } from "@/api/client";
 import { useMe, useMyTrialRequests, useRequestTrial } from "@/api/queries";
 import { Notice } from "@/components/Notice";
+import { Page } from "@/components/Page";
 import { Button } from "@/components/ui/button";
 import { askAgainFrom } from "@/lib/trials";
 import { TrialForm } from "@/pages/trial/TrialForm";
@@ -54,27 +55,26 @@ function RequesterTrial() {
   }
   const again = latest ? askAgainFrom(latest) : undefined;
   const mayAsk = !latest || (latest.phase === "Declined" && (!again || new Date() >= again));
+  const title =
+    latest?.phase === "Pending"
+      ? "Your request is in"
+      : latest?.phase === "Declined"
+        ? "Your request was declined"
+        : "Request a trial";
+  const ask =
+    "Tell us about your team and what you want Kafka for. An operator reviews each request and sets up a dedicated Kafka cluster for you.";
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-col gap-10 p-6 sm:p-8">
+    <Page title={title} description={latest ? undefined : ask} className="gap-10 [&>*]:max-w-xl">
       {latest?.phase === "Pending" && <PendingRequest request={latest} />}
       {latest?.phase === "Declined" && <DeclinedRequest request={latest} />}
       {mayAsk && (
-        <section aria-labelledby="request-title" className="flex flex-col gap-6">
-          <div className="flex flex-col gap-2">
-            {latest ? (
-              <h2 id="request-title" className="text-xl font-semibold tracking-tight">
-                Ask again
-              </h2>
-            ) : (
-              <h1 id="request-title" className="text-2xl font-semibold tracking-tight">
-                Request a trial
-              </h1>
-            )}
-            <p className="text-muted-foreground">
-              Tell us about your team and what you want Kafka for. An operator reviews each request
-              and sets up a dedicated Kafka cluster for you.
-            </p>
-          </div>
+        <section aria-label={latest ? "Ask again" : title} className="flex flex-col gap-6">
+          {latest && (
+            <div className="flex flex-col gap-2">
+              <h2 className="text-base font-semibold">Ask again</h2>
+              <p className="text-sm text-muted-foreground">{ask}</p>
+            </div>
+          )}
           <TrialForm
             pending={requestTrial.isPending}
             error={requestTrial.error}
@@ -84,7 +84,7 @@ function RequesterTrial() {
           />
         </section>
       )}
-    </main>
+    </Page>
   );
 }
 
@@ -118,11 +118,10 @@ function OpenCluster({ request }: { request: TrialRequest }) {
     );
   }
   return (
-    <main className="mx-auto flex max-w-xl flex-col gap-4 p-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Your trial is approved</h1>
-      <p className="text-muted-foreground">
-        Your cluster belongs to the organization {request.company}, which could not be opened.
-      </p>
+    <Page
+      title="Your trial is approved"
+      description={`Your cluster belongs to the organization ${request.company}, which could not be opened.`}
+    >
       <div>
         <Button
           onClick={() => {
@@ -132,6 +131,6 @@ function OpenCluster({ request }: { request: TrialRequest }) {
           Open your cluster
         </Button>
       </div>
-    </main>
+    </Page>
   );
 }

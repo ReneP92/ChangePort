@@ -21,12 +21,27 @@ Signing in, through Clerk.
 
 ![Sign-in](screenshots/01-sign-in-desktop.png)
 
-The console's sidebar reads from the outside in: the organization, whose
-name leads to its team; the environment switcher; that environment's pages,
-Overview, Sources and Alerts; then the whole organization's, Environments
-and Team. It collapses to icons, from its foot or with ctrl-B (cmd-B on a
-Mac), and remembers that. On phones it opens from the top bar's menu
+The console is laid out as Linear is: a sidebar on a grey frame, and the
+page on a panel beside it, headed by a bar with where the page sits, its
+title and its main action, such as **Add source**. At the sidebar's top,
+the organization's workspace menu leads to its Environments and Team, the
+user's profile and signing out. Under it, each of the organization's
+environments is a section with its cluster's pages, Overview, Sources and
+Alerts. The environment shown is unfolded, and a folded one counts its
+active alerts. Then come the whole organization's pages, Environments and
+Team. The sidebar collapses to icons, from its foot or with ctrl-B (cmd-B
+on a Mac), and remembers that. On phones it opens from the top bar's menu
 button. Operators see the operator console's pages in it instead.
+
+Changeport's mark at the sidebar's foot opens **Help**, as Linear's does.
+It leads to the getting started guide of the environment shown, to support
+by email when the console has an address for it (`CHANGEPORT_SUPPORT_EMAIL`,
+see the runbook), and to the keyboard shortcuts. As in Linear, G then a page's key goes to it: O the overview, S
+sources, A alerts, E environments and T the team, or for operators C
+customers and R trial requests. Cmd-/ (ctrl-/) lists them. Keys typed into
+a field, or while a dialog or menu is open, are left alone.
+
+![Keyboard shortcuts](screenshots/55-keyboard-shortcuts-desktop.png)
 
 ### Getting started
 
@@ -145,11 +160,11 @@ to them, an unknown page, and an organization without a cluster.
 
 ### Environments
 
-An organization has a cluster per environment, such as production, staging and dev. The console shows one at a time, under `/e/<environment>/` in its URL, so a link opens the environment it was copied in. The sidebar's environment switcher, above the environment's pages, moves between them, landing on the chosen one's overview. Everything on a cluster's pages is the environment's own: its connection and credentials, topics, consumer groups, sources and alerts. The team and trials belong to the whole organization. A page from before environments, such as `/topics/orders`, opens in the default environment.
+An organization has a cluster per environment, such as production, staging and dev. The console shows one at a time, under `/e/<environment>/` in its URL, so a link opens the environment it was copied in. The sidebar lists each environment with its pages, so moving to another one is a click on its section, then on the page. Everything on a cluster's pages is the environment's own: its connection and credentials, topics, consumer groups, sources and alerts. The team and trials belong to the whole organization. A page from before environments, such as `/topics/orders`, opens in the default environment.
 
 ![Switching environments](screenshots/51-environments-desktop.png)
 
-The Environments page, from the sidebar's Environments link or the switcher's **Manage environments**, lists them. Each shows its profile, whether its cluster is ready, starting or being removed, which one is the default, and which are protected. Members can see the page; admins change it:
+The Environments page, from the sidebar's Environments link, the settings button beside "Your environments", or the workspace menu, lists them. Each shows its profile, whether its cluster is ready, starting or being removed, which one is the default, and which are protected. Members can see the page; admins change it:
 
 - **Add environment** names the new one, suggesting production, staging or dev when the organization lacks it, and picks its profile and deletion protection, which is on for production unless chosen otherwise. An organization has at most 5 environments (`-max-environments` on the console). Operators add more from the operator console. A trial is one environment.
 - **Rename** changes only its links. Its cluster, connection and credentials stay as they are, so its clients keep working.
@@ -166,7 +181,7 @@ The Environments page, from the sidebar's Environments link or the switcher's **
 ### Team
 
 The organization's members and pending invitations, from the sidebar's
-Team link or the organization's name. A person belongs to one
+Team link or the workspace menu. A person belongs to one
 organization, their company's, so an invitation to an address that
 belongs, or is invited, to another organization is refused, as is an
 operator's invitation of such an address as a new customer's admin, and a

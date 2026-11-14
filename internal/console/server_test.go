@@ -343,6 +343,7 @@ func newFixture(t *testing.T) *fixture {
 		StaffOrganizationID: staffOrg,
 		Origins:             []string{origin, "http://localhost:5173"},
 		OperatorEmails:      []string{"ops@changeport.test"},
+		SupportEmail:        "support@changeport.test",
 	}, Options{
 		Customers:     f.customers,
 		Organizations: f.organizations,
@@ -374,6 +375,24 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.handler = server.Handler()
 	return f
+}
+
+// The help menu offers the support address the console is configured with,
+// to anyone, and none without one.
+func TestConfigNamesTheSupportAddress(t *testing.T) {
+	f := newFixture(t)
+	status, body, _ := get(t, f.handler, "/api/config", "")
+	if status != http.StatusOK || !strings.Contains(body, `"supportEmail":"support@changeport.test"`) {
+		t.Errorf("GET /api/config = %d %s, want the support address", status, body)
+	}
+	response, err := (&Server{config: Config{PublishableKey: publishableKey}}).
+		GetConfig(t.Context(), api.GetConfigRequestObject{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config := response.(api.GetConfig200JSONResponse); config.SupportEmail != nil {
+		t.Errorf("supportEmail = %q without one configured, want none", *config.SupportEmail)
+	}
 }
 
 // get requests path with token, if any, and returns the status and body.

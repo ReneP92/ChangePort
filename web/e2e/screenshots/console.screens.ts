@@ -40,11 +40,11 @@ const context = { viewport: devices[0][1], deviceScaleFactor: 2 };
  * viewport, which the dialog's overlay covers.
  */
 async function shot(page: Page, name: string): Promise<void> {
-  // Signed in, the header links home; its user menu comes from Clerk.
-  if ((await page.getByRole("link", { name: "Changeport" }).count()) > 0) {
-    await expect(page.getByRole("button", { name: "Open user menu" })).toBeVisible({
-      timeout: 20_000,
-    });
+  // Signed in, the sidebar's workspace menu waits on Clerk for the
+  // organization's name.
+  const workspace = page.getByRole("button", { name: "Workspace menu" });
+  if ((await workspace.count()) > 0) {
+    await expect(workspace).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
   }
   // Images, such as the logos of Clerk's sign-in buttons, load late.
   await page.waitForFunction(() => {
@@ -432,8 +432,15 @@ test("every screen of the console", async ({ browser }) => {
   );
   await shot(admin, "50-team");
 
+  // The keyboard shortcuts, from the help menu at the sidebar's foot.
+  await admin.getByRole("button", { name: "Help" }).click();
+  await admin.getByRole("menuitem", { name: /^Keyboard shortcuts/ }).click();
+  await expect(admin.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
+  await shot(admin, "55-keyboard-shortcuts");
+  await admin.keyboard.press("Escape");
+
   // Ada adds a staging environment to Acme herself, and switches to it.
-  await nav.getByRole("link", { name: "Environments" }).click();
+  await nav.getByRole("link", { name: "Environments", exact: true }).click();
   const environments = main.getByRole("list", { name: "Environments" });
   await expect(environments.getByRole("listitem", { name: "production" })).toContainText("Ready");
   await main.getByRole("button", { name: "Add environment" }).click();
@@ -454,11 +461,10 @@ test("every screen of the console", async ({ browser }) => {
   created.customers.push(staging);
   await expect(stagingRow).toContainText("Ready", { timeout: 6 * 60_000 });
   await shot(admin, "52-environments-page");
-  const switcher = admin.getByRole("combobox", { name: "Environment" });
-  await switcher.click();
-  await expect(admin.getByRole("option", { name: "staging" })).toBeVisible();
+  // The sidebar lists staging too, its section unfolded.
+  await nav.getByRole("button", { name: /^staging\b/ }).click();
+  await expect(nav.getByRole("list", { name: "staging", exact: true })).toBeVisible();
   await shot(admin, "51-environments");
-  await admin.keyboard.press("Escape");
   // Its cluster goes again, to spare the kind cluster's memory.
   await stagingRow.getByRole("button", { name: "Remove staging" }).click();
   const removeEnvironment = admin.getByRole("dialog", { name: "Remove staging?" });
@@ -466,7 +472,10 @@ test("every screen of the console", async ({ browser }) => {
   await shot(admin, "54-remove-environment");
   await removeEnvironment.getByRole("button", { name: "Remove" }).click();
   await expect(stagingRow).toContainText("Being removed");
-  await nav.getByRole("link", { name: "Overview" }).click();
+  await nav
+    .getByRole("list", { name: "production", exact: true })
+    .getByRole("link", { name: "Overview" })
+    .click();
   await expect(main.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 30_000 });
 
   // A topic's page and a consumer group's, with the changes over their

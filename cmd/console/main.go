@@ -124,6 +124,7 @@ func run(ctx context.Context, args []string) error {
 		StaffOrganizationID: os.Getenv("CHANGEPORT_STAFF_ORG_ID"),
 		Origins:             splitList(os.Getenv("CHANGEPORT_CONSOLE_ORIGINS")),
 		OperatorEmails:      splitList(os.Getenv("CHANGEPORT_OPERATOR_EMAILS")),
+		SupportEmail:        os.Getenv("CHANGEPORT_SUPPORT_EMAIL"),
 		MaxEnvironments:     *maxEnvironments,
 	}, console.Options{
 		Mail:          mailer,

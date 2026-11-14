@@ -21,10 +21,11 @@ const context = { viewport: devices[0][1], deviceScaleFactor: 2 };
 
 /** As in console.screens.ts: the whole page, or the viewport with a dialog. */
 async function shot(page: Page, name: string): Promise<void> {
-  if ((await page.getByRole("link", { name: "Changeport" }).count()) > 0) {
-    await expect(page.getByRole("button", { name: "Open user menu" })).toBeVisible({
-      timeout: 20_000,
-    });
+  // Signed in, the sidebar's workspace menu waits on Clerk for the
+  // organization's name.
+  const workspace = page.getByRole("button", { name: "Workspace menu" });
+  if ((await workspace.count()) > 0) {
+    await expect(workspace).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
   }
   // Images, such as the logos of Clerk's sign-in buttons, load late.
   await page.waitForFunction(() => {

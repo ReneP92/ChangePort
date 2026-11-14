@@ -1,6 +1,7 @@
 import type { Customer } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { customerLine } from "@/lib/customers";
 import { parts } from "@/lib/parts";
 
 /** What the cluster waits for, in words, per condition type. */
@@ -23,20 +24,28 @@ export function StatusBadge({ customer }: { customer: Customer }) {
   return <Badge variant="secondary">Starting</Badge>;
 }
 
-/** A customer's cluster: how to reach it and how far it is. */
-export function CustomerSummary({ customer }: { customer: Customer }) {
+/**
+ * A customer's cluster: how to reach it and how far it is; under its name
+ * and state, unless the page's header has them.
+ */
+export function CustomerSummary({
+  customer,
+  named = true,
+}: {
+  customer: Customer;
+  named?: boolean;
+}) {
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center gap-3">
-          <CardTitle className="text-xl">{customer.displayName}</CardTitle>
-          <StatusBadge customer={customer} />
-        </div>
-        <CardDescription>
-          Customer {customer.id}, the {customer.environment} environment on a {customer.profile}{" "}
-          cluster
-        </CardDescription>
-      </CardHeader>
+      {named && (
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <CardTitle className="text-base">{customer.displayName}</CardTitle>
+            <StatusBadge customer={customer} />
+          </div>
+          <CardDescription>{customerLine(customer)}</CardDescription>
+        </CardHeader>
+      )}
       <CardContent className="flex flex-col gap-6">
         <section aria-label="Connection">
           <h2 className="text-sm font-medium">Bootstrap address</h2>

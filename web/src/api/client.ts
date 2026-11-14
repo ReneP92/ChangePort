@@ -80,9 +80,10 @@ export function createApiClient(getToken: () => Promise<string | null>): ApiClie
       if (token) {
         request.headers.set("Authorization", `Bearer ${token}`);
       }
-      // The environment the page is in, whose cluster customer routes act on.
+      // The environment the page is in, whose cluster customer routes act
+      // on, unless the request names another.
       const environment = environmentFromPath(window.location.pathname);
-      if (environment !== undefined) {
+      if (environment !== undefined && !request.headers.has(environmentHeader)) {
         request.headers.set(environmentHeader, environment);
       }
       return request;
