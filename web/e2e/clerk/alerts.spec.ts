@@ -106,7 +106,7 @@ test("a stalled consumer group raises an alert in the console and at a webhook, 
   // rule have each had their turn, and the rule's minute has passed.
   await page
     .getByRole("navigation", { name: "Console" })
-    .getByRole("link", { name: "Cluster" })
+    .getByRole("link", { name: "Overview" })
     .click();
   const banner = page.getByRole("region", { name: /^\d+ alerts?$/ });
   const alert = banner.getByRole("listitem").filter({ hasText: `Consumer group ${group} is` });

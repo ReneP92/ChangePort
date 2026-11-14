@@ -54,7 +54,7 @@ test("an operator adds an environment, and its topics are its own", async ({ pag
     // The admin switches to it: a new cluster, so its welcome page first.
     await openOverview(page, fixtures.users.adminA);
     await expect(page).toHaveURL(/\/e\/production$/);
-    const switcher = page.getByRole("banner").getByRole("combobox", { name: "Environment" });
+    const switcher = page.getByRole("combobox", { name: "Environment" });
     await expect(switcher).toHaveText("production");
     await switcher.click();
     await page.getByRole("option", { name: "staging" }).click();

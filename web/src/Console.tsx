@@ -1,10 +1,10 @@
-import { ClerkFailed, ClerkLoading, Show, SignIn, SignUp, UserButton } from "@clerk/react";
-import { Link, NavLink, Route, Routes, useLocation } from "react-router";
+import { ClerkFailed, ClerkLoading, Show, SignIn, SignUp } from "@clerk/react";
+import { Route, Routes, useLocation } from "react-router";
 import { ApiProvider } from "@/api/ApiProvider";
-import { useAlerts, useMe, useTrialRequests } from "@/api/queries";
-import { EnvironmentSwitcher } from "@/components/EnvironmentSwitcher";
+import { ConsoleSidebar, MobileTopBar } from "@/components/ConsoleSidebar";
 import { Notice } from "@/components/Notice";
-import { OrganizationButton } from "@/components/OrganizationButton";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { EnvironmentHome, EnvironmentLayout, ToEnvironment } from "@/pages/EnvironmentRoutes";
 import { Home } from "@/pages/Home";
 import { AlertsPage } from "@/pages/alerts/AlertsPage";
@@ -20,8 +20,6 @@ import { SourcePage } from "@/pages/sources/SourcePage";
 import { Sources } from "@/pages/sources/Sources";
 import { TopicPage } from "@/pages/topics/TopicPage";
 import { TrialPage } from "@/pages/trial/TrialPage";
-import { cn } from "@/lib/utils";
-import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** The console behind Clerk sign-in. */
 export function Console() {
@@ -78,151 +76,61 @@ function SignedOut() {
 
 function SignedIn() {
   return (
-    <div className="min-h-svh">
-      <header className="border-b">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-6 py-3">
-          <Link to="/" className="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
-            <img src="/favicon.svg" alt="" className="size-6" />
-            {/* On phones the mark alone leaves room for the organization's name. */}
-            <span className="max-sm:sr-only">Changeport</span>
-          </Link>
-          <CustomerNav />
-          <OperatorNav />
-          <div className="ml-auto flex min-w-0 items-center gap-3">
-            <OrganizationButton />
-            <EnvironmentSwitcher />
-            <UserButton />
+    <TooltipProvider>
+      <SidebarProvider defaultOpen={sidebarOpen()}>
+        <ConsoleSidebar />
+        {/* As a flex item the page would otherwise grow to its widest
+            content, such as a table that scrolls on its own, past a phone. */}
+        <SidebarInset className="min-w-0">
+          <MobileTopBar />
+          {/* Pages centre their main with auto margins, which in the inset's
+              flex column would size it to its content rather than the
+              window: a plain block gives them the window's width. */}
+          <div className="min-w-0 flex-1">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              {/* Each of an organization's environments, a cluster of its own. */}
+              <Route path="/e/:environment" element={<EnvironmentLayout />}>
+                <Route index element={<EnvironmentHome />} />
+                <Route path="welcome" element={<Welcome />} />
+                <Route path="alerts" element={<AlertsPage />} />
+                <Route path="topics/:name" element={<TopicPage />} />
+                <Route path="consumer-groups/:group" element={<ConsumerGroupPage />} />
+                <Route path="sources" element={<Sources />} />
+                <Route path="sources/new" element={<NewSource />} />
+                <Route path="sources/:name" element={<SourcePage />} />
+              </Route>
+              <Route path="/team" element={<TeamPage />} />
+              <Route path="/environments" element={<EnvironmentsPage />} />
+              {/* Links from before environments open in the default one. */}
+              {[
+                "/welcome",
+                "/alerts",
+                "/topics/:name",
+                "/consumer-groups/:group",
+                "/sources",
+                "/sources/new",
+                "/sources/:name",
+              ].map((path) => (
+                <Route key={path} path={path} element={<ToEnvironment />} />
+              ))}
+              <Route path="/trial" element={<TrialPage />} />
+              <Route path="/operator" element={<OperatorCustomers />} />
+              <Route path="/operator/trials" element={<OperatorTrialRequests />} />
+              <Route path="/operator/customers/:customerID" element={<OperatorCustomer />} />
+              <Route path="*" element={<Notice title="There is no such page" />} />
+            </Routes>
           </div>
-        </div>
-      </header>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        {/* Each of an organization's environments, a cluster of its own. */}
-        <Route path="/e/:environment" element={<EnvironmentLayout />}>
-          <Route index element={<EnvironmentHome />} />
-          <Route path="welcome" element={<Welcome />} />
-          <Route path="alerts" element={<AlertsPage />} />
-          <Route path="topics/:name" element={<TopicPage />} />
-          <Route path="consumer-groups/:group" element={<ConsumerGroupPage />} />
-          <Route path="sources" element={<Sources />} />
-          <Route path="sources/new" element={<NewSource />} />
-          <Route path="sources/:name" element={<SourcePage />} />
-        </Route>
-        <Route path="/team" element={<TeamPage />} />
-        <Route path="/environments" element={<EnvironmentsPage />} />
-        {/* Links from before environments open in the default one. */}
-        {[
-          "/welcome",
-          "/alerts",
-          "/topics/:name",
-          "/consumer-groups/:group",
-          "/sources",
-          "/sources/new",
-          "/sources/:name",
-        ].map((path) => (
-          <Route key={path} path={path} element={<ToEnvironment />} />
-        ))}
-        <Route path="/trial" element={<TrialPage />} />
-        <Route path="/operator" element={<OperatorCustomers />} />
-        <Route path="/operator/trials" element={<OperatorTrialRequests />} />
-        <Route path="/operator/customers/:customerID" element={<OperatorCustomer />} />
-        <Route path="*" element={<Notice title="There is no such page" />} />
-      </Routes>
-    </div>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }
 
-const navLink = ({ isActive }: { isActive: boolean }) =>
-  cn(
-    "rounded-md px-2 py-1 text-sm transition-colors hover:text-foreground",
-    isActive ? "font-medium text-foreground" : "text-muted-foreground",
-  );
-
-/** The pages of a customer's console, for its members. */
-function CustomerNav() {
-  const envPath = useEnvironmentPath();
-  const me = useMe();
-  if (me.data?.access !== "customer") {
-    return null;
-  }
-  return (
-    // On phones the links get a row of their own, under the organization.
-    <nav
-      aria-label="Console"
-      className="flex items-center gap-1 max-sm:order-last max-sm:-ml-2 max-sm:w-full"
-    >
-      <NavLink to={envPath("/")} end className={navLink}>
-        Cluster
-      </NavLink>
-      <NavLink to={envPath("/sources")} className={navLink}>
-        Sources
-      </NavLink>
-      <NavLink to={envPath("/alerts")} className={navLink}>
-        Alerts
-        <AlertCount />
-      </NavLink>
-      <NavLink to="/team" className={navLink}>
-        Team
-      </NavLink>
-      {/* Phones reach it through the environment switcher: five links fit no row. */}
-      <NavLink to="/environments" className={(state) => cn(navLink(state), "max-sm:hidden")}>
-        Environments
-      </NavLink>
-    </nav>
-  );
-}
-
-/** The pages of the operator console, for operators. */
-function OperatorNav() {
-  const me = useMe();
-  if (me.data?.access !== "operator") {
-    return null;
-  }
-  return (
-    <nav
-      aria-label="Operator console"
-      className="flex items-center gap-1 max-sm:order-last max-sm:-ml-2 max-sm:w-full"
-    >
-      <NavLink to="/operator" end className={navLink}>
-        Customers
-      </NavLink>
-      <NavLink to="/operator/trials" className={navLink}>
-        Trial requests
-        <PendingTrialCount />
-      </NavLink>
-    </nav>
-  );
-}
-
-/** How many trial requests wait for a decision; nothing without. */
-function PendingTrialCount() {
-  const requests = useTrialRequests();
-  const count = requests.data?.filter((request) => request.phase === "Pending").length ?? 0;
-  return <Count count={count} label="waiting" />;
-}
-
-/** How many alerts are active, next to the Alerts link; nothing without. */
-function AlertCount() {
-  const alerts = useAlerts();
-  return <Count count={alerts.data?.length ?? 0} label="active" />;
-}
-
-/** A count in a pill next to a link, read out with its label. */
-function Count({ count, label }: { count: number; label: string }) {
-  if (count === 0) {
-    return null;
-  }
-  return (
-    <>
-      <span
-        aria-hidden
-        className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.65rem] font-medium text-white tabular-nums"
-      >
-        {count}
-      </span>
-      <span className="sr-only">
-        , {count} {label}
-      </span>
-    </>
-  );
+/**
+ * Whether the sidebar was open when the viewer last left it, which the
+ * sidebar keeps in a cookie: open unless collapsed.
+ */
+function sidebarOpen(): boolean {
+  return !document.cookie.split("; ").includes("sidebar_state=false");
 }
