@@ -12,10 +12,15 @@ ensure_kind
 ensure_kubectl
 cluster_exists || die "kind cluster $CLUSTER_NAME does not exist; run just dev-up first"
 # The tests provision customers of their own, four Kafka clusters and a
-# Connect worker at once. Next to the demo customer they outgrow a 12 GB
-# Docker: the cluster ran short of memory until its API answered slowly
-# enough to fail steps at random, or the kernel killed pods.
+# Connect worker at once, which take about 10 GiB of Docker's memory with
+# the platform. Next to the demo customer they outgrow a 12 GB Docker: the
+# cluster ran short of memory until its API answered slowly enough to fail
+# steps at random, or the kernel killed pods. An 18 GB Mac gives Docker
+# about 11 GB, keeping the rest for macOS, and runs them without the demo.
 docker_memory_gib=$(($(docker info --format '{{.MemTotal}}') / 1024 / 1024 / 1024))
+if ((docker_memory_gib < 10)); then
+  die "Docker has ${docker_memory_gib} GiB of memory, too little for these tests: give it 11 GB (Docker Desktop, Settings, Resources)"
+fi
 if ((docker_memory_gib < 15)) && kubectl get customer demo >/dev/null 2>&1; then
   die "Docker has ${docker_memory_gib} GiB of memory, too little for these tests next to the demo customer: remove it with kubectl --context $KUBE_CONTEXT delete customer demo (just dev-up brings it back), or give Docker 16 GB"
 fi

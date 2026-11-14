@@ -62,6 +62,25 @@ patches:
       - op: add
         path: /spec/ports/0/nodePort
         value: 30088
+  # JVMs that start and idle lightly, as the customers' do on kind
+  # (provisioning.LeanJVMOptions): two processors, whatever the laptop has,
+  # and only the quick compiler. Strimzi's launch script adds JAVA_OPTS.
+  - target:
+      kind: Deployment
+      name: strimzi-cluster-operator
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: strimzi-cluster-operator
+      spec:
+        template:
+          spec:
+            containers:
+              - name: strimzi-cluster-operator
+                env:
+                  - name: JAVA_OPTS
+                    value: -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1
   # The platform the provisioner provisions customers on.
   - target:
       kind: Deployment

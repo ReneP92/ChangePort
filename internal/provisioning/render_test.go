@@ -447,3 +447,13 @@ func TestRenderTailUserOnlyReads(t *testing.T) {
 		t.Errorf("the tail user's ACLs are %v, want %v", got, want)
 	}
 }
+
+func TestJVMFlags(t *testing.T) {
+	got := jvmFlags(map[string]string{"TieredStopAtLevel": "1", "UseSerialGC": "true", "UseCompressedOops": "false"})
+	if want := "-XX:TieredStopAtLevel=1 -XX:-UseCompressedOops -XX:+UseSerialGC"; got != want {
+		t.Errorf("jvmFlags() = %q, want %q", got, want)
+	}
+	if got := jvmFlags(nil); got != "" {
+		t.Errorf("jvmFlags(nil) = %q, want none", got)
+	}
+}

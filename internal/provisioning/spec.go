@@ -550,6 +550,10 @@ type Platform struct {
 	// NodePool of their own: nodes tainted and labelled with the tenant, which
 	// only that customer's pods tolerate and select.
 	DedicatedNodes *DedicatedNodes
+	// JVMOptions are -XX options, by name, of every JVM the platform's
+	// customers run: the brokers, the entity operators, the Connect worker
+	// and the schema registry.
+	JVMOptions map[string]string
 }
 
 // TieredStorage configures Kafka tiered storage on S3: one bucket per
@@ -714,6 +718,20 @@ var KindPlatform = Platform{
 	ClientMetricsInterval: 5 * time.Second,
 	// The Postgres of deploy/base/source-postgres, which the CDC tests use.
 	SourceDatabaseNamespace: "source-postgres",
+	// JVMs that start and idle lightly, so that a laptop stays responsive.
+	// Every kind node sees all of Docker's processors, and each JVM sizes
+	// its compiler and garbage collector threads to them: a broker starting
+	// peaked at 5 cores. Two processors and only the quick compiler halve
+	// that, with no slower start; the clusters hold test traffic only.
+	JVMOptions: LeanJVMOptions,
+}
+
+// LeanJVMOptions are the -XX options of JVMs on a laptop: two processors,
+// whatever the machine has, and only the client compiler, which compiles
+// fast and little.
+var LeanJVMOptions = map[string]string{
+	"ActiveProcessorCount": "2",
+	"TieredStopAtLevel":    "1",
 }
 
 // eksLoadBalancer is an internet-facing EKS Auto Mode Network Load Balancer

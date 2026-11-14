@@ -190,6 +190,30 @@ envtest_assets() {
   "$BIN_DIR/setup-envtest" use "$ENVTEST_K8S_VERSION" --bin-dir "$BIN_DIR/envtest" -p path
 }
 
+# Stops the envtest API servers and etcds that a go test killed midway, by a
+# timeout or ctrl-C, left running: orphans, whose parent is init. Each pair
+# keeps a little CPU and a few hundred MB until stopped, and they add up.
+stop_orphaned_envtest() {
+  local pids
+  pids=$(ps -Ao pid=,ppid=,command= | awk -v dir="$BIN_DIR/envtest/" '$2 == 1 && index($3, dir) == 1 {print $1}')
+  [[ -n $pids ]] || return 0
+  log "Stopping $(wc -w <<<"$pids" | tr -d ' ') envtest processes that killed tests left running"
+  # shellcheck disable=SC2086 # one PID per word
+  kill $pids 2>/dev/null || true
+  # An API server can take minutes to shut down; nothing needs what they
+  # hold, so those still running after 10 seconds are killed.
+  local pid _
+  for _ in $(seq 10); do
+    sleep 1
+    for pid in $pids; do
+      kill -0 "$pid" 2>/dev/null && continue 2
+    done
+    return 0
+  done
+  # shellcheck disable=SC2086
+  kill -9 $pids 2>/dev/null || true
+}
+
 # Downloads url to dest unless dest already has the SHA-256 want. The file only
 # appears at dest once its checksum matches. Failed and stalled downloads are
 # retried for about two minutes, with growing pauses, as GitHub's release
@@ -314,6 +338,20 @@ check_docker_disk() {
     die "Docker's disk has only $((free_kb / 1024)) MiB free; free space (docker system df) or enlarge the disk in Docker Desktop"
   elif [[ $free_kb -lt $((5 * 1024 * 1024)) ]]; then
     log "Warning: Docker's disk has only $((free_kb / 1024)) MiB free"
+  fi
+}
+
+# Warns when Docker Desktop may take every processor of the Mac it runs on:
+# a burst in its VM, such as Kafka clusters starting or images building,
+# then competes with macOS itself, and the machine lags. On Linux Docker
+# runs on the host, without a VM to cap.
+check_docker_cpus() {
+  [[ $(uname -s) == Darwin ]] || return 0
+  local docker host
+  docker=$(docker info --format '{{.NCPU}}')
+  host=$(sysctl -n hw.ncpu)
+  if ((docker >= host)); then
+    log "Warning: Docker Desktop may use all $host processors of this Mac, so that a busy cluster lags it; leave macOS a few (Settings, Resources, CPU limit: about $((host * 2 / 3)))"
   fi
 }
 

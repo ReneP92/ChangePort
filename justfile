@@ -203,6 +203,16 @@ dev-up:
 dev-down:
     hack/dev-down.sh
 
+# Freeze the local setup's containers, so that it takes no CPU, keeping its state
+[group('Local development (kind + Strimzi)')]
+dev-pause:
+    hack/dev-pause.sh pause
+
+# Resume the local setup that dev-pause froze
+[group('Local development (kind + Strimzi)')]
+dev-resume:
+    hack/dev-pause.sh resume
+
 # List the local setup's containers: kind nodes, customers' load balancers and helpers
 [group('Local development (kind + Strimzi)')]
 ps:

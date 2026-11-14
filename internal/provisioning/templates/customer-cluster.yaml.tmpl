@@ -188,6 +188,10 @@ spec:
       memory: "{{ .Profile.Memory }}"
     limits:
       memory: "{{ .Profile.Memory }}"
+{{- with .Platform.JVMOptions }}
+  jvmOptions:
+    "-XX": {{ json . }}
+{{- end }}
   storage:
     type: jbod
     volumes:
@@ -383,6 +387,10 @@ spec:
           memory: 512Mi
         limits:
           memory: 512Mi
+{{- with .Platform.JVMOptions }}
+      jvmOptions:
+        "-XX": {{ json . }}
+{{- end }}
     userOperator:
       resources:
         requests:
@@ -390,6 +398,10 @@ spec:
           memory: 512Mi
         limits:
           memory: 512Mi
+{{- with .Platform.JVMOptions }}
+      jvmOptions:
+        "-XX": {{ json . }}
+{{- end }}
 ---
 # The customer's user. It manages topics, consumer groups and transactions,
 # but cannot change the cluster's configuration, which the platform owns.
@@ -830,6 +842,9 @@ spec:
   jvmOptions:
     "-Xms": "{{ .Profile.ConnectHeap }}"
     "-Xmx": "{{ .Profile.ConnectHeap }}"
+{{- with .Platform.JVMOptions }}
+    "-XX": {{ json . }}
+{{- end }}
   template:
     pod:
 {{- template "cdc-placement" . }}
@@ -1023,6 +1038,11 @@ spec:
         - name: registry
           image: {{ .CDC.RegistryImage }}
           env:
+{{- with .Platform.JVMOptions }}
+            # The image's run-java.sh adds these to the JVM's flags.
+            - name: JAVA_OPTS_APPEND
+              value: {{ quote (jvmFlags .) }}
+{{- end }}
             - name: APICURIO_STORAGE_KIND
               value: kafkasql
             - name: APICURIO_KAFKASQL_BOOTSTRAP_SERVERS
