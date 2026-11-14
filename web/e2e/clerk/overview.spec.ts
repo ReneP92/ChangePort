@@ -57,13 +57,11 @@ test("an admin downloads client.properties and produces with it", async ({ page 
   await expect(row.getByText("Tiered")).toBeVisible();
 });
 
-// A user belongs to one organization, their company's: the header names
+// A user belongs to one organization, their company's: the sidebar names
 // it and leads to its team, with no other organization to switch to.
-test("the header names the user's one organization", async ({ page }) => {
+test("the sidebar names the user's one organization", async ({ page }) => {
   await openOverview(page, fixtures.users.adminA);
-  const organization = page
-    .getByRole("banner")
-    .getByRole("link", { name: `E2E ${fixtures.run} A` });
+  const organization = page.getByRole("link", { name: `E2E ${fixtures.run} A` });
   await expect(organization).toBeVisible();
   await expect(page.locator(".cl-organizationSwitcherTrigger")).toHaveCount(0);
   await organization.click();

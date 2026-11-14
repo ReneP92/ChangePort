@@ -355,7 +355,7 @@ test("every screen of the console", async ({ browser }) => {
   ]);
   created.sources.push(`changeport_shop_${sourceID}`);
   await shot(admin, "25-source-starting");
-  await nav.getByRole("link", { name: "Cluster" }).click();
+  await nav.getByRole("link", { name: "Overview" }).click();
 
   // Traffic for a few minutes: producers at a steady rate, two consumer
   // groups keeping up and one left at the start of orders.
@@ -449,7 +449,7 @@ test("every screen of the console", async ({ browser }) => {
   created.customers.push(staging);
   await expect(stagingRow).toContainText("Ready", { timeout: 6 * 60_000 });
   await shot(admin, "52-environments-page");
-  const switcher = admin.getByRole("banner").getByRole("combobox", { name: "Environment" });
+  const switcher = admin.getByRole("combobox", { name: "Environment" });
   await switcher.click();
   await expect(admin.getByRole("option", { name: "staging" })).toBeVisible();
   await shot(admin, "51-environments");
@@ -461,7 +461,7 @@ test("every screen of the console", async ({ browser }) => {
   await shot(admin, "54-remove-environment");
   await removeEnvironment.getByRole("button", { name: "Remove" }).click();
   await expect(stagingRow).toContainText("Being removed");
-  await nav.getByRole("link", { name: "Cluster" }).click();
+  await nav.getByRole("link", { name: "Overview" }).click();
   await expect(main.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 30_000 });
 
   // A topic's page and a consumer group's, with the changes over their
@@ -481,13 +481,13 @@ test("every screen of the console", async ({ browser }) => {
     admin.getByRole("region", { name: "Changes" }).getByText(/created topic orders/),
   ).toBeVisible({ timeout: 60_000 });
   await shot(admin, "18-consumer-group");
-  await nav.getByRole("link", { name: "Cluster" }).click();
+  await nav.getByRole("link", { name: "Overview" }).click();
   await nav.getByRole("link", { name: /^Alerts/ }).click();
   await expect(main.getByText(/search-indexer is .* behind/)).toBeVisible();
   // The settings load on their own, after the active alerts.
   await expect(main.getByRole("heading", { name: "Where alerts go" })).toBeVisible();
   await shot(admin, "30-alerts");
-  await nav.getByRole("link", { name: "Cluster" }).click();
+  await nav.getByRole("link", { name: "Overview" }).click();
 
   // Deleting a topic names the groups still reading it.
   await main

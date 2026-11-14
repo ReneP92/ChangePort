@@ -138,7 +138,7 @@ test("an admin adds a Postgres source, changes it and deletes it", async ({ page
   // The source's topics are marked as its own, and cannot be deleted alone.
   await page
     .getByRole("navigation", { name: "Console" })
-    .getByRole("link", { name: "Cluster" })
+    .getByRole("link", { name: "Overview" })
     .click();
   const topic = main.getByRole("row").filter({ hasText: `${name}.public.orders` });
   await expect(topic).toBeVisible({ timeout: 60_000 });
