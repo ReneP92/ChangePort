@@ -79,41 +79,48 @@ function SignedIn() {
     <TooltipProvider>
       <SidebarProvider defaultOpen={sidebarOpen()}>
         <ConsoleSidebar />
-        <SidebarInset>
+        {/* As a flex item the page would otherwise grow to its widest
+            content, such as a table that scrolls on its own, past a phone. */}
+        <SidebarInset className="min-w-0">
           <MobileTopBar />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            {/* Each of an organization's environments, a cluster of its own. */}
-            <Route path="/e/:environment" element={<EnvironmentLayout />}>
-              <Route index element={<EnvironmentHome />} />
-              <Route path="welcome" element={<Welcome />} />
-              <Route path="alerts" element={<AlertsPage />} />
-              <Route path="topics/:name" element={<TopicPage />} />
-              <Route path="consumer-groups/:group" element={<ConsumerGroupPage />} />
-              <Route path="sources" element={<Sources />} />
-              <Route path="sources/new" element={<NewSource />} />
-              <Route path="sources/:name" element={<SourcePage />} />
-            </Route>
-            <Route path="/team" element={<TeamPage />} />
-            <Route path="/environments" element={<EnvironmentsPage />} />
-            {/* Links from before environments open in the default one. */}
-            {[
-              "/welcome",
-              "/alerts",
-              "/topics/:name",
-              "/consumer-groups/:group",
-              "/sources",
-              "/sources/new",
-              "/sources/:name",
-            ].map((path) => (
-              <Route key={path} path={path} element={<ToEnvironment />} />
-            ))}
-            <Route path="/trial" element={<TrialPage />} />
-            <Route path="/operator" element={<OperatorCustomers />} />
-            <Route path="/operator/trials" element={<OperatorTrialRequests />} />
-            <Route path="/operator/customers/:customerID" element={<OperatorCustomer />} />
-            <Route path="*" element={<Notice title="There is no such page" />} />
-          </Routes>
+          {/* Pages centre their main with auto margins, which in the inset's
+              flex column would size it to its content rather than the
+              window: a plain block gives them the window's width. */}
+          <div className="min-w-0 flex-1">
+            <Routes>
+              <Route path="/" element={<Home />} />
+              {/* Each of an organization's environments, a cluster of its own. */}
+              <Route path="/e/:environment" element={<EnvironmentLayout />}>
+                <Route index element={<EnvironmentHome />} />
+                <Route path="welcome" element={<Welcome />} />
+                <Route path="alerts" element={<AlertsPage />} />
+                <Route path="topics/:name" element={<TopicPage />} />
+                <Route path="consumer-groups/:group" element={<ConsumerGroupPage />} />
+                <Route path="sources" element={<Sources />} />
+                <Route path="sources/new" element={<NewSource />} />
+                <Route path="sources/:name" element={<SourcePage />} />
+              </Route>
+              <Route path="/team" element={<TeamPage />} />
+              <Route path="/environments" element={<EnvironmentsPage />} />
+              {/* Links from before environments open in the default one. */}
+              {[
+                "/welcome",
+                "/alerts",
+                "/topics/:name",
+                "/consumer-groups/:group",
+                "/sources",
+                "/sources/new",
+                "/sources/:name",
+              ].map((path) => (
+                <Route key={path} path={path} element={<ToEnvironment />} />
+              ))}
+              <Route path="/trial" element={<TrialPage />} />
+              <Route path="/operator" element={<OperatorCustomers />} />
+              <Route path="/operator/trials" element={<OperatorTrialRequests />} />
+              <Route path="/operator/customers/:customerID" element={<OperatorCustomer />} />
+              <Route path="*" element={<Notice title="There is no such page" />} />
+            </Routes>
+          </div>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>

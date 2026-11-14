@@ -494,6 +494,8 @@ ensure_kind_cluster() {
   local image
   for image in "$KAFKA_IMAGE" "$AGENT_IMAGE" "$CONNECT_IMAGE" "$REGISTRY_GATEWAY_IMAGE" "$PROVISIONER_IMAGE" "$CONSOLE_IMAGE"; do
     if docker image inspect "$image" >/dev/null 2>&1; then
+      # A build interrupted before it tagged its image leaves it untagged.
+      tag_content "$image"
       kind_load "$workers" "$(content_tag "$image")"
       prune_node_images "$image" "$workers"
     fi

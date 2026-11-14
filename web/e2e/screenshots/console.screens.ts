@@ -15,6 +15,7 @@ import {
   shownSQL,
   sourceLeftovers,
 } from "../clerk/helpers";
+import { fullHeightSidebar } from "./style";
 
 // Captures every screen of the console, on a desktop and a phone, into
 // CHANGEPORT_SCREENSHOTS_DIR (just ui-screenshots). An operator provisions
@@ -58,7 +59,11 @@ async function shot(page: Page, name: string): Promise<void> {
     await page.setViewportSize(viewport);
     // Dialogs and layout settle after a resize.
     await page.waitForTimeout(600);
-    await page.screenshot({ path: path.join(out, `${name}-${device}.png`), fullPage: !dialog });
+    await page.screenshot({
+      path: path.join(out, `${name}-${device}.png`),
+      fullPage: !dialog,
+      style: dialog ? undefined : fullHeightSidebar,
+    });
   }
   if (size) {
     await page.setViewportSize(size);

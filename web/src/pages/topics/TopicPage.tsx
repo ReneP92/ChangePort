@@ -64,7 +64,7 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
       <header className="flex flex-col gap-1">
         <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
           <Link to={envPath("/")} className="underline-offset-4 hover:underline">
-            Cluster
+            Overview
           </Link>{" "}
           / Topics
         </nav>

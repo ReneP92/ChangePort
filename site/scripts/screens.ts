@@ -14,7 +14,9 @@ const shots = path.join(root, "..", "docs", "screenshots");
 const out = path.join(root, "public", "screens");
 
 // Each crop: its source, and the region of it, in the console's CSS pixels:
-// the desktop screenshots are 1280 wide, and the phone's 390.
+// the desktop screenshots are 1280 wide, and the phone's 390. On the
+// desktop the console's sidebar takes the first 256 pixels, which the crops
+// leave out.
 // The phone crops come from the console's own phone layout, since the
 // desktop's would be too small to read on a phone.
 const crops = [
@@ -22,7 +24,7 @@ const crops = [
   {
     name: "overview",
     from: "03-overview-desktop.png",
-    left: 130,
+    left: 258,
     top: 0,
     width: 1020,
     height: 820,
@@ -40,8 +42,8 @@ const crops = [
   {
     name: "timeline",
     from: "03-overview-desktop.png",
-    left: 140,
-    top: 815,
+    left: 268,
+    top: 762,
     width: 1000,
     height: 680,
   },
@@ -49,7 +51,7 @@ const crops = [
     name: "timeline-phone",
     from: "03-overview-phone.png",
     left: 0,
-    top: 1270,
+    top: 1226,
     width: 390,
     height: 742,
   },
@@ -57,8 +59,8 @@ const crops = [
   {
     name: "topology",
     from: "03-overview-desktop.png",
-    left: 140,
-    top: 1500,
+    left: 268,
+    top: 1447,
     width: 1000,
     height: 315,
   },
@@ -66,7 +68,7 @@ const crops = [
     name: "topology-phone",
     from: "03-overview-phone.png",
     left: 0,
-    top: 2014,
+    top: 1970,
     width: 390,
     height: 374,
   },
@@ -74,8 +76,8 @@ const crops = [
   {
     name: "lag",
     from: "18-consumer-group-desktop.png",
-    left: 140,
-    top: 60,
+    left: 268,
+    top: 7,
     width: 1000,
     height: 760,
   },
@@ -83,7 +85,7 @@ const crops = [
     name: "lag-phone",
     from: "18-consumer-group-phone.png",
     left: 0,
-    top: 100,
+    top: 56,
     width: 390,
     height: 950,
   },
