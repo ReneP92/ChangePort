@@ -23,6 +23,7 @@ build_registry_gateway_image
 build_provisioner_image
 build_console_image
 check_docker_disk
+check_docker_cpus
 ensure_kind_cluster
 ensure_cloud_provider_kind
 ensure_host_gateway

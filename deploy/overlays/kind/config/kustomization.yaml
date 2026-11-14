@@ -8,3 +8,22 @@ resources:
   # A customer's database for the Postgres CDC source, with a certificate
   # from the local CA.
   - ../../../base/source-postgres
+patches:
+  # A JVM that starts and idles lightly, as the operators' do on kind
+  # (deploy/overlays/kind). The drain cleaner's launch script adds JAVA_OPTS.
+  - target:
+      kind: Deployment
+      name: strimzi-drain-cleaner
+    patch: |-
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: strimzi-drain-cleaner
+      spec:
+        template:
+          spec:
+            containers:
+              - name: strimzi-drain-cleaner
+                env:
+                  - name: JAVA_OPTS
+                    value: -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1

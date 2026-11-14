@@ -115,12 +115,9 @@ template by the provisioning service. Locally this runs on
 [kind](https://kind.sigs.k8s.io/) with the
 [Strimzi](https://strimzi.io/) operator, mirroring the EKS layout.
 
-Prerequisites: Docker (give it at least 12 GB of memory: with 8 GB the full
-end-to-end suite runs out, as the e2e customers' brokers come and go next to
-the demo's; the console's signed-in tests and screenshots, `just ui-e2e` and
-`just ui-screenshots`, need 16 GB next to the demo customer, or 12 GB without
-it), Go 1.26 and [just](https://just.systems/) (`brew install just`),
-which runs every task here; `just` alone lists them.
+Prerequisites: Docker (see [A responsive laptop](#a-responsive-laptop) for
+its CPU and memory), Go 1.26 and [just](https://just.systems/)
+(`brew install just`), which runs every task here; `just` alone lists them.
 The scripts download a pinned, checksum-verified kubectl into `bin/` and the
 upstream install files pinned in `deploy/upstream-files.txt` (Strimzi,
 cert-manager) into `deploy/base/*/upstream/`, and build kind from
@@ -339,6 +336,39 @@ has the procedures:
 ```bash
 go run ./cmd/provisioner unprotect -customer acme -confirm acme
 ```
+
+### A responsive laptop
+
+The local setup runs a dozen JVMs and a Kubernetes control plane in Docker
+Desktop's VM. Idle, it takes under a core; starting Kafka clusters, building
+images and running the tests come in bursts, which should not take the
+machine with them:
+
+- **Docker Desktop's resources** (Settings, Resources): leave macOS a few
+  processors, about two thirds for Docker (8 of 12), which `just dev-up`
+  warns about. For memory, 11 GB on an 18 GB Mac keeps the rest for macOS:
+  more makes macOS swap, which lags worse than a busy processor. That is
+  enough for the demo customer and its sources, and for the console's
+  signed-in tests and screenshots (`just ui-e2e`, `just ui-screenshots`)
+  without the demo, which they need 16 GB next to. The full end-to-end
+  suite (`just e2e`) needs 12 GB, as its customers' brokers come and go next
+  to the demo's: give Docker that while it runs, or leave it to CI.
+- **Lean JVMs:** on kind every JVM, the brokers, the entity operators, the
+  Connect workers, the schema registries, Strimzi's operator and its drain
+  cleaner, gets `-XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1`
+  (`provisioning.KindPlatform` and `deploy/overlays/kind`). Each kind node
+  sees all of Docker's processors, and a JVM sizes its compiler and garbage
+  collector threads to them: a broker starting peaked at 5 cores. Two
+  processors and only the quick compiler halve that, and a customer is
+  provisioned faster. EKS keeps the JVMs' own defaults.
+- **Pausing:** `just dev-pause` freezes every container of the local setup,
+  which then takes no CPU, and `just dev-resume` resumes it in seconds with
+  everything as it was. Its memory stays taken. On resume, Strimzi's
+  operator and cert-manager's CA injector restart once, as their leader
+  leases lapsed meanwhile, and catch up within a minute.
+- **Tests' leftovers:** a `go test` killed midway, by a timeout or ctrl-C,
+  leaves its envtest API server and etcd running; `just test` stops those
+  before it runs.
 
 Docker Desktop lists the local setup's containers without grouping them, as
 kind and cloud-provider-kind create theirs without a Compose project. This

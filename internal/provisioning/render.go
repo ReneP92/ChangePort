@@ -3,11 +3,13 @@ package provisioning
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -21,13 +23,36 @@ var templates embed.FS
 
 // clusterTemplate quotes values that stand alone as YAML scalars with
 // "quote": a customer ID such as "true", "no" or "null" would otherwise be
-// read as a boolean or null.
+// read as a boolean or null. "json" writes a map as a JSON object, which
+// YAML reads as it is, and "jvmFlags" -XX options as a JVM's flags.
 var clusterTemplate = template.Must(
 	template.New("customer-cluster.yaml.tmpl").
 		Option("missingkey=error").
-		Funcs(template.FuncMap{"quote": strconv.Quote}).
+		Funcs(template.FuncMap{"quote": strconv.Quote, "json": toJSON, "jvmFlags": jvmFlags}).
 		ParseFS(templates, "templates/customer-cluster.yaml.tmpl"),
 )
+
+func toJSON(v any) (string, error) {
+	b, err := json.Marshal(v)
+	return string(b), err
+}
+
+// jvmFlags writes -XX options as the JVM takes them, in the order of their
+// names, as Strimzi does: true and false switch an option on and off.
+func jvmFlags(options map[string]string) string {
+	flags := make([]string, 0, len(options))
+	for _, name := range slices.Sorted(maps.Keys(options)) {
+		switch value := options[name]; value {
+		case "true":
+			flags = append(flags, "-XX:+"+name)
+		case "false":
+			flags = append(flags, "-XX:-"+name)
+		default:
+			flags = append(flags, "-XX:"+name+"="+value)
+		}
+	}
+	return strings.Join(flags, " ")
+}
 
 type templateValues struct {
 	Tenant          string

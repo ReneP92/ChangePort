@@ -65,6 +65,8 @@ spec:
       memory: "5Gi"
     limits:
       memory: "5Gi"
+  jvmOptions:
+    "-XX": {"ActiveProcessorCount":"2","TieredStopAtLevel":"1"}
   storage:
     type: jbod
     volumes:
@@ -226,6 +228,8 @@ spec:
           memory: 512Mi
         limits:
           memory: 512Mi
+      jvmOptions:
+        "-XX": {"ActiveProcessorCount":"2","TieredStopAtLevel":"1"}
     userOperator:
       resources:
         requests:
@@ -233,6 +237,8 @@ spec:
           memory: 512Mi
         limits:
           memory: 512Mi
+      jvmOptions:
+        "-XX": {"ActiveProcessorCount":"2","TieredStopAtLevel":"1"}
 ---
 # The customer's user. It manages topics, consumer groups and transactions,
 # but cannot change the cluster's configuration, which the platform owns.

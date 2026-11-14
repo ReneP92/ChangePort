@@ -9,6 +9,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 fetch_upstream_files
+stop_orphaned_envtest
 KUBEBUILDER_ASSETS=$(envtest_assets)
 export KUBEBUILDER_ASSETS
 docker info >/dev/null 2>&1 || die "Docker is not running; the Postgres CDC source's tests run Postgres in it"
