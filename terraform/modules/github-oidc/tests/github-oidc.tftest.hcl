@@ -15,9 +15,9 @@ mock_provider "aws" {
 }
 
 variables {
-  name              = "changeport-test"
-  github_repository = "ReneP92/ChangePort"
-  state_bucket_arn  = "arn:aws:s3:::changeport-test-terraform-state"
+  name                      = "changeport-test"
+  github_repository_subject = "ReneP92@40995280/ChangePort@1412834684"
+  state_bucket_arn          = "arn:aws:s3:::changeport-test-terraform-state"
 }
 
 run "pull_requests_and_main_plan" {
@@ -30,7 +30,7 @@ run "pull_requests_and_main_plan" {
   assert {
     condition = jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Condition.StringEquals == {
       "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-      "token.actions.githubusercontent.com:sub" = ["repo:ReneP92/ChangePort:pull_request", "repo:ReneP92/ChangePort:ref:refs/heads/main"]
+      "token.actions.githubusercontent.com:sub" = ["repo:ReneP92@40995280/ChangePort@1412834684:pull_request", "repo:ReneP92@40995280/ChangePort@1412834684:ref:refs/heads/main"]
     }
     error_message = "Only pull requests and pushes to main of the repository may assume the plan role."
   }
@@ -59,4 +59,16 @@ run "reads_only_what_terraform_needs" {
     ])
     error_message = "The plan role may not read secrets or decrypt."
   }
+}
+
+# The plain owner/name is not what this repository's tokens carry, so a role
+# trusting it could never be assumed.
+run "subjects_without_ids_are_refused" {
+  command = plan
+
+  variables {
+    github_repository_subject = "ReneP92/ChangePort"
+  }
+
+  expect_failures = [var.github_repository_subject]
 }

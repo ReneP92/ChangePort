@@ -29,8 +29,8 @@ resource "aws_iam_role" "plan" {
           # Pull requests and pushes to main. Pull requests from forks get
           # no OpenID Connect token, so these are the repository's own.
           "token.actions.githubusercontent.com:sub" = [
-            "repo:${var.github_repository}:pull_request",
-            "repo:${var.github_repository}:ref:refs/heads/main",
+            "repo:${var.github_repository_subject}:pull_request",
+            "repo:${var.github_repository_subject}:ref:refs/heads/main",
           ]
         }
       }

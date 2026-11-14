@@ -6,7 +6,8 @@ composes the modules in `modules/`:
 
 - `management`: the Organization, its guardrails, single sign-on and cost
   alerts. No workload runs here.
-- `dev` and `prod`: VPC, EKS, S3 and IAM, and in prod the image registry.
+- `dev` and `prod`: VPC, EKS, S3 and IAM, and in prod the image registry
+  and the landing site.
 
 Nothing has been applied yet; [Setting up the accounts](#setting-up-the-accounts)
 lists the steps.
@@ -75,6 +76,13 @@ there is no DynamoDB table. `just tf-bootstrap <account>` creates the bucket
 with local state and moves the state into it, once per account.
 
 ## Plans in CI (`modules/github-oidc`)
+
+GitHub Actions authenticates to AWS with OpenID Connect tokens, whose `sub`
+claim names the repository with its owner's and its own ID, as
+`repo:ReneP92@40995280/ChangePort@1412834684:ref:refs/heads/main`: the
+repository uses immutable subjects, which survive a rename. Every role for
+GitHub Actions trusts that subject, set once per account as
+`github_repository_subject`.
 
 Each account has a GitHub Actions OpenID Connect provider and a role,
 `changeport-<account>-terraform-plan`, that pull requests and pushes to main
@@ -260,3 +268,48 @@ Once prod is applied, two settings turn publishing on:
 
 Then run the workflow once by hand (Actions, Publish images, Run workflow) to
 publish every image.
+
+## Landing site (`modules/static-site`, prod only)
+
+The landing site (`site/`, [docs/site.md](../docs/site.md)) is served at the
+domain's root from the prod account, once `domain` and `domain_zone_id` are
+in its `terraform.tfvars` (#8); until then nothing of it exists.
+
+- **The bucket**, `changeport-prod-site`, is private: only the site's
+  CloudFront distribution reads it, signing its requests with origin access
+  control, and requests without TLS 1.2 are refused.
+- **The distribution** answers for the domain and `www.<domain>` with an ACM
+  certificate of both, validated through the domain's zone, over HTTP/2 and
+  HTTP/3 and TLS 1.2 or newer; plain HTTP redirects to HTTPS. A CloudFront
+  Function redirects `www.<domain>` to the domain, keeping the path and the
+  query. An address the bucket has no page for gets the site's `404.html`,
+  with a 404. It serves from North America and Europe (`PriceClass_100`).
+- **Headers:** HSTS for two years with subdomains, `nosniff`, no framing,
+  `strict-origin-when-cross-origin` referrers, a Permissions-Policy that
+  turns off the camera, microphone, location, payment and USB, and a
+  Content-Security-Policy with what a page cannot say for itself. The pages
+  carry their own policy for scripts and styles, with the hashes of their
+  inline scripts, which the build computes (`site/vite.config.ts`).
+- **Records:** A and AAAA aliases of the distribution for the domain and its
+  `www`, in the domain's zone.
+
+`.github/workflows/publish-site.yml` builds the site for the domain, with
+the console at `console.<domain>`, after every green CI run for main's
+newest commit (a re-run for an older one publishes nothing), and publishes
+it with `hack/publish-site.sh`: assets, whose names carry their
+content's hash, are kept by browsers for a year; pages and other files are
+revalidated by browsers on each visit and kept by CloudFront until the next
+publish, which empties its cache and waits for it before it removes the
+assets the new pages no longer use. It assumes `changeport-prod-site-publish`,
+which only runs on main may assume, through the account's OpenID Connect
+provider, and which reaches only the site's bucket and distribution.
+
+Once prod is applied with a domain, set the repository variables the
+workflow needs, then run it once by hand (Actions, Publish site, Run
+workflow):
+
+```bash
+terraform -chdir=terraform/environments/prod output -json site_publishing |
+  jq -r 'to_entries[] | "\(.key) \(.value)"' |
+  while read -r name value; do gh variable set "$name" --body "$value"; done
+```

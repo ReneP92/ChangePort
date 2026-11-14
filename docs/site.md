@@ -12,7 +12,8 @@ It is plain HTML with Tailwind's CSS in the console's brand
 data streaming through Changeport, the Postgres change data capture demo,
 the lag simulator and the console tour. There are no cookies, no analytics and no
 third-party requests. Vite builds it into `site/dist`, a folder of static
-files that any static host can serve; publishing it is #138.
+files, which CloudFront serves from a private bucket in the prod account
+(see [Publishing](#publishing)).
 
 The page is complete without the script: sections show, every console
 screen shows, and the demos show a still state. The script only adds to it,
@@ -27,7 +28,9 @@ just site-build   # site/dist
 just site-check   # type-check, format-check, build, test, then Lighthouse
 ```
 
-- **Pages** are `site/index.html`, `site/privacy.html` and `site/terms.html`.
+- **Pages** are `site/index.html`, `site/privacy.html`, `site/terms.html`
+  and `site/404.html`, which the host serves for an address it has no page
+  for, asking search engines not to index it.
   A new page also goes into `build.rolldownOptions.input` in
   `site/vite.config.ts`, and into the pages that `site/scripts/lighthouse.ts`
   audits.
@@ -94,3 +97,18 @@ performance, accessibility, best practices and SEO, and names the audits
 that fell short. Its reports are in `site/lighthouse`; CI runs it, after the tests, in the
 `Site tests and Lighthouse` job, and uploads both reports as the
 `site-reports` artifact when it fails.
+
+## Publishing
+
+Once prod has a domain (#8), `.github/workflows/publish-site.yml` builds the
+site for it after every green CI run for main's newest commit, with the console at
+`console.<domain>`, and publishes it to its bucket behind CloudFront
+(`hack/publish-site.sh`, [terraform/README.md](../terraform/README.md#landing-site-modulesstatic-site-prod-only)).
+A merge reaches visitors a few minutes after CI passes.
+
+Each page carries a Content-Security-Policy, which the build writes into it:
+the site's own files only, and of inline scripts only those the page was
+built with, by their hashes. A new inline script is covered on the next
+build, and a test fails if anything on a page is refused. CloudFront adds
+the headers a page cannot set for itself, such as HSTS and the refusal to be
+framed.

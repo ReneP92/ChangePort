@@ -14,8 +14,11 @@ provider "aws" {
 }
 
 locals {
-  name              = "changeport-dev"
-  github_repository = "ReneP92/ChangePort"
+  name = "changeport-dev"
+  # The repository as its OpenID Connect tokens name it, which the roles for
+  # GitHub Actions trust: immutable subjects carry the owner's and the
+  # repository's IDs (gh api repos/ReneP92/ChangePort/actions/oidc/customization/sub).
+  github_repository_subject = "ReneP92@40995280/ChangePort@1412834684"
 }
 
 # The state of this account, which `just tf-bootstrap dev` creates.
@@ -28,9 +31,9 @@ module "state_backend" {
 module "github_oidc" {
   source = "../../modules/github-oidc"
 
-  name              = local.name
-  github_repository = local.github_repository
-  state_bucket_arn  = module.state_backend.bucket_arn
+  name                      = local.name
+  github_repository_subject = local.github_repository_subject
+  state_bucket_arn          = module.state_backend.bucket_arn
 }
 
 module "vpc" {

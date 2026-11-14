@@ -38,3 +38,20 @@ variable "kafka_dns_zone_ids" {
   type        = list(string)
   default     = []
 }
+
+variable "domain" {
+  description = "Changeport's domain, such as changeport.io, once it is registered (#8). The landing site is served at it; without it there is no site."
+  type        = string
+  default     = ""
+}
+
+variable "domain_zone_id" {
+  description = "ID of the Route 53 hosted zone of the domain, in this account."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.domain == "" || var.domain_zone_id != ""
+    error_message = "Give the domain's hosted zone with the domain."
+  }
+}

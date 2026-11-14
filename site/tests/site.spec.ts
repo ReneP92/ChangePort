@@ -3,6 +3,44 @@ import { expect, test, type Page } from "@playwright/test";
 
 const wide = (page: Page) => (page.viewportSize()?.width ?? 0) >= 768;
 
+/** Every page of the site; 404.html is what the host serves for an unknown address. */
+const pages = ["/", "/privacy.html", "/terms.html", "/404.html"];
+
+// Each page's Content-Security-Policy (vite.config.ts) lets its own scripts
+// and styles run, and nothing it does is refused.
+for (const path of pages) {
+  test(`${path} runs under its Content-Security-Policy`, async ({ page }) => {
+    await page.addInitScript(() => {
+      const window = globalThis as unknown as {
+        violations: string[];
+        addEventListener(type: string, listener: (event: Event) => void): void;
+      };
+      window.violations = [];
+      window.addEventListener("securitypolicyviolation", (event) => {
+        const violation = event as unknown as { violatedDirective: string; blockedURI: string };
+        window.violations.push(`${violation.violatedDirective} ${violation.blockedURI}`);
+      });
+    });
+    await page.goto(path);
+    await page.waitForLoadState("networkidle");
+    const policy = page.locator('meta[http-equiv="Content-Security-Policy"]');
+    await expect(policy).toHaveAttribute("content", /script-src 'self' 'sha256-/);
+    // The inline script ran: it marks the page for the animations.
+    await expect(page.locator("html")).toHaveClass(/\bjs\b/);
+    expect(
+      await page.evaluate(() => (globalThis as unknown as { violations: string[] }).violations),
+    ).toEqual([]);
+  });
+}
+
+test("the 404 page leads home, and keeps out of search engines", async ({ page }) => {
+  await page.goto("/404.html");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("There is no such page");
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex");
+  await page.getByRole("main").getByRole("link", { name: "Go to the home page" }).click();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("the hero's diagram draws white nodes on thin lines", async ({ page }) => {
   await page.goto("/");
   const diagram = page.locator("svg[data-flow]:visible");
@@ -146,7 +184,7 @@ test.describe("every page, fully shown", () => {
   // every element, which Lighthouse's audit of the first screen does not.
   test.use({ reducedMotion: "reduce" });
 
-  for (const path of ["/", "/privacy.html", "/terms.html"]) {
+  for (const path of pages) {
     test(`${path} has no accessibility violations`, async ({ page }) => {
       await page.goto(path);
       const results = await new AxeBuilder({ page }).analyze();
