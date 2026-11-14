@@ -1,4 +1,4 @@
-import type { Environment } from "@/api/client";
+import type { Environment, Environments, Me } from "@/api/client";
 
 /**
  * An organization has a cluster per environment, such as production and
@@ -62,4 +62,31 @@ export function defaultEnvironment(
     return remembered;
   }
   return environments[0]?.name;
+}
+
+/**
+ * The viewer as they are after a change to their organization's
+ * environments: the ones to switch between, without those being removed,
+ * the default first.
+ */
+export function meWithEnvironments(me: Me, list: Environments): Me {
+  if (me.access !== "customer") {
+    return me;
+  }
+  const environments = list.environments.filter((e) => !e.deleting);
+  const first = environments[0];
+  return first === undefined
+    ? { ...me, environments }
+    : { ...me, environments, customerID: first.customerID };
+}
+
+/** Follows a rename with the environment this browser remembers. */
+export function renameRemembered(organization: string, from: string, to: string) {
+  try {
+    if (localStorage.getItem(storageKey(organization)) === from) {
+      localStorage.setItem(storageKey(organization), to);
+    }
+  } catch {
+    // Storage can be off, as in a private window.
+  }
 }

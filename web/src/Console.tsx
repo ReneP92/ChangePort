@@ -8,6 +8,7 @@ import { OrganizationButton } from "@/components/OrganizationButton";
 import { EnvironmentHome, EnvironmentLayout, ToEnvironment } from "@/pages/EnvironmentRoutes";
 import { Home } from "@/pages/Home";
 import { AlertsPage } from "@/pages/alerts/AlertsPage";
+import { EnvironmentsPage } from "@/pages/environments/EnvironmentsPage";
 import { TeamPage } from "@/pages/team/TeamPage";
 import { Welcome } from "@/pages/welcome/Welcome";
 import { ConsumerGroupPage } from "@/pages/consumer-groups/ConsumerGroupPage";
@@ -108,6 +109,7 @@ function SignedIn() {
           <Route path="sources/:name" element={<SourcePage />} />
         </Route>
         <Route path="/team" element={<TeamPage />} />
+        <Route path="/environments" element={<EnvironmentsPage />} />
         {/* Links from before environments open in the default one. */}
         {[
           "/welcome",
@@ -161,6 +163,10 @@ function CustomerNav() {
       </NavLink>
       <NavLink to="/team" className={navLink}>
         Team
+      </NavLink>
+      {/* Phones reach it through the environment switcher: five links fit no row. */}
+      <NavLink to="/environments" className={(state) => cn(navLink(state), "max-sm:hidden")}>
+        Environments
       </NavLink>
     </nav>
   );

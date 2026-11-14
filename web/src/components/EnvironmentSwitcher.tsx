@@ -1,20 +1,25 @@
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useMe } from "@/api/queries";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { environmentPath } from "@/lib/environments";
 import { useEnvironment } from "@/lib/useEnvironment";
 
+/** The choice that opens the page of the organization's environments. */
+const manage = "/environments";
+
 /**
  * The environment the console shows, in the header: a choice of the
  * organization's environments, each a cluster of its own, which opens the
- * chosen one's overview; with one environment, just its name.
+ * chosen one's overview, or their page; with one environment, just its
+ * name, which opens their page.
  */
 export function EnvironmentSwitcher() {
   const me = useMe();
@@ -26,8 +31,10 @@ export function EnvironmentSwitcher() {
   }
   if (environments.length === 1) {
     return (
-      <Badge variant="outline" title="Your organization's environment">
-        {environment}
+      <Badge variant="outline" asChild>
+        <Link to={manage} title="Your organization's environments">
+          {environment}
+        </Link>
       </Badge>
     );
   }
@@ -35,7 +42,7 @@ export function EnvironmentSwitcher() {
     <Select
       value={environment}
       onValueChange={(next) => {
-        void navigate(environmentPath(next, "/"));
+        void navigate(next === manage ? manage : environmentPath(next, "/"));
       }}
     >
       <SelectTrigger size="sm" className="w-auto min-w-28" aria-label="Environment">
@@ -47,6 +54,8 @@ export function EnvironmentSwitcher() {
             {e.name}
           </SelectItem>
         ))}
+        <SelectSeparator />
+        <SelectItem value={manage}>Manage environments</SelectItem>
       </SelectContent>
     </Select>
   );

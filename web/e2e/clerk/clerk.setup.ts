@@ -5,6 +5,7 @@ import { test as setup } from "@playwright/test";
 import {
   abandonedAfterMs,
   clerkClient,
+  deleteTestCustomer,
   env,
   kubectl,
   operatorEmail,
@@ -168,7 +169,7 @@ async function removeAbandoned(): Promise<void> {
   }
   for (const c of testCustomers()) {
     if (Date.parse(c.metadata.creationTimestamp) < cutoff) {
-      kubectl(["delete", "customer", c.metadata.name, "--wait=false"]);
+      deleteTestCustomer(c.metadata.name);
     }
   }
   for (const r of testTrialRequests()) {

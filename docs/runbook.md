@@ -201,16 +201,20 @@ Operators extend a trial, to a new end at most 90 days away, or convert the
 customer, which ends its trial so that it stays, on the customer's page in
 the operator console. Both are in the audit log (`trial extended`, `trial
 converted`). A trial cannot have deletion protection; turn it on after
-converting, if the customer needs it. The console may change nothing of a
-Customer but its trial: the admission policy
+converting, if the customer needs it. The console may change only a
+Customer's trial, and, for its organization's admins, its environment's
+name, the default and deletion protection: the admission policy
 `deploy/base/console/customer-trials.yaml` refuses the rest.
 
 ## Environments
 
 An organization has a cluster per environment, such as production, staging and dev: each is a Customer of its own, with `spec.environment` naming it, sharing the organization's `spec.clerkOrganizationID`. Customers from before environments are production.
 
-- **Adding one:** on a customer's page in the operator console, **Add environment** names it, unique in the organization, and picks its profile and deletion protection. The organization's members see it in the console's environment switcher once its cluster is ready. A trial is one environment: convert the customer first.
-- **Removing one:** deprovision its customer, as any other. The organization and its other environments stay.
+- **Customers manage them:** an organization's admins add, rename, protect and remove environments on the console's Environments page, and choose the default one (docs/console.md). The audit lines say who did what: `environment added`, `environment renamed`, `default environment set`, `deletion protection turned on` or `off`, and `environment removed`, with the environment's customer as the tenant.
+- **The limit:** admins may have at most 5 environments per organization, which `-max-environments` on the console changes. Each is a dedicated cluster.
+- **Adding one beyond it:** on a customer's page in the operator console, **Add environment** names it, unique in the organization, and picks its profile and deletion protection. The organization's members see it in the console's environment switcher at once, starting until its cluster is ready. A trial is one environment: convert the customer first.
+- **Removing the last one:** admins cannot remove their organization's last environment. Closing an account is deprovisioning its customer, as any other. The organization stays.
+- **Deletion protection:** admins turn it off themselves, with the environment's name typed, which the console checks too. The admission policy `changeport-console-customers` lets the console change only a customer's trial, environment name, default and deletion protection.
 - **Finding them:** `kubectl get customers -l changeport.io/clerk-organization=<org_...>` lists an organization's environments, with their names in the Environment column.
 
 ## Deletion protection
@@ -223,10 +227,13 @@ Customer and deleting its namespace, which carries the
 console refuse deprovisioning it. New production customers are protected by
 default, from the console and from `provisioner provision`.
 
-Protection is turned on and off with the provisioner CLI only; the console
-can create and delete customers, and change only their trials. A customer on
-a trial cannot be protected until it is converted. Turning protection off
-takes the customer ID typed again:
+Operators turn protection on and off with the provisioner CLI. An
+organization's admins turn it on and off for their environments on the
+console's Environments page, off only with the environment's name typed
+(see [Environments](#environments)); the console changes nothing else of a
+customer but its trial. A customer on a trial cannot be protected until it
+is converted. With the CLI, turning protection off takes the customer ID
+typed again:
 
 ```bash
 provisioner protect -customer c-7f3k2q

@@ -37,10 +37,9 @@ type Customers interface {
 	// Delete deletes a customer, whose cluster the provisioning controller
 	// then deletes, or returns ErrNoSuchCustomer.
 	Delete(ctx context.Context, id string) error
-	// SetTrial sets or, with nil, removes the trial of the customer as read,
-	// filling in the result, or returns ErrCustomerChanged when it changed
-	// meanwhile.
-	SetTrial(ctx context.Context, customer *v1alpha1.Customer, trial *v1alpha1.CustomerTrial) error
+	// Change changes the spec of the customer as read, filling in the
+	// result, or returns ErrCustomerChanged when it changed meanwhile.
+	Change(ctx context.Context, customer *v1alpha1.Customer, change func(*v1alpha1.CustomerSpec)) error
 }
 
 // ErrCustomerExists means a customer of that ID exists already.
@@ -93,11 +92,14 @@ func environmentOf(c *v1alpha1.Customer) string {
 	return cmp.Or(c.Spec.Environment, v1alpha1.DefaultEnvironment)
 }
 
-// environmentOrder sorts an organization's customers by environment:
-// production, the default, first, then by name.
+// environmentOrder sorts an organization's customers by environment: the
+// one chosen as the default first, then production, then by name, and
+// those being removed last. The first is the organization's default.
 func environmentOrder(a, b v1alpha1.Customer) int {
 	ea, eb := environmentOf(&a), environmentOf(&b)
 	return cmp.Or(
+		cmp.Compare(boolRank(!a.DeletionTimestamp.IsZero()), boolRank(!b.DeletionTimestamp.IsZero())),
+		cmp.Compare(boolRank(!a.Spec.DefaultEnvironment), boolRank(!b.Spec.DefaultEnvironment)),
 		cmp.Compare(boolRank(ea != v1alpha1.DefaultEnvironment), boolRank(eb != v1alpha1.DefaultEnvironment)),
 		strings.Compare(ea, eb),
 		strings.Compare(a.Name, b.Name),
@@ -163,17 +165,18 @@ func (k KubeCustomers) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// SetTrial implements Customers, with a patch of the trial alone, which the
-// admission policy changeport-console-customers holds the console to.
-func (k KubeCustomers) SetTrial(ctx context.Context, customer *v1alpha1.Customer, trial *v1alpha1.CustomerTrial) error {
+// Change implements Customers, with a patch of the spec alone, against the
+// customer as read. The admission policy changeport-console-customers holds
+// the console to the fields it may change.
+func (k KubeCustomers) Change(ctx context.Context, customer *v1alpha1.Customer, change func(*v1alpha1.CustomerSpec)) error {
 	original := customer.DeepCopy()
-	customer.Spec.Trial = trial
+	change(&customer.Spec)
 	err := k.Client.Patch(ctx, customer, client.MergeFromWithOptions(original, client.MergeFromWithOptimisticLock{}))
 	if apierrors.IsConflict(err) || apierrors.IsNotFound(err) {
 		return fmt.Errorf("customer %s: %w", customer.Name, ErrCustomerChanged)
 	}
 	if err != nil {
-		return fmt.Errorf("set the trial of customer %s: %w", customer.Name, err)
+		return fmt.Errorf("change customer %s: %w", customer.Name, err)
 	}
 	return nil
 }

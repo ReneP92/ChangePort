@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ApiError, type NewCustomer } from "@/api/client";
 import { useProvisionCustomer } from "@/api/queries";
+import { ProfileRadio } from "@/components/ProfileRadio";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -16,8 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { profiles, type Profile } from "@/lib/profiles";
 
 /**
  * A button that opens the dialog to provision a customer: a new Clerk
@@ -106,10 +105,10 @@ function ProvisionCustomerForm() {
 
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Profile</legend>
-        <RadioGroup
+        <ProfileRadio
+          id="profile"
           value={customer.profile}
-          onValueChange={(value) => {
-            const profile = value as Profile;
+          onChange={(profile) => {
             setCustomer({
               ...customer,
               profile,
@@ -118,24 +117,7 @@ function ProvisionCustomerForm() {
                 : profile === "production",
             });
           }}
-        >
-          {profiles.map((profile) => (
-            <div key={profile.name} className="flex items-start gap-3">
-              <RadioGroupItem
-                value={profile.name}
-                id={`profile-${profile.name}`}
-                className="mt-0.5"
-              />
-              <Label
-                htmlFor={`profile-${profile.name}`}
-                className="flex flex-col items-start gap-1 font-normal"
-              >
-                <span className="font-medium">{profile.name}</span>
-                <span className="leading-snug text-muted-foreground">{profile.description}</span>
-              </Label>
-            </div>
-          ))}
-        </RadioGroup>
+        />
         <Problem text={fieldProblem("profile")} />
       </fieldset>
 

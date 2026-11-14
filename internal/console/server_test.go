@@ -52,7 +52,7 @@ type fakeCustomers struct {
 	collisions int
 	// deleted lists the customers deleted, by ID.
 	deleted []string
-	// changed makes every trial change fail as if the customer had changed.
+	// changed makes every change fail as if the customer had changed.
 	changed bool
 }
 
@@ -112,13 +112,13 @@ func (f *fakeCustomers) Create(_ context.Context, customer *v1alpha1.Customer) e
 	return nil
 }
 
-func (f *fakeCustomers) SetTrial(_ context.Context, customer *v1alpha1.Customer, trial *v1alpha1.CustomerTrial) error {
-	stored, _ := f.Get(context.Background(), customer.Name)
-	if stored == nil || f.changed {
+func (f *fakeCustomers) Change(_ context.Context, customer *v1alpha1.Customer, change func(*v1alpha1.CustomerSpec)) error {
+	i := slices.IndexFunc(f.customers, func(c v1alpha1.Customer) bool { return c.Name == customer.Name })
+	if i < 0 || f.changed {
 		return ErrCustomerChanged
 	}
-	stored.Spec.Trial = trial.DeepCopy()
-	customer.Spec.Trial = trial.DeepCopy()
+	change(&f.customers[i].Spec)
+	change(&customer.Spec)
 	return nil
 }
 
@@ -476,6 +476,11 @@ func TestAuthorizationMatrix(t *testing.T) {
 	routes["/api/customer/events"] = customerRoute(`"message":"Topic acme-orders was created`, `"kind":"broker.restarted"`, `"events":[]`)
 	routes["/api/customer/consumer-groups/billing/lag"] = customerRoute(`"topic":"acme-orders"`, `"lagSeconds":[{`, `"topic":"globex-orders"`)
 	routes["/api/customer/topics/acme-orders/consumer-groups"] = customerRoute(`{"groups":[]}`, `{"groups":[]}`, `{"groups":[]}`)
+	// An organization without a cluster has no environments, rather than
+	// none to act on.
+	environments := customerRoute(`"customerID":"acme","default":true`, `"limit":5`, `"customerID":"globex"`)
+	environments["organization without"] = want{200, `{"environments":[],"limit":5}`}
+	routes["/api/customer/environments"] = environments
 	// Only an organization's admins may download its credentials.
 	clientProperties := customerRoute("", "sasl.jaas.config=", "")
 	clientProperties["acme member"] = want{403, "Admins only"}

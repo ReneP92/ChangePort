@@ -4,7 +4,8 @@
 # service account and Kafka user. The service account may read exactly the
 # Secrets the console needs in the customer's namespace, and its pods for the
 # brokers' health, and nothing else. It changes Customers only to extend a
-# trial or convert a customer. It makes trial requests and decides
+# trial or convert a customer, and to rename an environment, make it the
+# default or protect it, for its admins. It makes trial requests and decides
 # them through their status, but cannot change one. It manages Postgres
 # sources, and may create their write-once password Secrets; it manages
 # alert settings, and may create their receivers' write-once Secrets. The
@@ -44,9 +45,10 @@ for allowed in "-n $namespace get pods" "-n $namespace list pods"; do
   # shellcheck disable=SC2086 # the words are separate arguments
   [[ $(can_i $allowed) == yes ]] || die "the console may not $allowed"
 done
-# Customers, which it watches, and creates and deletes for operators; it may
-# patch them, which the admission policy changeport-console-customers holds
-# to extending a trial or converting a customer.
+# Customers, which it watches, and creates and deletes for operators and
+# admins; it may patch them, which the admission policy
+# changeport-console-customers holds to a trial, the environment's name, the
+# default and deletion protection.
 for allowed in "get customers" "list customers" "watch customers" "create customers" "patch customers" "delete customers"; do
   # shellcheck disable=SC2086 # the words are separate arguments
   [[ $(can_i $allowed) == yes ]] || die "the console may not $allowed"
@@ -64,8 +66,13 @@ done
 patch_customer_as_console() {
   kubectl patch customer "$customer" --as "$console" --type=merge --dry-run=server -o name -p "$1" 2>&1 || true
 }
-answer=$(patch_customer_as_console '{"spec":{"deletionProtection":true}}')
-[[ $answer == *changeport-console-customers* ]] || die "the console could turn on deletion protection of customer $customer: $answer"
+for change in '{"spec":{"displayName":"Not the customer"}}' '{"spec":{"clerkOrganizationID":"org_2evil"}}' \
+  '{"spec":{"trial":{"endsAt":"2030-01-01T00:00:00Z"}}}' '{"metadata":{"finalizers":null}}'; do
+  answer=$(patch_customer_as_console "$change")
+  [[ $answer == *changeport-console-customers* ]] || die "the console could patch customer $customer with $change: $answer"
+done
+answer=$(patch_customer_as_console '{"spec":{"environment":"renamed","defaultEnvironment":true,"deletionProtection":true}}')
+[[ $answer == "customer.changeport.io/$customer" ]] || die "the console could not rename, default or protect customer $customer's environment: $answer"
 
 log "Console service account's access to trial requests"
 # Users make them and operators decide them through the status; a request

@@ -1,12 +1,14 @@
 import { test as teardown } from "@playwright/test";
 import {
   clerkClient,
+  deleteTestCustomer,
   kubectl,
   operatorEmail,
   readFixtures,
   runLabel,
   testCustomers,
   testTrialRequests,
+  unprotectTestCustomer,
 } from "./fixtures";
 
 // Removes this run's users, organizations and customers, but not the
@@ -35,7 +37,7 @@ teardown("remove this run's users, organizations and customers", async () => {
   ])
     .split("\n")
     .filter(Boolean)) {
-    kubectl(["patch", name, "--type=merge", "-p", '{"spec":{"deletionProtection":false}}']);
+    unprotectTestCustomer(name.replace(/^customer\.changeport\.io\//, ""));
   }
   kubectl(["delete", "customers", "-l", `${runLabel}=${fixtures.run}`, "--wait=false"]);
   // What the tests provisioned through the operator console is named like
@@ -49,7 +51,7 @@ teardown("remove this run's users, organizations and customers", async () => {
   }
   for (const c of testCustomers()) {
     if (c.spec.displayName.startsWith(prefix)) {
-      kubectl(["delete", "customer", c.metadata.name, "--wait=false", "--ignore-not-found"]);
+      deleteTestCustomer(c.metadata.name);
     }
   }
   // The trial requests the tests made, for companies named the same way.

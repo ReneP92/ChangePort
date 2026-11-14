@@ -5,11 +5,12 @@ metadata:
   namespace: changeport
 ---
 # The console reads Customers, from a watch it keeps in memory, and creates
-# and deletes them for operators; the provisioning controller does the rest.
-# It patches a Customer only to extend its trial or convert it, which the
-# admission policy changeport-console-customers holds it to, so it cannot
-# turn deletion protection off. In each customer namespace the template's
-# Role lets it read the Secrets it needs, by name.
+# and deletes them for operators and organizations' admins; the provisioning
+# controller does the rest. It patches a Customer only to extend its trial
+# or convert it, and to rename an environment, make it the default or turn
+# its deletion protection on or off, which the admission policy
+# changeport-console-customers holds it to. In each customer namespace the
+# template's Role lets it read the Secrets it needs, by name.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:

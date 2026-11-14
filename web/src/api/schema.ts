@@ -493,6 +493,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/customer/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The environments of the customer's organization, each a cluster, the default first. It ignores the environment header. */
+        get: operations["listEnvironments"];
+        put?: never;
+        /** Adds an environment, a cluster of its own, to the organization; for organization admins. Refused while the organization is on a trial, at its limit, and for a name it has. */
+        post: operations["createEnvironment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/environments/{customerID}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The environment's customer, whose ID stays when the environment is renamed */
+                customerID: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Removes an environment and deletes its cluster; for organization admins. Refused while it is protected, and for the organization's last environment. */
+        delete: operations["removeEnvironment"];
+        options?: never;
+        head?: never;
+        /** Renames an environment, makes it the default, or turns its deletion protection on or off; for organization admins */
+        patch: operations["changeEnvironment"];
+        trace?: never;
+    };
     "/api/customer/alert-settings": {
         parameters: {
             query?: never;
@@ -824,7 +863,7 @@ export interface components {
             admin?: boolean;
             /** @description The customer of the active organization's default environment, if any */
             customerID?: string;
-            /** @description The active organization's environments, each a cluster, the default first */
+            /** @description The active organization's environments, each a cluster, the default first, without those being removed */
             environments?: components["schemas"]["Environment"][];
         };
         Connection: {
@@ -1443,6 +1482,33 @@ export interface components {
             /** @enum {string} */
             profile: "dev" | "dev-ha" | "production";
             ready: boolean;
+            /** @description Whether the environment is being removed, its cluster deleted */
+            deleting: boolean;
+            /** @description Whether the console opens this environment by default */
+            default: boolean;
+            /** @description Whether removing the environment is refused until protection is turned off */
+            deletionProtection: boolean;
+            /** @description Whether the environment is a trial, which is the organization's one environment */
+            trial: boolean;
+        };
+        Environments: {
+            /** @description The organization's environments, the default first */
+            environments: components["schemas"]["Environment"][];
+            /** @description The most environments the organization may add itself */
+            limit: number;
+        };
+        /** @description One change to an environment; the fields not set stay as they are */
+        EnvironmentChange: {
+            /** @description Its new name, unique in the organization */
+            name?: string;
+            /**
+             * @description Makes it the environment the console opens by default
+             * @enum {boolean}
+             */
+            default?: true;
+            deletionProtection?: boolean;
+            /** @description The environment's name, to turn its deletion protection off */
+            confirm?: string;
         };
         NewEnvironment: {
             /** @description Its name, unique in the organization, such as staging */
@@ -2479,6 +2545,119 @@ export interface operations {
                     "application/json": components["schemas"]["Team"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    listEnvironments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The environments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environments"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    createEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewEnvironment"];
+            };
+        };
+        responses: {
+            /** @description The environments, with the new one */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environments"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    removeEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The environment's customer, whose ID stays when the environment is renamed */
+                customerID: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The environments, with the removed one being deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environments"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    changeEnvironment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The environment's customer, whose ID stays when the environment is renamed */
+                customerID: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvironmentChange"];
+            };
+        };
+        responses: {
+            /** @description The environments, with the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environments"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

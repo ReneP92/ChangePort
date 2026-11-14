@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { ApiError, errorText, type Customer, type NewEnvironment } from "@/api/client";
 import { useAddEnvironment, useCustomers } from "@/api/queries";
+import { ProfileRadio } from "@/components/ProfileRadio";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,7 +18,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 /** The names an environment usually has, which the dialog suggests. */
 const suggested = ["production", "staging", "dev"];
@@ -150,38 +150,24 @@ function AddEnvironmentForm({
         <Input
           id="environment-name"
           autoComplete="off"
-          list="environment-names"
           value={environment.environment}
           onChange={(event) => {
             setEnvironment({ ...environment, environment: event.target.value });
           }}
         />
-        <datalist id="environment-names">
-          {suggested.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
         {fieldProblem("environment") && (
           <p className="text-sm text-destructive">{fieldProblem("environment")}</p>
         )}
       </div>
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Profile</legend>
-        <RadioGroup
+        <ProfileRadio
+          id="environment-profile"
           value={environment.profile}
-          onValueChange={(profile) => {
-            setEnvironment({ ...environment, profile: profile as NewEnvironment["profile"] });
+          onChange={(profile) => {
+            setEnvironment({ ...environment, profile });
           }}
-        >
-          {(["dev", "dev-ha", "production"] as const).map((profile) => (
-            <div key={profile} className="flex items-center gap-3">
-              <RadioGroupItem value={profile} id={`environment-profile-${profile}`} />
-              <Label htmlFor={`environment-profile-${profile}`} className="font-normal">
-                {profile}
-              </Label>
-            </div>
-          ))}
-        </RadioGroup>
+        />
       </fieldset>
       <div className="flex items-center gap-3">
         <Checkbox

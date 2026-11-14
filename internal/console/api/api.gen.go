@@ -160,6 +160,21 @@ func (e EnvironmentProfile) Valid() bool {
 	}
 }
 
+// Defines values for EnvironmentChangeDefault.
+const (
+	True EnvironmentChangeDefault = true
+)
+
+// Valid indicates whether the value is a known member of the EnvironmentChangeDefault enum.
+func (e EnvironmentChangeDefault) Valid() bool {
+	switch e {
+	case True:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MeAccess.
 const (
 	MeAccessCustomer MeAccess = "customer"
@@ -851,14 +866,51 @@ type CustomerTrial struct {
 
 // Environment defines model for Environment.
 type Environment struct {
-	CustomerID string             `json:"customerID"`
-	Name       string             `json:"name"`
-	Profile    EnvironmentProfile `json:"profile"`
-	Ready      bool               `json:"ready"`
+	CustomerID string `json:"customerID"`
+
+	// Default Whether the console opens this environment by default
+	Default bool `json:"default"`
+
+	// Deleting Whether the environment is being removed, its cluster deleted
+	Deleting bool `json:"deleting"`
+
+	// DeletionProtection Whether removing the environment is refused until protection is turned off
+	DeletionProtection bool               `json:"deletionProtection"`
+	Name               string             `json:"name"`
+	Profile            EnvironmentProfile `json:"profile"`
+	Ready              bool               `json:"ready"`
+
+	// Trial Whether the environment is a trial, which is the organization's one environment
+	Trial bool `json:"trial"`
 }
 
 // EnvironmentProfile defines model for Environment.Profile.
 type EnvironmentProfile string
+
+// EnvironmentChange One change to an environment; the fields not set stay as they are
+type EnvironmentChange struct {
+	// Confirm The environment's name, to turn its deletion protection off
+	Confirm *string `json:"confirm,omitempty"`
+
+	// Default Makes it the environment the console opens by default
+	Default            *EnvironmentChangeDefault `json:"default,omitempty"`
+	DeletionProtection *bool                     `json:"deletionProtection,omitempty"`
+
+	// Name Its new name, unique in the organization
+	Name *string `json:"name,omitempty"`
+}
+
+// EnvironmentChangeDefault Makes it the environment the console opens by default
+type EnvironmentChangeDefault bool
+
+// Environments defines model for Environments.
+type Environments struct {
+	// Environments The organization's environments, the default first
+	Environments []Environment `json:"environments"`
+
+	// Limit The most environments the organization may add itself
+	Limit int `json:"limit"`
+}
 
 // EventList defines model for EventList.
 type EventList struct {
@@ -894,7 +946,7 @@ type Me struct {
 	// CustomerID The customer of the active organization's default environment, if any
 	CustomerID *string `json:"customerID,omitempty"`
 
-	// Environments The active organization's environments, each a cluster, the default first
+	// Environments The active organization's environments, each a cluster, the default first, without those being removed
 	Environments *[]Environment `json:"environments,omitempty"`
 
 	// OrganizationID The active Clerk organization, if any
@@ -1670,6 +1722,12 @@ type ChangeAlertSettingsJSONRequestBody = AlertThresholds
 // SetAlertReceiverJSONRequestBody defines body for SetAlertReceiver for application/json ContentType.
 type SetAlertReceiverJSONRequestBody = ReceiverSecret
 
+// CreateEnvironmentJSONRequestBody defines body for CreateEnvironment for application/json ContentType.
+type CreateEnvironmentJSONRequestBody = NewEnvironment
+
+// ChangeEnvironmentJSONRequestBody defines body for ChangeEnvironment for application/json ContentType.
+type ChangeEnvironmentJSONRequestBody = EnvironmentChange
+
 // CreateSourceJSONRequestBody defines body for CreateSource for application/json ContentType.
 type CreateSourceJSONRequestBody = NewSource
 
@@ -1756,6 +1814,18 @@ type ServerInterface interface {
 	// GetConsumerGroupLag How far behind a consumer group was on each topic it reads, over a range
 	// (GET /api/customer/consumer-groups/{group}/lag)
 	GetConsumerGroupLag(w http.ResponseWriter, r *http.Request, group string, params GetConsumerGroupLagParams)
+	// ListEnvironments The environments of the customer's organization, each a cluster, the default first. It ignores the environment header.
+	// (GET /api/customer/environments)
+	ListEnvironments(w http.ResponseWriter, r *http.Request)
+	// CreateEnvironment Adds an environment, a cluster of its own, to the organization; for organization admins. Refused while the organization is on a trial, at its limit, and for a name it has.
+	// (POST /api/customer/environments)
+	CreateEnvironment(w http.ResponseWriter, r *http.Request)
+	// RemoveEnvironment Removes an environment and deletes its cluster; for organization admins. Refused while it is protected, and for the organization's last environment.
+	// (DELETE /api/customer/environments/{customerID})
+	RemoveEnvironment(w http.ResponseWriter, r *http.Request, customerID string)
+	// ChangeEnvironment Renames an environment, makes it the default, or turns its deletion protection on or off; for organization admins
+	// (PATCH /api/customer/environments/{customerID})
+	ChangeEnvironment(w http.ResponseWriter, r *http.Request, customerID string)
 	// ListEvents The changes in the cluster over a range, for the timeline over the graphs (docs/timeline.md): all of them, or those about a topic, or about a consumer group and the topics it reads. Broker restarts show in each.
 	// (GET /api/customer/events)
 	ListEvents(w http.ResponseWriter, r *http.Request, params ListEventsParams)
@@ -2101,6 +2171,86 @@ func (siw *ServerInterfaceWrapper) GetConsumerGroupLag(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetConsumerGroupLag(w, r, group, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEnvironments operation middleware
+func (siw *ServerInterfaceWrapper) ListEnvironments(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEnvironments(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) CreateEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateEnvironment(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) RemoveEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "customerID" -------------
+	var customerID string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "customerID", r.PathValue("customerID"), &customerID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "customerID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveEnvironment(w, r, customerID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) ChangeEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "customerID" -------------
+	var customerID string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "customerID", r.PathValue("customerID"), &customerID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "customerID", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeEnvironment(w, r, customerID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3199,6 +3349,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/team/invitations/{invitationID}", wrapper.RevokeInvitation)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/team/members/{userID}", wrapper.RemoveTeammate)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/team/members/{userID}", wrapper.ChangeTeammateRole)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/environments", wrapper.ListEnvironments)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/customer/environments", wrapper.CreateEnvironment)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/environments/{customerID}", wrapper.RemoveEnvironment)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/customer/environments/{customerID}", wrapper.ChangeEnvironment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/alert-settings", wrapper.GetAlertSettings)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/alert-settings", wrapper.ChangeAlertSettings)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.RemoveAlertReceiver)
@@ -4240,6 +4394,360 @@ func (response GetConsumerGroupLag404JSONResponse) VisitGetConsumerGroupLagRespo
 type GetConsumerGroupLag503JSONResponse struct{ NotConfiguredJSONResponse }
 
 func (response GetConsumerGroupLag503JSONResponse) VisitGetConsumerGroupLagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentsRequestObject struct {
+}
+
+type ListEnvironmentsResponseObject interface {
+	VisitListEnvironmentsResponse(w http.ResponseWriter) error
+}
+
+type ListEnvironments200JSONResponse Environments
+
+func (response ListEnvironments200JSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironments401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListEnvironments401JSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironments403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListEnvironments403JSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironments503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ListEnvironments503JSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEnvironmentRequestObject struct {
+	Body *CreateEnvironmentJSONRequestBody
+}
+
+type CreateEnvironmentResponseObject interface {
+	VisitCreateEnvironmentResponse(w http.ResponseWriter) error
+}
+
+type CreateEnvironment201JSONResponse Environments
+
+func (response CreateEnvironment201JSONResponse) VisitCreateEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEnvironment400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response CreateEnvironment400JSONResponse) VisitCreateEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEnvironment401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CreateEnvironment401JSONResponse) VisitCreateEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEnvironment403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateEnvironment403JSONResponse) VisitCreateEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEnvironment409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateEnvironment409JSONResponse) VisitCreateEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateEnvironment503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response CreateEnvironment503JSONResponse) VisitCreateEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEnvironmentRequestObject struct {
+	CustomerID string `json:"customerID"`
+}
+
+type RemoveEnvironmentResponseObject interface {
+	VisitRemoveEnvironmentResponse(w http.ResponseWriter) error
+}
+
+type RemoveEnvironment200JSONResponse Environments
+
+func (response RemoveEnvironment200JSONResponse) VisitRemoveEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEnvironment401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response RemoveEnvironment401JSONResponse) VisitRemoveEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEnvironment403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response RemoveEnvironment403JSONResponse) VisitRemoveEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEnvironment404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response RemoveEnvironment404JSONResponse) VisitRemoveEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEnvironment409JSONResponse struct{ ConflictJSONResponse }
+
+func (response RemoveEnvironment409JSONResponse) VisitRemoveEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveEnvironment503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response RemoveEnvironment503JSONResponse) VisitRemoveEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeEnvironmentRequestObject struct {
+	CustomerID string `json:"customerID"`
+	Body       *ChangeEnvironmentJSONRequestBody
+}
+
+type ChangeEnvironmentResponseObject interface {
+	VisitChangeEnvironmentResponse(w http.ResponseWriter) error
+}
+
+type ChangeEnvironment200JSONResponse Environments
+
+func (response ChangeEnvironment200JSONResponse) VisitChangeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeEnvironment400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ChangeEnvironment400JSONResponse) VisitChangeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeEnvironment401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ChangeEnvironment401JSONResponse) VisitChangeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeEnvironment403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ChangeEnvironment403JSONResponse) VisitChangeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeEnvironment404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ChangeEnvironment404JSONResponse) VisitChangeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeEnvironment409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ChangeEnvironment409JSONResponse) VisitChangeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeEnvironment503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ChangeEnvironment503JSONResponse) VisitChangeEnvironmentResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -7975,6 +8483,18 @@ type StrictServerInterface interface {
 	// GetConsumerGroupLag How far behind a consumer group was on each topic it reads, over a range
 	// (GET /api/customer/consumer-groups/{group}/lag)
 	GetConsumerGroupLag(ctx context.Context, request GetConsumerGroupLagRequestObject) (GetConsumerGroupLagResponseObject, error)
+	// ListEnvironments The environments of the customer's organization, each a cluster, the default first. It ignores the environment header.
+	// (GET /api/customer/environments)
+	ListEnvironments(ctx context.Context, request ListEnvironmentsRequestObject) (ListEnvironmentsResponseObject, error)
+	// CreateEnvironment Adds an environment, a cluster of its own, to the organization; for organization admins. Refused while the organization is on a trial, at its limit, and for a name it has.
+	// (POST /api/customer/environments)
+	CreateEnvironment(ctx context.Context, request CreateEnvironmentRequestObject) (CreateEnvironmentResponseObject, error)
+	// RemoveEnvironment Removes an environment and deletes its cluster; for organization admins. Refused while it is protected, and for the organization's last environment.
+	// (DELETE /api/customer/environments/{customerID})
+	RemoveEnvironment(ctx context.Context, request RemoveEnvironmentRequestObject) (RemoveEnvironmentResponseObject, error)
+	// ChangeEnvironment Renames an environment, makes it the default, or turns its deletion protection on or off; for organization admins
+	// (PATCH /api/customer/environments/{customerID})
+	ChangeEnvironment(ctx context.Context, request ChangeEnvironmentRequestObject) (ChangeEnvironmentResponseObject, error)
 	// ListEvents The changes in the cluster over a range, for the timeline over the graphs (docs/timeline.md): all of them, or those about a topic, or about a consumer group and the topics it reads. Broker restarts show in each.
 	// (GET /api/customer/events)
 	ListEvents(ctx context.Context, request ListEventsRequestObject) (ListEventsResponseObject, error)
@@ -8441,6 +8961,120 @@ func (sh *strictHandler) GetConsumerGroupLag(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetConsumerGroupLagResponseObject); ok {
 		if err := validResponse.VisitGetConsumerGroupLagResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEnvironments operation middleware
+func (sh *strictHandler) ListEnvironments(w http.ResponseWriter, r *http.Request) {
+	var request ListEnvironmentsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEnvironments(ctx, request.(ListEnvironmentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEnvironments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEnvironmentsResponseObject); ok {
+		if err := validResponse.VisitListEnvironmentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateEnvironment operation middleware
+func (sh *strictHandler) CreateEnvironment(w http.ResponseWriter, r *http.Request) {
+	var request CreateEnvironmentRequestObject
+
+	var body CreateEnvironmentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateEnvironment(ctx, request.(CreateEnvironmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateEnvironment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateEnvironmentResponseObject); ok {
+		if err := validResponse.VisitCreateEnvironmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveEnvironment operation middleware
+func (sh *strictHandler) RemoveEnvironment(w http.ResponseWriter, r *http.Request, customerID string) {
+	var request RemoveEnvironmentRequestObject
+
+	request.CustomerID = customerID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveEnvironment(ctx, request.(RemoveEnvironmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveEnvironment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveEnvironmentResponseObject); ok {
+		if err := validResponse.VisitRemoveEnvironmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeEnvironment operation middleware
+func (sh *strictHandler) ChangeEnvironment(w http.ResponseWriter, r *http.Request, customerID string) {
+	var request ChangeEnvironmentRequestObject
+
+	request.CustomerID = customerID
+
+	var body ChangeEnvironmentJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeEnvironment(ctx, request.(ChangeEnvironmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeEnvironment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeEnvironmentResponseObject); ok {
+		if err := validResponse.VisitChangeEnvironmentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

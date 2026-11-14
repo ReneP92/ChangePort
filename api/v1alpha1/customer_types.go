@@ -127,14 +127,22 @@ type CustomerSpec struct {
 	// Environment names the customer's cluster among its organization's,
 	// such as production or staging: each environment is a Customer of its
 	// own, with its own cluster. It is unique within the organization, which
-	// the console checks, and cannot change.
+	// the console checks. Renaming it changes only the console's URLs:
+	// everything the cluster runs is named by the customer ID.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=20
 	// +kubebuilder:validation:Pattern=`^[a-z]([-a-z0-9]*[a-z0-9])?$`
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="the environment cannot change"
 	// +kubebuilder:default=production
 	// +optional
 	Environment string `json:"environment,omitempty"`
+
+	// DefaultEnvironment, when true, makes this the environment its
+	// organization's console opens by default. The console sets it on one
+	// of the organization's Customers and clears it on the others. Should
+	// two have it, as when two admins choose at once, the first in order
+	// wins until the next choice.
+	// +optional
+	DefaultEnvironment bool `json:"defaultEnvironment,omitempty"`
 
 	// ClerkOrganizationID is the Clerk organization whose members sign in to
 	// the console as this customer, if any.

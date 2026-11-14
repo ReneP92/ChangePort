@@ -60,6 +60,8 @@ func run(ctx context.Context, args []string) error {
 		"address of Alertmanager, which holds the customers' active alerts")
 	allowPrivateReceivers := fs.Bool("allow-private-receivers", false,
 		"let alert webhooks be on private networks and plain HTTP, as on kind, where a test webhook stands in for customers'")
+	maxEnvironments := fs.Int("max-environments", console.DefaultMaxEnvironments,
+		"the most environments, each a cluster, an organization's admins may have; operators add beyond it")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -122,6 +124,7 @@ func run(ctx context.Context, args []string) error {
 		StaffOrganizationID: os.Getenv("CHANGEPORT_STAFF_ORG_ID"),
 		Origins:             splitList(os.Getenv("CHANGEPORT_CONSOLE_ORIGINS")),
 		OperatorEmails:      splitList(os.Getenv("CHANGEPORT_OPERATOR_EMAILS")),
+		MaxEnvironments:     *maxEnvironments,
 	}, console.Options{
 		Mail:          mailer,
 		Customers:     console.KubeCustomers{Client: kube, Cache: customers},

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { errorText, type TrialRequest } from "@/api/client";
 import { useApproveTrialRequest, useDeclineTrialRequest } from "@/api/queries";
+import { ProfileRadio } from "@/components/ProfileRadio";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,9 +14,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { profiles, type Profile } from "@/lib/profiles";
+import { type Profile } from "@/lib/profiles";
 import { characters } from "@/lib/trials";
 
 /** A button that opens the dialog to approve a pending trial request. */
@@ -87,29 +87,7 @@ export function ApproveTrialForm({
       </DialogHeader>
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Profile</legend>
-        <RadioGroup
-          value={profile}
-          onValueChange={(value) => {
-            setProfile(value as Profile);
-          }}
-        >
-          {profiles.map((option) => (
-            <div key={option.name} className="flex items-start gap-3">
-              <RadioGroupItem
-                value={option.name}
-                id={`approve-profile-${option.name}`}
-                className="mt-0.5"
-              />
-              <Label
-                htmlFor={`approve-profile-${option.name}`}
-                className="flex flex-col items-start gap-1 font-normal"
-              >
-                <span className="font-medium">{option.name}</span>
-                <span className="leading-snug text-muted-foreground">{option.description}</span>
-              </Label>
-            </div>
-          ))}
-        </RadioGroup>
+        <ProfileRadio id="approve-profile" value={profile} onChange={setProfile} />
       </fieldset>
       {error && (
         <p role="alert" className="text-sm text-destructive">

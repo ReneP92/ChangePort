@@ -427,32 +427,42 @@ test("every screen of the console", async ({ browser }) => {
   );
   await shot(admin, "50-team");
 
-  // The operator adds a staging environment to Acme, which Ada switches to.
-  await operator.goto(`/operator/customers/${acme.id}`);
-  await operator.getByRole("button", { name: "Add environment" }).click();
-  await operator
-    .getByRole("dialog", { name: /^Add an environment to / })
-    .getByRole("button", { name: "Add environment" })
-    .click();
-  await operator.waitForURL(
-    (url) => url.pathname.startsWith("/operator/customers/c-") && !url.pathname.endsWith(acme.id),
-    { timeout: 30_000 },
-  );
-  const staging = new URL(operator.url()).pathname.split("/").at(-1) ?? "";
+  // Ada adds a staging environment to Acme herself, and switches to it.
+  await nav.getByRole("link", { name: "Environments" }).click();
+  const environments = main.getByRole("list", { name: "Environments" });
+  await expect(environments.getByRole("listitem", { name: "production" })).toContainText("Ready");
+  await main.getByRole("button", { name: "Add environment" }).click();
+  const addEnvironment = admin.getByRole("dialog", { name: "Add an environment" });
+  await expect(addEnvironment.getByLabel("Name")).toHaveValue("staging");
+  await shot(admin, "53-add-environment");
+  await addEnvironment.getByRole("button", { name: "Add environment" }).click();
+  await expect(addEnvironment).toBeHidden({ timeout: 30_000 });
+  const stagingRow = environments.getByRole("listitem", { name: "staging" });
+  const staging = kubectl([
+    "get",
+    "customers",
+    "-l",
+    `changeport.io/clerk-organization=${acme.organization},changeport.io/environment=staging`,
+    "-o",
+    "jsonpath={.items[0].metadata.name}",
+  ]).trim();
   created.customers.push(staging);
-  await expect(operator.getByRole("main").getByText("Ready", { exact: true })).toBeVisible({
-    timeout: 6 * 60_000,
-  });
-  await nav.getByRole("link", { name: "Cluster" }).click();
-  await expect(main.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 30_000 });
-  await admin.reload();
+  await expect(stagingRow).toContainText("Ready", { timeout: 6 * 60_000 });
+  await shot(admin, "52-environments-page");
   const switcher = admin.getByRole("banner").getByRole("combobox", { name: "Environment" });
   await switcher.click();
   await expect(admin.getByRole("option", { name: "staging" })).toBeVisible();
   await shot(admin, "51-environments");
   await admin.keyboard.press("Escape");
   // Its cluster goes again, to spare the kind cluster's memory.
-  kubectl(["delete", "customer", staging, "--wait=false"]);
+  await stagingRow.getByRole("button", { name: "Remove staging" }).click();
+  const removeEnvironment = admin.getByRole("dialog", { name: "Remove staging?" });
+  await removeEnvironment.getByLabel("Type staging to confirm").fill("staging");
+  await shot(admin, "54-remove-environment");
+  await removeEnvironment.getByRole("button", { name: "Remove" }).click();
+  await expect(stagingRow).toContainText("Being removed");
+  await nav.getByRole("link", { name: "Cluster" }).click();
+  await expect(main.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 30_000 });
 
   // A topic's page and a consumer group's, with the changes over their
   // graphs: orders as Ada created it, and search-indexer, which started.

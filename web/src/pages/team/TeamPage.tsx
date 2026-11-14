@@ -1,6 +1,6 @@
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
-import { ApiError, errorText, type Customer, type Team, type TeamRole } from "@/api/client";
+import { ApiError, errorText, type Team, type TeamRole } from "@/api/client";
 import {
   useChangeTeammateRole,
   useInviteTeammate,
@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CustomerArea } from "@/pages/CustomerArea";
+import { OrganizationArea } from "@/pages/OrganizationArea";
 
 const roleNames: Record<TeamRole, string> = { admin: "Admin", member: "Member" };
 
@@ -41,28 +41,28 @@ const roleNames: Record<TeamRole, string> = { admin: "Admin", member: "Member" }
  */
 export function TeamPage() {
   return (
-    <CustomerArea>
-      {(customer, admin) => <TeamContent customer={customer} admin={admin} />}
-    </CustomerArea>
+    <OrganizationArea>
+      {(admin, organization) => <TeamContent organization={organization} admin={admin} />}
+    </OrganizationArea>
   );
 }
 
-function TeamContent({ customer, admin }: { customer: Customer; admin: boolean }) {
+function TeamContent({ organization, admin }: { organization: string; admin: boolean }) {
   const team = useTeam();
   return (
     <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
         <p className="text-sm text-muted-foreground">
-          Who at {customer.displayName} uses Changeport. Admins manage the cluster, its credentials
-          and the team; members use the cluster. A person belongs to one organization.
+          Who at {organization} uses Changeport. Admins manage the cluster, its credentials and the
+          team; members use the cluster. A person belongs to one organization.
         </p>
       </header>
       {team.isPending && <p className="text-sm text-muted-foreground">Loading the team</p>}
       {team.isError && <p className="text-sm text-destructive">{team.error.message}</p>}
       {team.data && (
         <>
-          <MembersCard team={team.data} admin={admin} organization={customer.displayName} />
+          <MembersCard team={team.data} admin={admin} organization={organization} />
           <InvitationsCard team={team.data} admin={admin} />
         </>
       )}

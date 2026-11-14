@@ -3,8 +3,9 @@
 # changeport.io/deletion-protection, which the template puts on a protected
 # customer's namespace. Deleting a namespace deletes the customer's Kafka
 # cluster and its volumes, whatever the storage class keeps, so a protected
-# customer's data can only go once an operator has turned protection off
-# (provisioner unprotect), which takes the label off again. Nobody is exempt.
+# customer's data can only go once protection is off, which takes the label
+# off again: an operator turns it off with provisioner unprotect, an
+# organization's admin on the console's Environments page. Nobody is exempt.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -20,8 +21,9 @@ spec:
   validations:
     - expression: "!has(oldObject.spec.deletionProtection) || !oldObject.spec.deletionProtection"
       messageExpression: >-
-        'customer ' + oldObject.metadata.name + ' has deletion protection; turn it off first with
-        provisioner unprotect -customer ' + oldObject.metadata.name + ' -confirm ' + oldObject.metadata.name
+        'customer ' + oldObject.metadata.name + ' has deletion protection; turn it off first, on the
+        console\'s Environments page or with provisioner unprotect -customer ' + oldObject.metadata.name +
+        ' -confirm ' + oldObject.metadata.name
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

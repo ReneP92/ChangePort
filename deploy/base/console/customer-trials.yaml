@@ -1,9 +1,11 @@
-# The console may patch Customers (deploy/base/console/console.yaml) only to
-# extend a trial or convert a customer, for operators: this policy holds
-# every change it makes to a Customer to the trial of a customer on a trial.
-# It can never turn deletion protection on or off, rename, move or resize a
-# customer, or touch its metadata, such as the finalizer that deprovisions
-# its cluster. A new field of CustomerSpec belongs in the comparison below.
+# The console may patch Customers (deploy/base/console/console.yaml) only for
+# what its users may change: an operator extends a trial or converts a
+# customer, and an organization's admins rename an environment, choose the
+# default one and turn its deletion protection on or off (docs/console.md).
+# It can never move, resize or rename a customer, put one on a trial, or
+# touch its metadata, such as the finalizer that deprovisions its cluster. A
+# new field of CustomerSpec belongs in the comparison below, unless the
+# console may change it.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -20,15 +22,14 @@ spec:
     - name: the-console
       expression: request.userInfo.username == 'system:serviceaccount:changeport:changeport-console'
   validations:
-    - expression: has(oldObject.spec.trial)
+    - expression: has(oldObject.spec.trial) || !has(object.spec.trial)
       message: the console may only change the trial of a customer on a trial
       reason: Forbidden
     - expression: >-
         object.spec.displayName == oldObject.spec.displayName &&
         object.spec.profile == oldObject.spec.profile &&
-        object.spec.?clerkOrganizationID == oldObject.spec.?clerkOrganizationID &&
-        object.spec.?deletionProtection == oldObject.spec.?deletionProtection
-      message: the console may only change a customer's trial, to extend it or convert the customer
+        object.spec.?clerkOrganizationID == oldObject.spec.?clerkOrganizationID
+      message: the console may change only a customer's trial, environment, default environment and deletion protection
       reason: Forbidden
     - expression: >-
         object.metadata.?labels == oldObject.metadata.?labels &&
