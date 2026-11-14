@@ -16,9 +16,9 @@ mock_provider "aws" {
 }
 
 variables {
-  name                     = "changeport-test"
-  github_repository        = "ReneP92/ChangePort"
-  github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+  name                      = "changeport-test"
+  github_repository_subject = "ReneP92@40995280/ChangePort@1412834684"
+  github_oidc_provider_arn  = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
 }
 
 run "repositories" {
@@ -72,7 +72,7 @@ run "only_main_pushes" {
   command = apply
 
   assert {
-    condition     = jsondecode(aws_iam_role.push.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:ReneP92/ChangePort:ref:refs/heads/main"
+    condition     = jsondecode(aws_iam_role.push.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:ReneP92@40995280/ChangePort@1412834684:ref:refs/heads/main"
     error_message = "Only workflow runs for pushes to main may assume the push role."
   }
   assert {
@@ -85,12 +85,14 @@ run "only_main_pushes" {
   }
 }
 
-run "bad_repository_names_are_refused" {
+# The plain owner/name is not what this repository's tokens carry, so a role
+# trusting it could never be assumed.
+run "subjects_without_ids_are_refused" {
   command = plan
 
   variables {
-    github_repository = "changeport"
+    github_repository_subject = "ReneP92/ChangePort"
   }
 
-  expect_failures = [var.github_repository]
+  expect_failures = [var.github_repository_subject]
 }

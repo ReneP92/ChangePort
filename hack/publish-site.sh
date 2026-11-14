@@ -43,10 +43,14 @@ if [[ -n $unknown ]] || find "$dist" -type f ! -name '*.*' | grep -q .; then
   exit 1
 fi
 
+# The assets first, so that a page CloudFront fetches meanwhile finds every
+# asset it names.
 for extension in "${!types[@]}"; do
   aws s3 sync "$dist/assets" "$bucket/assets" --only-show-errors \
     --exclude '*' --include "*.$extension" \
     --content-type "${types[$extension]}" --cache-control "$immutable"
+done
+for extension in "${!types[@]}"; do
   aws s3 sync "$dist" "$bucket" --only-show-errors \
     --exclude '*' --include "*.$extension" --exclude 'assets/*' \
     --content-type "${types[$extension]}" --cache-control "$revalidate"
@@ -57,7 +61,16 @@ aws s3 sync "$dist" "$bucket" --only-show-errors --delete --exclude 'assets/*'
 invalidation=$(aws cloudfront create-invalidation --distribution-id "$distribution" \
   --paths '/*' --query Invalidation.Id --output text)
 echo "publish-site: waiting for CloudFront to empty its cache ($invalidation)"
-aws cloudfront wait invalidation-completed --distribution-id "$distribution" --id "$invalidation"
+# The CLI gives up after 10 minutes, which an invalidation now and then takes.
+for attempt in 1 2 3; do
+  if aws cloudfront wait invalidation-completed --distribution-id "$distribution" --id "$invalidation"; then
+    break
+  fi
+  if ((attempt == 3)); then
+    echo "publish-site: CloudFront has not emptied its cache after 30 minutes; the old assets stay" >&2
+    exit 1
+  fi
+done
 
 aws s3 sync "$dist/assets" "$bucket/assets" --only-show-errors --delete
 echo "publish-site: published $dist to $bucket"

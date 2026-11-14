@@ -64,11 +64,11 @@ mock_provider "aws" {
 }
 
 variables {
-  name                     = "changeport-test"
-  domain                   = "changeport.example"
-  zone_id                  = "Z0123456789ABCDEFGHIJ"
-  github_repository        = "ReneP92/ChangePort"
-  github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+  name                      = "changeport-test"
+  domain                    = "changeport.example"
+  zone_id                   = "Z0123456789ABCDEFGHIJ"
+  github_repository_subject = "ReneP92@40995280/ChangePort@1412834684"
+  github_oidc_provider_arn  = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
 }
 
 run "only_the_distribution_reads_the_bucket" {
@@ -196,7 +196,7 @@ run "only_main_publishes" {
   command = apply
 
   assert {
-    condition     = jsondecode(aws_iam_role.publish.assume_role_policy).Statement[0].Condition.StringEquals == { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com", "token.actions.githubusercontent.com:sub" = "repo:ReneP92/ChangePort:ref:refs/heads/main" }
+    condition     = jsondecode(aws_iam_role.publish.assume_role_policy).Statement[0].Condition.StringEquals == { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com", "token.actions.githubusercontent.com:sub" = "repo:ReneP92@40995280/ChangePort@1412834684:ref:refs/heads/main" }
     error_message = "Only workflow runs on main may assume the publish role."
   }
   assert {
@@ -234,4 +234,16 @@ run "bad_domains_are_refused" {
   }
 
   expect_failures = [var.domain]
+}
+
+# The plain owner/name is not what this repository's tokens carry, so a role
+# trusting it could never be assumed.
+run "subjects_without_ids_are_refused" {
+  command = plan
+
+  variables {
+    github_repository_subject = "ReneP92/ChangePort"
+  }
+
+  expect_failures = [var.github_repository_subject]
 }

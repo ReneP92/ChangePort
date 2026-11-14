@@ -27,23 +27,46 @@ permissions:
   contents: read
 
 jobs:
-  publish:
-    name: Publish the landing site
-    # After CI passed for a push to main, or by hand; the publish role only
-    # trusts runs on main.
+  # After CI passed for a push to main, or by hand; the publish role only
+  # trusts runs on main. A CI run re-run for an older commit passes too, and
+  # would put that commit's site back, so only main's newest commit is
+  # published.
+  newest:
+    name: Main's newest commit
     if: >-
       vars.SITE_PUBLISH_ROLE_ARN != '' && (github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-26.04
-    timeout-minutes: 20
+    outputs:
+      commit: ${{ steps.newest.outputs.commit }}
+    steps:
+      - id: newest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          main=$(gh api "repos/$REPOSITORY/commits/main" --jq .sha)
+          if [[ $main == "$COMMIT" ]]; then
+            echo "commit=$COMMIT" >>"$GITHUB_OUTPUT"
+          else
+            echo "::notice::$COMMIT is no longer main's newest commit ($main), whose run publishes it"
+          fi
+
+  publish:
+    name: Publish the landing site
+    needs: newest
+    if: needs.newest.outputs.commit != ''
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The commit CI passed for, not whatever main is by now.
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # The commit CI passed for.
+          ref: ${{ needs.newest.outputs.commit }}
       - uses: ./.github/actions/setup-just
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:

@@ -101,7 +101,7 @@ that fell short. Its reports are in `site/lighthouse`; CI runs it, after the tes
 ## Publishing
 
 Once prod has a domain (#8), `.github/workflows/publish-site.yml` builds the
-site for it after every green CI run on main, with the console at
+site for it after every green CI run for main's newest commit, with the console at
 `console.<domain>`, and publishes it to its bucket behind CloudFront
 (`hack/publish-site.sh`, [terraform/README.md](../terraform/README.md#landing-site-modulesstatic-site-prod-only)).
 A merge reaches visitors a few minutes after CI passes.

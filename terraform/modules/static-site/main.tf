@@ -275,7 +275,7 @@ resource "aws_iam_role" "publish" {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           # Workflow runs on main only: not pull requests, other branches,
           # tags or GitHub environments.
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository_subject}:ref:refs/heads/main"
         }
       }
     }]

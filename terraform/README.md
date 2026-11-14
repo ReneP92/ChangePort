@@ -77,6 +77,13 @@ with local state and moves the state into it, once per account.
 
 ## Plans in CI (`modules/github-oidc`)
 
+GitHub Actions authenticates to AWS with OpenID Connect tokens, whose `sub`
+claim names the repository with its owner's and its own ID, as
+`repo:ReneP92@40995280/ChangePort@1412834684:ref:refs/heads/main`: the
+repository uses immutable subjects, which survive a rename. Every role for
+GitHub Actions trusts that subject, set once per account as
+`github_repository_subject`.
+
 Each account has a GitHub Actions OpenID Connect provider and a role,
 `changeport-<account>-terraform-plan`, that pull requests and pushes to main
 of `ReneP92/ChangePort` may assume, with no access key. The role reads with
@@ -287,8 +294,9 @@ in its `terraform.tfvars` (#8); until then nothing of it exists.
   `www`, in the domain's zone.
 
 `.github/workflows/publish-site.yml` builds the site for the domain, with
-the console at `console.<domain>`, after every green CI run on main, and
-publishes it with `hack/publish-site.sh`: assets, whose names carry their
+the console at `console.<domain>`, after every green CI run for main's
+newest commit (a re-run for an older one publishes nothing), and publishes
+it with `hack/publish-site.sh`: assets, whose names carry their
 content's hash, are kept by browsers for a year; pages and other files are
 revalidated by browsers on each visit and kept by CloudFront until the next
 publish, which empties its cache and waits for it before it removes the

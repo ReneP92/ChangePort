@@ -18,13 +18,13 @@ variable "zone_id" {
   type        = string
 }
 
-variable "github_repository" {
-  description = "The GitHub repository whose workflows on main may publish, as owner/name, in the case GitHub shows it: the token's sub claim keeps it, and IAM compares it case-sensitively."
+variable "github_repository_subject" {
+  description = "The GitHub repository as its OpenID Connect tokens' sub claim names it: owner@owner-id/name@repository-id, as the repository uses immutable subjects, which survive a rename (gh api repos/<owner>/<name>/actions/oidc/customization/sub). IAM compares it case-sensitively."
   type        = string
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
-    error_message = "Name the repository as owner/name."
+    condition     = can(regex("^[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+$", var.github_repository_subject))
+    error_message = "Name the repository as owner@owner-id/name@repository-id, as its tokens' sub claim does."
   }
 }
 
