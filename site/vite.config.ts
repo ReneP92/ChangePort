@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
@@ -70,11 +71,59 @@ function inlineStyles(): Plugin {
   };
 }
 
+/**
+ * Gives each built page a Content-Security-Policy: only the site's own
+ * files, and of inline scripts only those the page was built with, by their
+ * hashes. Styles may be inline, as the stylesheet and a few style attributes
+ * are; the site has no content of anyone else's to inject them. CloudFront
+ * adds what a page cannot say for itself, such as frame-ancestors
+ * (terraform/modules/static-site).
+ */
+function contentSecurityPolicy(): Plugin {
+  return {
+    name: "changeport-content-security-policy",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler: (html) => {
+        const hashes = [...html.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(
+          ([, script]) =>
+            `'sha256-${createHash("sha256")
+              .update(script ?? "")
+              .digest("base64")}'`,
+        );
+        const policy = [
+          "default-src 'self'",
+          `script-src 'self' ${hashes.join(" ")}`,
+          "style-src 'self' 'unsafe-inline'",
+          "img-src 'self' data:",
+          "font-src 'self' data:",
+          "object-src 'none'",
+          "base-uri 'none'",
+          "form-action 'none'",
+        ].join("; ");
+        const meta = `<meta http-equiv="Content-Security-Policy" content="${policy}" />`;
+        if (!html.includes('<meta charset="utf-8" />')) {
+          throw new Error("a page without <meta charset> gets no Content-Security-Policy");
+        }
+        // Before any script, which it would not cover otherwise.
+        return html.replace('<meta charset="utf-8" />', `<meta charset="utf-8" />\n    ${meta}`);
+      },
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [pages(), tailwindcss(), inlineStyles()],
+  plugins: [pages(), tailwindcss(), inlineStyles(), contentSecurityPolicy()],
   build: {
     rolldownOptions: {
-      input: { index: "index.html", privacy: "privacy.html", terms: "terms.html" },
+      // 404.html is what the host serves for an address it has no page for.
+      input: {
+        index: "index.html",
+        privacy: "privacy.html",
+        terms: "terms.html",
+        notFound: "404.html",
+      },
     },
   },
   server: {

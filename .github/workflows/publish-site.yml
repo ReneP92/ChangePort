@@ -1,0 +1,67 @@
+# Publishes the landing site (site/) at the domain's root once CI passes on
+# main: builds it for the domain, with the console at console.<domain>, and
+# syncs it into its bucket behind CloudFront (terraform/modules/static-site,
+# hack/publish-site.sh). It publishes after every green run, as uploading the
+# few dozen files costs next to nothing, and CI cancels runs superseded by a
+# newer push, which a check of what one commit changed would miss.
+#
+# It needs, once prod has a domain (#8), the repository variables
+# SITE_DOMAIN, SITE_BUCKET, SITE_DISTRIBUTION_ID and SITE_PUBLISH_ROLE_ARN,
+# from the site_publishing output of terraform/environments/prod
+# (terraform/README.md); until they are set, nothing runs.
+name: Publish site
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One publish at a time, each to completion.
+concurrency:
+  group: publish-site
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish the landing site
+    # After CI passed for a push to main, or by hand; the publish role only
+    # trusts runs on main.
+    if: >-
+      vars.SITE_PUBLISH_ROLE_ARN != '' && (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The commit CI passed for, not whatever main is by now.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: ./.github/actions/setup-just
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            bin/
+            !bin/*.kubeconfig
+          key: site-publish-tools-${{ runner.os }}-${{ hashFiles('hack/lib.sh', 'site/bun.lock') }}
+      - name: Build
+        env:
+          CHANGEPORT_SITE_URL: https://${{ vars.SITE_DOMAIN }}
+          CHANGEPORT_CONSOLE_URL: https://console.${{ vars.SITE_DOMAIN }}
+        run: just site-build
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.SITE_PUBLISH_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Publish
+        env:
+          SITE_BUCKET: ${{ vars.SITE_BUCKET }}
+          SITE_DISTRIBUTION_ID: ${{ vars.SITE_DISTRIBUTION_ID }}
+        run: hack/publish-site.sh site/dist "$SITE_BUCKET" "$SITE_DISTRIBUTION_ID"

@@ -3,3 +3,8 @@
 
 # Where the EKS API may be reached from, such as your own address as a /32.
 api_allowed_cidrs = ["203.0.113.10/32"]
+
+# Changeport's domain and its hosted zone in this account, once registered
+# (#8); the landing site is served at the domain.
+# domain         = "changeport.io"
+# domain_zone_id = "Z0123456789ABCDEFGHIJ"

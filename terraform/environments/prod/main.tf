@@ -85,3 +85,15 @@ module "ecr" {
   github_repository        = local.github_repository
   github_oidc_provider_arn = module.github_oidc.provider_arn
 }
+
+# The landing site at the domain's root, once the domain is registered (#8).
+module "static_site" {
+  source = "../../modules/static-site"
+  count  = var.domain == "" ? 0 : 1
+
+  name                     = local.name
+  domain                   = var.domain
+  zone_id                  = var.domain_zone_id
+  github_repository        = local.github_repository
+  github_oidc_provider_arn = module.github_oidc.provider_arn
+}
