@@ -1,14 +1,14 @@
 import type { TrialRequest } from "@/api/client";
 import { askAgainFrom, formatDay, retentionLabel, throughputLabel } from "@/lib/trials";
 
-/** A pending request: that it is in, and what it asked for. */
+/**
+ * A pending request: that it is in, which the page's title says, and what it
+ * asked for.
+ */
 export function PendingRequest({ request }: { request: TrialRequest }) {
   return (
-    <section aria-labelledby="pending-title" className="flex flex-col gap-4">
-      <h1 id="pending-title" className="text-2xl font-semibold tracking-tight">
-        Your request is in
-      </h1>
-      <p className="text-muted-foreground">
+    <section aria-label="Your request" className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
         An operator reviews it and sets up your Kafka cluster. This page moves on by itself once
         they have decided.
       </p>
@@ -18,8 +18,8 @@ export function PendingRequest({ request }: { request: TrialRequest }) {
 }
 
 /**
- * A declined request: the operator's reason, and when the user may ask
- * again, if they may not yet.
+ * A declined request, which the page's title says: the operator's reason,
+ * and when the user may ask again, if they may not yet.
  */
 export function DeclinedRequest({
   request,
@@ -31,15 +31,14 @@ export function DeclinedRequest({
   const again = askAgainFrom(request);
   const waiting = again !== undefined && now < again;
   return (
-    <section aria-labelledby="declined-title" className="flex flex-col gap-4">
-      <h1 id="declined-title" className="text-2xl font-semibold tracking-tight">
-        Your request was declined
-      </h1>
+    <section aria-label="The decision" className="flex flex-col gap-4">
       {request.reason && (
-        <blockquote className="border-l-2 pl-4 whitespace-pre-line">{request.reason}</blockquote>
+        <blockquote className="border-l-2 pl-4 text-sm whitespace-pre-line">
+          {request.reason}
+        </blockquote>
       )}
       {waiting && (
-        <p className="text-muted-foreground">You may ask again from {formatDay(again)}.</p>
+        <p className="text-sm text-muted-foreground">You may ask again from {formatDay(again)}.</p>
       )}
     </section>
   );

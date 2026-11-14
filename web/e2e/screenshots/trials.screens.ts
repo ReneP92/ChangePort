@@ -2,6 +2,7 @@ import path from "node:path";
 import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { clerkClient, kubectl, readFixtures, testEmail } from "../clerk/fixtures";
+import { fullHeightSidebar } from "./style";
 
 // Captures the screens of trial requests, on a desktop and a phone, into
 // CHANGEPORT_SCREENSHOTS_DIR (just ui-screenshots): sign-up, the request
@@ -20,10 +21,11 @@ const context = { viewport: devices[0][1], deviceScaleFactor: 2 };
 
 /** As in console.screens.ts: the whole page, or the viewport with a dialog. */
 async function shot(page: Page, name: string): Promise<void> {
-  if ((await page.getByRole("link", { name: "Changeport" }).count()) > 0) {
-    await expect(page.getByRole("button", { name: "Open user menu" })).toBeVisible({
-      timeout: 20_000,
-    });
+  // Signed in, the sidebar's workspace menu waits on Clerk for the
+  // organization's name.
+  const workspace = page.getByRole("button", { name: "Workspace menu" });
+  if ((await workspace.count()) > 0) {
+    await expect(workspace).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
   }
   // Images, such as the logos of Clerk's sign-in buttons, load late.
   await page.waitForFunction(() => {
@@ -37,7 +39,11 @@ async function shot(page: Page, name: string): Promise<void> {
   for (const [device, viewport] of devices) {
     await page.setViewportSize(viewport);
     await page.waitForTimeout(600);
-    await page.screenshot({ path: path.join(out, `${name}-${device}.png`), fullPage: !dialog });
+    await page.screenshot({
+      path: path.join(out, `${name}-${device}.png`),
+      fullPage: !dialog,
+      style: dialog ? undefined : fullHeightSidebar,
+    });
   }
   if (size) {
     await page.setViewportSize(size);

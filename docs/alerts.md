@@ -63,7 +63,7 @@ Your clients' logs say why each request failed.
 
 Every alert shows in the console: at the top of the overview, as a badge on
 the topic or consumer group it is about, and on the Alerts page, which the
-header counts them next to. Admins choose on the Alerts page where else
+sidebar counts them next to. Admins choose on the Alerts page where else
 alerts go, and can choose all three:
 
 - **Slack:** an incoming webhook URL (`https://hooks.slack.com/...`), which

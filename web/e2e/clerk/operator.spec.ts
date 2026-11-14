@@ -80,7 +80,10 @@ test("an operator provisions a customer, watches it get ready, and deprovisions 
   ]);
 
   // The list shows it with every part ready.
-  await page.getByRole("link", { name: "All customers" }).click();
+  await page
+    .getByRole("navigation", { name: "Breadcrumb" })
+    .getByRole("link", { name: "Customers" })
+    .click();
   const row = main.getByRole("row").filter({ hasText: id });
   await expect(row.getByRole("img", { name: "4 of 4 parts ready" })).toBeVisible();
   await expectNoSidewaysScroll(page);

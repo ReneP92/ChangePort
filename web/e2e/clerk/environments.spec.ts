@@ -8,7 +8,7 @@ import {
   testEmail,
   unprotectTestCustomer,
 } from "./fixtures";
-import { card, expectNoSidewaysScroll, openOverview } from "./helpers";
+import { card, expectNoSidewaysScroll, openEnvironment, openOverview } from "./helpers";
 
 // Environments (docs/console.md): an operator adds a staging environment to
 // customer A's organization, a cluster of its own; the organization's admin
@@ -54,10 +54,10 @@ test("an operator adds an environment, and its topics are its own", async ({ pag
     // The admin switches to it: a new cluster, so its welcome page first.
     await openOverview(page, fixtures.users.adminA);
     await expect(page).toHaveURL(/\/e\/production$/);
-    const switcher = page.getByRole("banner").getByRole("combobox", { name: "Environment" });
-    await expect(switcher).toHaveText("production");
-    await switcher.click();
-    await page.getByRole("option", { name: "staging" }).click();
+    const nav = page.getByRole("navigation", { name: "Console" });
+    await expect(nav.getByRole("list", { name: "production", exact: true })).toBeVisible();
+    await expect(nav.getByRole("list", { name: "staging", exact: true })).toBeHidden();
+    await openEnvironment(page, "staging");
     await expect(page).toHaveURL(/\/e\/staging\/welcome$/);
     await page.getByRole("button", { name: "Skip to the overview" }).click();
     await expect(page).toHaveURL(/\/e\/staging$/);
@@ -76,8 +76,7 @@ test("an operator adds an environment, and its topics are its own", async ({ pag
     await create.getByRole("button", { name: "Create topic" }).click();
     await expect(create).toBeHidden();
     await expect(card(page, "Topics").getByRole("link", { name: topic })).toBeVisible();
-    await switcher.click();
-    await page.getByRole("option", { name: "production" }).click();
+    await openEnvironment(page, "production");
     await expect(page).toHaveURL(/\/e\/production$/);
     await expect(card(page, "Topics").getByRole("heading", { name: "Topics" })).toBeVisible();
     await expect(card(page, "Topics").getByRole("link", { name: topic })).toHaveCount(0);
@@ -87,7 +86,8 @@ test("an operator adds an environment, and its topics are its own", async ({ pag
     await expect(page.getByRole("heading", { level: 1, name: topic })).toBeVisible({
       timeout: 20_000,
     });
-    await expect(switcher).toHaveText("staging");
+    await expect(nav.getByRole("list", { name: "staging", exact: true })).toBeVisible();
+    await expect(nav.getByRole("list", { name: "production", exact: true })).toBeHidden();
   } finally {
     // The cluster goes again, to spare the kind cluster's memory.
     if (staging !== "") {
@@ -169,7 +169,7 @@ test("an admin adds, renames, protects and removes environments, and picks the d
     await expect(environments).toContainText("1 of at most 5");
 
     // Adding staging, which production leaves to suggest.
-    await environments.getByRole("button", { name: "Add environment" }).click();
+    await page.getByRole("main").getByRole("button", { name: "Add environment" }).click();
     const add = page.getByRole("dialog", { name: "Add an environment" });
     await expect(add.getByLabel("Name")).toHaveValue("staging");
     await add.getByRole("button", { name: "Add environment" }).click();
@@ -203,7 +203,7 @@ test("an admin adds, renames, protects and removes environments, and picks the d
     const memberList = card(memberPage, "Your environments");
     await expect(memberList).toContainText("Ask an admin of your organization");
     await expect(memberList.getByRole("listitem", { name: "qa", exact: true })).toBeVisible();
-    await expect(memberList.getByRole("button")).toHaveCount(0);
+    await expect(memberPage.getByRole("main").getByRole("button")).toHaveCount(0);
 
     // Protected, qa cannot be removed until protection is off again.
     await row("qa").getByRole("button", { name: "Protect qa" }).click();

@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/CustomerSummary";
 import { parts } from "@/lib/parts";
 import { formatDay, trialEnding, trialLeft } from "@/lib/trials";
 import { Notice } from "@/components/Notice";
+import { Page } from "@/components/Page";
 import { ProvisionCustomerDialog } from "@/pages/operator/ProvisionCustomerDialog";
 
 /** Shows children to operators, and everyone else what to do instead. */
@@ -42,11 +43,7 @@ function CustomerTable() {
     return <Notice title="The console is unavailable">{customers.error.message}</Notice>;
   }
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Customers</h1>
-        <ProvisionCustomerDialog />
-      </div>
+    <Page title="Customers" actions={<ProvisionCustomerDialog />}>
       {customers.data.length === 0 ? (
         <p className="text-muted-foreground">There are no customers yet.</p>
       ) : (
@@ -101,7 +98,7 @@ function CustomerTable() {
           </table>
         </div>
       )}
-    </main>
+    </Page>
   );
 }
 

@@ -1,10 +1,11 @@
 import { clerk, setupClerkTestingToken } from "@clerk/testing/playwright";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { readFixtures, skipWelcome, type UserFixture } from "./fixtures";
+import { openWorkspaceMenu } from "./helpers";
 
 // Signed in as this run's test users (clerk.setup.ts), against the console on
-// kind with a real Clerk development instance. Customers are looked for in the
-// page's main content: the header names the user's organization too.
+// kind with a real Clerk development instance. Customers are looked for by
+// their IDs in the page's main content: the sidebar names the organization.
 
 // Playwright loads this file before the setup project has run, so the
 // fixtures are read in the tests.
@@ -33,8 +34,8 @@ async function sessionToken(browser: Browser, user: UserFixture): Promise<string
   try {
     const page = await context.newPage();
     await signIn(page, user);
-    // The app has loaded the session once it shows the signed-in header.
-    await expect(page.getByRole("link", { name: "Changeport" })).toBeVisible();
+    // The app has loaded the session once it shows the signed-in sidebar.
+    await expect(page.getByRole("button", { name: "Workspace menu" })).toBeVisible();
     const token = await page.evaluate(async () => {
       const window = globalThis as unknown as {
         Clerk: { session: { getToken(): Promise<string | null> } | null };
@@ -51,6 +52,14 @@ async function sessionToken(browser: Browser, user: UserFixture): Promise<string
 }
 
 /** Calls the console's API with token, returning the status and body. */
+/**
+ * The line of the main content that names the customer whose cluster the
+ * page shows, by its ID: the sidebar names the organization.
+ */
+function cluster(page: Page, customer: { id: string }) {
+  return page.getByRole("main").getByText(`Customer ${customer.id}, `);
+}
+
 async function call(request: APIRequestContext, path: string, token: string) {
   const response = await request.get(path, { headers: { Authorization: `Bearer ${token}` } });
   return { status: response.status(), body: (await response.json()) as Record<string, unknown> };
@@ -74,33 +83,38 @@ test("a customer signs in with the form and sees their cluster", async ({ page }
   await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
   // Clerk's test addresses take this code instead of an email.
   await page.getByRole("textbox", { name: "Enter verification code" }).pressSequentially("424242");
-  await expect(page.getByRole("main").getByText(a.displayName)).toBeVisible({ timeout: 20_000 });
   await expect(
     page
       .getByRole("main")
       .getByText(`Customer ${a.id}, the production environment on a dev cluster`),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Workspace menu" })).toHaveText(a.displayName);
 });
 
 test("a customer only ever sees their own cluster", async ({ page }) => {
   await signIn(page, fixtures.users.memberB);
-  await expect(page.getByRole("main").getByText(b.displayName)).toBeVisible();
-  await expect(page.getByRole("main").getByText(a.displayName)).toHaveCount(0);
+  await expect(cluster(page, b)).toBeVisible();
+  await expect(cluster(page, a)).toHaveCount(0);
 });
 
 test("a customer cannot open the operator console", async ({ page }) => {
   await signIn(page, fixtures.users.adminA);
-  await expect(page.getByRole("main").getByText(a.displayName)).toBeVisible();
+  await expect(cluster(page, a)).toBeVisible();
   await page.goto("/operator");
   await expect(page.getByRole("heading", { name: "Operators only" })).toBeVisible();
-  await expect(page.getByRole("main").getByText(b.displayName)).toHaveCount(0);
+  await expect(cluster(page, b)).toHaveCount(0);
 });
 
 test("an operator sees every customer", async ({ page }) => {
   await signIn(page, fixtures.users.staff);
   await expect(page.getByRole("heading", { name: "Customers" })).toBeVisible();
-  await expect(page.getByRole("main").getByText(a.displayName)).toBeVisible();
-  await expect(page.getByRole("main").getByText(b.displayName)).toBeVisible();
+  // By ID: environments.spec.ts may add an environment to A meanwhile, a
+  // customer of the same name.
+  for (const customer of [a, b]) {
+    await expect(
+      page.getByRole("main").getByRole("row").filter({ hasText: customer.id }),
+    ).toContainText(customer.displayName);
+  }
 });
 
 test("the API scopes customers to their organization and operators to staff", async ({
@@ -155,10 +169,10 @@ test("the API scopes customers to their organization and operators to staff", as
 
 test("signing out returns to the sign-in form", async ({ page }) => {
   await signIn(page, fixtures.users.signOutA);
-  await expect(page.getByRole("main").getByText(a.displayName)).toBeVisible();
-  await page.getByRole("button", { name: /open user menu/i }).click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(cluster(page, a)).toBeVisible();
+  const menu = await openWorkspaceMenu(page);
+  await menu.getByRole("menuitem", { name: "Sign out" }).click();
   // Signing out reloads Clerk before the form shows again.
   await expect(page.getByLabel(/email address/i)).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("main").getByText(a.displayName)).toHaveCount(0);
+  await expect(cluster(page, a)).toHaveCount(0);
 });

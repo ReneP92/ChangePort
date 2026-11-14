@@ -14,7 +14,11 @@ const shots = path.join(root, "..", "docs", "screenshots");
 const out = path.join(root, "public", "screens");
 
 // Each crop: its source, and the region of it, in the console's CSS pixels:
-// the desktop screenshots are 1280 wide, and the phone's 390.
+// the desktop screenshots are 1280 wide, and the phone's 390. On the
+// desktop the console's sidebar takes the first 256 pixels and the page sits
+// on a panel from 257 to 1271, from 9 down, with its cards from 280 to 1248:
+// the crops take the panel's inside, past its rounded corners, with a card
+// and an even margin around it.
 // The phone crops come from the console's own phone layout, since the
 // desktop's would be too small to read on a phone.
 const crops = [
@@ -22,10 +26,10 @@ const crops = [
   {
     name: "overview",
     from: "03-overview-desktop.png",
-    left: 130,
-    top: 0,
-    width: 1020,
-    height: 820,
+    left: 264,
+    top: 10,
+    width: 1000,
+    height: 800,
   },
   // The alert, in the phone's header.
   {
@@ -34,14 +38,14 @@ const crops = [
     left: 0,
     top: 0,
     width: 390,
-    height: 372,
+    height: 340,
   },
   // What changed, under the throughput chart.
   {
     name: "timeline",
     from: "03-overview-desktop.png",
-    left: 140,
-    top: 815,
+    left: 264,
+    top: 742,
     width: 1000,
     height: 680,
   },
@@ -49,7 +53,7 @@ const crops = [
     name: "timeline-phone",
     from: "03-overview-phone.png",
     left: 0,
-    top: 1270,
+    top: 1214,
     width: 390,
     height: 742,
   },
@@ -57,8 +61,8 @@ const crops = [
   {
     name: "topology",
     from: "03-overview-desktop.png",
-    left: 140,
-    top: 1500,
+    left: 264,
+    top: 1416,
     width: 1000,
     height: 315,
   },
@@ -66,26 +70,26 @@ const crops = [
     name: "topology-phone",
     from: "03-overview-phone.png",
     left: 0,
-    top: 2014,
+    top: 1949,
     width: 390,
-    height: 374,
+    height: 356,
   },
   // A consumer group's lag in time, and what changed meanwhile.
   {
     name: "lag",
     from: "18-consumer-group-desktop.png",
-    left: 140,
-    top: 60,
+    left: 264,
+    top: 10,
     width: 1000,
-    height: 760,
+    height: 720,
   },
   {
     name: "lag-phone",
     from: "18-consumer-group-phone.png",
     left: 0,
-    top: 100,
+    top: 44,
     width: 390,
-    height: 950,
+    height: 873,
   },
 ];
 

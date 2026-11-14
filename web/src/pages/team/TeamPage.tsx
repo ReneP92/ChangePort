@@ -8,6 +8,7 @@ import {
   useRevokeInvitation,
   useTeam,
 } from "@/api/queries";
+import { Page } from "@/components/Page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,14 +51,10 @@ export function TeamPage() {
 function TeamContent({ organization, admin }: { organization: string; admin: boolean }) {
   const team = useTeam();
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
-        <p className="text-sm text-muted-foreground">
-          Who at {organization} uses Changeport. Admins manage the cluster, its credentials and the
-          team; members use the cluster. A person belongs to one organization.
-        </p>
-      </header>
+    <Page
+      title="Team"
+      description={`Who at ${organization} uses Changeport. Admins manage the cluster, its credentials and the team; members use the cluster. A person belongs to one organization.`}
+    >
       {team.isPending && <p className="text-sm text-muted-foreground">Loading the team</p>}
       {team.isError && <p className="text-sm text-destructive">{team.error.message}</p>}
       {team.data && (
@@ -66,7 +63,7 @@ function TeamContent({ organization, admin }: { organization: string; admin: boo
           <InvitationsCard team={team.data} admin={admin} />
         </>
       )}
-    </main>
+    </Page>
   );
 }
 

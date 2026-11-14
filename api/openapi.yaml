@@ -1543,6 +1543,10 @@ components:
         clerkPublishableKey:
           type: string
           description: The Clerk publishable key the web app signs in with
+        supportEmail:
+          type: string
+          format: email
+          description: Where customers contact Changeport's support; without it the console offers no address
     Me:
       type: object
       required: [userID, access]

@@ -122,7 +122,10 @@ describe("TrialForm", () => {
 describe("the request's status", () => {
   test("a pending request says what it asked for", () => {
     render(<PendingRequest request={pending} />);
-    expect(screen.getByRole("heading", { name: "Your request is in" })).toBeDefined();
+    // The page's title says the request is in.
+    expect(screen.getByRole("region", { name: "Your request" }).textContent).toContain(
+      "An operator reviews it",
+    );
     const summary = screen.getByText("Peak throughput").closest("dl");
     expect(summary?.textContent).toContain("Hooli");
     expect(summary?.textContent).toContain("1 to 10 MB/s");
@@ -140,7 +143,8 @@ describe("the request's status", () => {
     const { rerender } = render(
       <DeclinedRequest request={declined} now={new Date("2026-11-09T00:00:00Z")} />,
     );
-    expect(screen.getByRole("heading", { name: "Your request was declined" })).toBeDefined();
+    // The page's title says it was declined.
+    expect(screen.getByRole("region", { name: "The decision" })).toBeDefined();
     expect(screen.getByText("We start with teams in the EU.")).toBeDefined();
     expect(screen.getByText(/You may ask again from/)).toBeDefined();
     // A week later, there is nothing to wait for.

@@ -22,3 +22,14 @@ export function useEnvironmentPath(): (page: string) => string {
   const environment = useEnvironment();
   return (page) => (environment === undefined ? page : environmentPath(environment, page));
 }
+
+/**
+ * The first of the breadcrumbs of an environment's pages: the environment,
+ * which leads to its overview.
+ */
+export function useEnvironmentCrumb(): { label: string; to: string }[] {
+  const environment = useEnvironment();
+  return environment === undefined
+    ? []
+    : [{ label: environment, to: environmentPath(environment, "/") }];
+}

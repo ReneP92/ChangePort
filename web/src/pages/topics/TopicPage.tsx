@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router";
 import { useAlerts, useConsumerGroups, useTopics } from "@/api/queries";
 import { Notice } from "@/components/Notice";
+import { Page } from "@/components/Page";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { alertsAbout } from "@/lib/alerts";
@@ -10,7 +11,7 @@ import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { ThroughputCard } from "@/pages/overview/ThroughputCard";
 import { TailCard } from "@/pages/topics/TailCard";
-import { useEnvironmentPath } from "@/lib/useEnvironment";
+import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
  * One topic: its settings, its traffic with what changed meanwhile, the
@@ -23,6 +24,7 @@ export function TopicPage() {
 
 function Topic({ name, admin }: { name: string; admin: boolean }) {
   const envPath = useEnvironmentPath();
+  const crumbs = useEnvironmentCrumb();
   const topics = useTopics();
   const alerts = useAlerts();
   if (topics.isPending) {
@@ -60,26 +62,20 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
     ["Out", topic.bytesOutPerSecond === undefined ? "–" : formatRate(topic.bytesOutPerSecond)],
   ];
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      <header className="flex flex-col gap-1">
-        <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-          <Link to={envPath("/")} className="underline-offset-4 hover:underline">
-            Cluster
-          </Link>{" "}
-          / Topics
-        </nav>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight [overflow-wrap:anywhere]">
-            {topic.name}
-          </h1>
+    <Page
+      crumbs={[...crumbs, { label: "Topics", to: envPath("/#topics") }]}
+      title={<span className="[overflow-wrap:anywhere]">{topic.name}</span>}
+      badge={
+        <>
           <AlertBadge alerts={alertsAbout(alerts.data, { topic: name })} />
           {topic.source && (
             <Badge variant="outline" asChild>
               <Link to={envPath(`/sources/${topic.source}`)}>Source {topic.source}</Link>
             </Badge>
           )}
-        </div>
-      </header>
+        </>
+      }
+    >
       {topicAlerts.length > 0 && (
         <section
           aria-label="Alerts"
@@ -108,7 +104,7 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
       <ThroughputCard topic={topic.name} />
       <ReadersCard topic={topic.name} />
       <TailCard topic={topic.name} admin={admin} />
-    </main>
+    </Page>
   );
 }
 

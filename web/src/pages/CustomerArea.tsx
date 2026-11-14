@@ -2,7 +2,10 @@ import type { ReactNode } from "react";
 import { Navigate } from "react-router";
 import { ApiError, type Customer } from "@/api/client";
 import { useCustomer, useLiveAlerts, useMe } from "@/api/queries";
-import { CustomerSummary } from "@/components/CustomerSummary";
+import { CustomerSummary, StatusBadge } from "@/components/CustomerSummary";
+import { customerLine } from "@/lib/customers";
+import { Page } from "@/components/Page";
+import { useEnvironmentCrumb } from "@/lib/useEnvironment";
 import { TrialNotice } from "@/components/TrialNotice";
 import { Notice } from "@/components/Notice";
 
@@ -38,6 +41,7 @@ function ReadyCustomer({
   children: (customer: Customer, admin: boolean) => ReactNode;
 }) {
   const customer = useCustomer();
+  const crumbs = useEnvironmentCrumb();
   useLiveAlerts();
   if (customer.isPending) {
     return <Notice title="Loading" busy />;
@@ -56,9 +60,14 @@ function ReadyCustomer({
     return (
       <>
         {trial}
-        <main className="mx-auto max-w-5xl p-6">
-          <CustomerSummary customer={customer.data} />
-        </main>
+        <Page
+          crumbs={crumbs}
+          title="Overview"
+          badge={<StatusBadge customer={customer.data} />}
+          description={customerLine(customer.data)}
+        >
+          <CustomerSummary customer={customer.data} named={false} />
+        </Page>
       </>
     );
   }

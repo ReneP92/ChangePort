@@ -20,6 +20,7 @@ import {
   useSourceOptions,
 } from "@/api/queries";
 import { Notice } from "@/components/Notice";
+import { Page } from "@/components/Page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -41,7 +42,7 @@ import { EgressAddresses } from "@/pages/sources/EgressAddresses";
 import { SqlBlock } from "@/pages/sources/SqlBlock";
 import { tableKey, tableName } from "@/lib/tables";
 import { TablePicker } from "@/pages/sources/TablePicker";
-import { useEnvironmentPath } from "@/lib/useEnvironment";
+import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** The wizard's steps, in order. */
 const steps = [
@@ -102,6 +103,7 @@ interface Draft {
 
 function Wizard({ options }: { options: SourceOptions }) {
   const envPath = useEnvironmentPath();
+  const crumbs = useEnvironmentCrumb();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [draft, setDraft] = useState<Draft>({
@@ -300,15 +302,12 @@ function Wizard({ options }: { options: SourceOptions }) {
   const generalProblem = problem && !problem.field ? (problem.detail ?? problem.title) : null;
 
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6 [&>*]:max-w-3xl">
-      <Link
-        to={envPath("/sources")}
-        className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-      >
-        ← Sources
-      </Link>
+    <Page
+      crumbs={[...crumbs, { label: "Sources", to: envPath("/sources") }]}
+      title="Add a Postgres source"
+      className="[&>*]:max-w-3xl"
+    >
       <header className="flex flex-col gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Add a Postgres source</h1>
         <p className="text-sm text-muted-foreground sm:hidden">
           Step {step + 1} of {steps.length}: {steps[step]}
         </p>
@@ -667,7 +666,7 @@ function Wizard({ options }: { options: SourceOptions }) {
           </CardContent>
         </Card>
       </form>
-    </main>
+    </Page>
   );
 }
 

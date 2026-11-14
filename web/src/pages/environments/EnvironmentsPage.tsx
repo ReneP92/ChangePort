@@ -15,17 +15,11 @@ import {
   useEnvironments,
   useRemoveEnvironment,
 } from "@/api/queries";
+import { Page } from "@/components/Page";
 import { ProfileRadio } from "@/components/ProfileRadio";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -61,15 +55,22 @@ export function EnvironmentsPage() {
 
 function EnvironmentsContent({ admin, organization }: { admin: boolean; organization: string }) {
   const environments = useEnvironments();
+  const list = environments.data;
+  // A trial is one environment, and the organization has a limit.
+  const canAdd = admin && list !== undefined && !list.environments.some((e) => e.trial);
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Environments</h1>
-        <p className="text-sm text-muted-foreground">
-          Each environment of {organization} is a Kafka cluster of its own, with its own connection,
-          credentials, topics, sources and alerts. The console opens the default one first.
-        </p>
-      </header>
+    <Page
+      title="Environments"
+      description={`Each environment of ${organization} is a Kafka cluster of its own, with its own connection, credentials, topics, sources and alerts. The console opens the default one first.`}
+      actions={
+        canAdd && (
+          <AddEnvironmentDialog
+            taken={list.environments.map((e) => e.name)}
+            disabled={list.environments.length >= list.limit || list.environments.length === 0}
+          />
+        )
+      }
+    >
       {environments.isPending && (
         <p className="text-sm text-muted-foreground">Loading the environments</p>
       )}
@@ -77,7 +78,7 @@ function EnvironmentsContent({ admin, organization }: { admin: boolean; organiza
         <p className="text-sm text-destructive">{environments.error.message}</p>
       )}
       {environments.data && <EnvironmentsCard list={environments.data} admin={admin} />}
-    </main>
+    </Page>
   );
 }
 
@@ -99,14 +100,6 @@ function EnvironmentsCard({ list, admin }: { list: Environments; admin: boolean 
             ? `${String(environments.length)} of at most ${String(list.limit)}`
             : "Ask an admin of your organization to change its environments."}
         </CardDescription>
-        {admin && !trial && (
-          <CardAction>
-            <AddEnvironmentDialog
-              taken={environments.map((e) => e.name)}
-              disabled={atLimit || environments.length === 0}
-            />
-          </CardAction>
-        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
         {admin && trial && (

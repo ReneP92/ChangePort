@@ -1,7 +1,7 @@
 import { ClerkProvider } from "@clerk/react";
 import { ui } from "@clerk/ui";
 import { useQuery } from "@tanstack/react-query";
-import { fetchConfig } from "@/api/config";
+import { configQuery } from "@/api/config";
 import { Console } from "@/Console";
 import { Notice } from "@/components/Notice";
 
@@ -13,12 +13,7 @@ import { Notice } from "@/components/Notice";
  * request left the sign-in form blank.
  */
 export function App() {
-  const config = useQuery({
-    queryKey: ["config"],
-    queryFn: fetchConfig,
-    staleTime: Infinity,
-    retry: 1,
-  });
+  const config = useQuery(configQuery);
   if (config.isPending) {
     return <Notice title="Changeport" busy />;
   }

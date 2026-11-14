@@ -15,6 +15,7 @@ import {
   shownSQL,
   sourceLeftovers,
 } from "../clerk/helpers";
+import { fullHeightSidebar } from "./style";
 
 // Captures every screen of the console, on a desktop and a phone, into
 // CHANGEPORT_SCREENSHOTS_DIR (just ui-screenshots). An operator provisions
@@ -39,11 +40,11 @@ const context = { viewport: devices[0][1], deviceScaleFactor: 2 };
  * viewport, which the dialog's overlay covers.
  */
 async function shot(page: Page, name: string): Promise<void> {
-  // Signed in, the header links home; its user menu comes from Clerk.
-  if ((await page.getByRole("link", { name: "Changeport" }).count()) > 0) {
-    await expect(page.getByRole("button", { name: "Open user menu" })).toBeVisible({
-      timeout: 20_000,
-    });
+  // Signed in, the sidebar's workspace menu waits on Clerk for the
+  // organization's name.
+  const workspace = page.getByRole("button", { name: "Workspace menu" });
+  if ((await workspace.count()) > 0) {
+    await expect(workspace).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
   }
   // Images, such as the logos of Clerk's sign-in buttons, load late.
   await page.waitForFunction(() => {
@@ -58,7 +59,11 @@ async function shot(page: Page, name: string): Promise<void> {
     await page.setViewportSize(viewport);
     // Dialogs and layout settle after a resize.
     await page.waitForTimeout(600);
-    await page.screenshot({ path: path.join(out, `${name}-${device}.png`), fullPage: !dialog });
+    await page.screenshot({
+      path: path.join(out, `${name}-${device}.png`),
+      fullPage: !dialog,
+      style: dialog ? undefined : fullHeightSidebar,
+    });
   }
   if (size) {
     await page.setViewportSize(size);
@@ -355,7 +360,7 @@ test("every screen of the console", async ({ browser }) => {
   ]);
   created.sources.push(`changeport_shop_${sourceID}`);
   await shot(admin, "25-source-starting");
-  await nav.getByRole("link", { name: "Cluster" }).click();
+  await nav.getByRole("link", { name: "Overview" }).click();
 
   // Traffic for a few minutes: producers at a steady rate, two consumer
   // groups keeping up and one left at the start of orders.
@@ -427,8 +432,15 @@ test("every screen of the console", async ({ browser }) => {
   );
   await shot(admin, "50-team");
 
+  // The keyboard shortcuts, from the help menu at the sidebar's foot.
+  await admin.getByRole("button", { name: "Help" }).click();
+  await admin.getByRole("menuitem", { name: /^Keyboard shortcuts/ }).click();
+  await expect(admin.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
+  await shot(admin, "55-keyboard-shortcuts");
+  await admin.keyboard.press("Escape");
+
   // Ada adds a staging environment to Acme herself, and switches to it.
-  await nav.getByRole("link", { name: "Environments" }).click();
+  await nav.getByRole("link", { name: "Environments", exact: true }).click();
   const environments = main.getByRole("list", { name: "Environments" });
   await expect(environments.getByRole("listitem", { name: "production" })).toContainText("Ready");
   await main.getByRole("button", { name: "Add environment" }).click();
@@ -449,11 +461,10 @@ test("every screen of the console", async ({ browser }) => {
   created.customers.push(staging);
   await expect(stagingRow).toContainText("Ready", { timeout: 6 * 60_000 });
   await shot(admin, "52-environments-page");
-  const switcher = admin.getByRole("banner").getByRole("combobox", { name: "Environment" });
-  await switcher.click();
-  await expect(admin.getByRole("option", { name: "staging" })).toBeVisible();
+  // The sidebar lists staging too, its section unfolded.
+  await nav.getByRole("button", { name: /^staging\b/ }).click();
+  await expect(nav.getByRole("list", { name: "staging", exact: true })).toBeVisible();
   await shot(admin, "51-environments");
-  await admin.keyboard.press("Escape");
   // Its cluster goes again, to spare the kind cluster's memory.
   await stagingRow.getByRole("button", { name: "Remove staging" }).click();
   const removeEnvironment = admin.getByRole("dialog", { name: "Remove staging?" });
@@ -461,7 +472,10 @@ test("every screen of the console", async ({ browser }) => {
   await shot(admin, "54-remove-environment");
   await removeEnvironment.getByRole("button", { name: "Remove" }).click();
   await expect(stagingRow).toContainText("Being removed");
-  await nav.getByRole("link", { name: "Cluster" }).click();
+  await nav
+    .getByRole("list", { name: "production", exact: true })
+    .getByRole("link", { name: "Overview" })
+    .click();
   await expect(main.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 30_000 });
 
   // A topic's page and a consumer group's, with the changes over their
@@ -481,13 +495,13 @@ test("every screen of the console", async ({ browser }) => {
     admin.getByRole("region", { name: "Changes" }).getByText(/created topic orders/),
   ).toBeVisible({ timeout: 60_000 });
   await shot(admin, "18-consumer-group");
-  await nav.getByRole("link", { name: "Cluster" }).click();
+  await nav.getByRole("link", { name: "Overview" }).click();
   await nav.getByRole("link", { name: /^Alerts/ }).click();
   await expect(main.getByText(/search-indexer is .* behind/)).toBeVisible();
   // The settings load on their own, after the active alerts.
   await expect(main.getByRole("heading", { name: "Where alerts go" })).toBeVisible();
   await shot(admin, "30-alerts");
-  await nav.getByRole("link", { name: "Cluster" }).click();
+  await nav.getByRole("link", { name: "Overview" }).click();
 
   // Deleting a topic names the groups still reading it.
   await main

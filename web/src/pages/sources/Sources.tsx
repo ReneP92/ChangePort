@@ -1,12 +1,13 @@
 import { errorText } from "@/api/client";
 import { Link } from "react-router";
 import { useSources } from "@/api/queries";
+import { Page } from "@/components/Page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes } from "@/lib/format";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { PhaseBadge } from "@/pages/sources/PhaseBadge";
-import { useEnvironmentPath } from "@/lib/useEnvironment";
+import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** The customer's Postgres sources, and for admins adding one. */
 export function Sources() {
@@ -15,23 +16,21 @@ export function Sources() {
 
 function SourceList({ admin }: { admin: boolean }) {
   const envPath = useEnvironmentPath();
+  const crumbs = useEnvironmentCrumb();
   const sources = useSources();
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Postgres sources</h1>
-          <p className="text-sm text-muted-foreground">
-            Each table of a source streams into a topic of its own: its existing rows first, then
-            every insert, update and delete.
-          </p>
-        </div>
-        {admin && (
-          <Button asChild className="shrink-0">
+    <Page
+      crumbs={crumbs}
+      title="Postgres sources"
+      description="Each table of a source streams into a topic of its own: its existing rows first, then every insert, update and delete."
+      actions={
+        admin && (
+          <Button asChild size="sm">
             <Link to={envPath("/sources/new")}>Add source</Link>
           </Button>
-        )}
-      </header>
+        )
+      }
+    >
       <Card>
         <CardHeader>
           <CardTitle>
@@ -94,6 +93,6 @@ function SourceList({ admin }: { admin: boolean }) {
           )}
         </CardContent>
       </Card>
-    </main>
+    </Page>
   );
 }

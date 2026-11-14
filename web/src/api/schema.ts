@@ -846,6 +846,11 @@ export interface components {
         Config: {
             /** @description The Clerk publishable key the web app signs in with */
             clerkPublishableKey: string;
+            /**
+             * Format: email
+             * @description Where customers contact Changeport's support; without it the console offers no address
+             */
+            supportEmail?: string;
         };
         Me: {
             userID: string;

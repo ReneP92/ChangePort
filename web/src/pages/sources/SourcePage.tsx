@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
 import { errorText, ApiError, type Source, type SourceOptions } from "@/api/client";
 import { useChangeSource, useConfirmSlotDropped, useSource, useSourceOptions } from "@/api/queries";
 import { Notice } from "@/components/Notice";
+import { Page } from "@/components/Page";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,26 +24,16 @@ import { PasswordDialog } from "@/pages/sources/PasswordDialog";
 import { PhaseBadge } from "@/pages/sources/PhaseBadge";
 import { RemoveTablesDialog } from "@/pages/sources/RemoveTablesDialog";
 import { CodeBlock } from "@/components/CodeBlock";
-import { useEnvironmentPath } from "@/lib/useEnvironment";
+import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** One Postgres source: its tables' progress, its slot, and for admins its changes. */
 export function SourcePage() {
   return <CustomerArea>{(_, admin) => <SourceDetails admin={admin} />}</CustomerArea>;
 }
 
-function Back() {
-  const envPath = useEnvironmentPath();
-  return (
-    <Link
-      to={envPath("/sources")}
-      className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-    >
-      ← Sources
-    </Link>
-  );
-}
-
 function SourceDetails({ admin }: { admin: boolean }) {
+  const envPath = useEnvironmentPath();
+  const crumbs = [...useEnvironmentCrumb(), { label: "Sources", to: envPath("/sources") }];
   const { name = "" } = useParams();
   const source = useSource(name);
   const options = useSourceOptions();
@@ -53,40 +44,38 @@ function SourceDetails({ admin }: { admin: boolean }) {
     const error = source.error ?? options.error;
     const gone = error instanceof ApiError && error.status === 404;
     return (
-      <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-        <Back />
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {gone ? `There is no source ${name}` : "The console is unavailable"}
-        </h1>
-        <p className="text-muted-foreground">
+      <Page
+        crumbs={crumbs}
+        title={gone ? `There is no source ${name}` : "The console is unavailable"}
+      >
+        <p className="text-sm text-muted-foreground">
           {gone
             ? "It does not exist, or it has been deleted. Its topics, if any, are kept."
             : error?.message}
         </p>
-      </main>
+      </Page>
     );
   }
   const s = source.data;
   const deleting = s.deleting ?? false;
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      <Back />
-      <header className="flex flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight break-all">{s.name}</h1>
-          <PhaseBadge source={s} />
-        </div>
-        <p className="text-sm break-all text-muted-foreground">
+    <Page
+      crumbs={crumbs}
+      title={<span className="break-all">{s.name}</span>}
+      badge={<PhaseBadge source={s} />}
+      description={
+        <span className="break-all">
           {s.database} on {s.host}:{s.port}
-        </p>
-      </header>
+        </span>
+      }
+    >
       <StatusNote source={s} />
       {deleting && <DeletingCard source={s} admin={admin} />}
       <TablesCard source={s} options={options.data} admin={admin && !deleting} />
       <SlotCard source={s} />
       <DetailsCard source={s} options={options.data} admin={admin && !deleting} />
       {admin && !deleting && <ManageCard source={s} options={options.data} />}
-    </main>
+    </Page>
   );
 }
 

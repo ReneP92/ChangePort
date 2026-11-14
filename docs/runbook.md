@@ -212,7 +212,7 @@ An organization has a cluster per environment, such as production, staging and d
 
 - **Customers manage them:** an organization's admins add, rename, protect and remove environments on the console's Environments page, and choose the default one (docs/console.md). The audit lines say who did what: `environment added`, `environment renamed`, `default environment set`, `deletion protection turned on` or `off`, and `environment removed`, with the environment's customer as the tenant.
 - **The limit:** admins may have at most 5 environments per organization, which `-max-environments` on the console changes. Each is a dedicated cluster.
-- **Adding one beyond it:** on a customer's page in the operator console, **Add environment** names it, unique in the organization, and picks its profile and deletion protection. The organization's members see it in the console's environment switcher at once, starting until its cluster is ready. A trial is one environment: convert the customer first.
+- **Adding one beyond it:** on a customer's page in the operator console, **Add environment** names it, unique in the organization, and picks its profile and deletion protection. The organization's members see it in the console's sidebar at once, starting until its cluster is ready. A trial is one environment: convert the customer first.
 - **Removing the last one:** admins cannot remove their organization's last environment. Closing an account is deprovisioning its customer, as any other. The organization stays.
 - **Deletion protection:** admins turn it off themselves, with the environment's name typed, which the console checks too. The admission policy `changeport-console-customers` lets the console change only a customer's trial, environment name, default and deletion protection.
 - **Finding them:** `kubectl get customers -l changeport.io/clerk-organization=<org_...>` lists an organization's environments, with their names in the Environment column.
@@ -451,6 +451,7 @@ ConfigMap `changeport-mail` in the `changeport` namespace:
 | `CHANGEPORT_MAIL_FROM` | The address email comes from, and replies go to |
 | `CHANGEPORT_OPERATOR_EMAILS` | Who hears of new trial requests, comma-separated |
 | `CHANGEPORT_CONSOLE_URL` | Where the provisioner's emails link |
+| `CHANGEPORT_SUPPORT_EMAIL` | The address the console's help menu offers customers for support; without it, it offers none |
 
 Without the ConfigMap no email is sent, and the logs say so (`mail is off`).
 A send is tried four times; every attempt that succeeds or finally fails is

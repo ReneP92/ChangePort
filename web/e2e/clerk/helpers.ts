@@ -14,6 +14,30 @@ export async function openOverview(page: Page, user: UserFixture): Promise<void>
 }
 
 /**
+ * Opens environment's overview from the sidebar: its section unfolds, when
+ * it isn't already, and lists the pages of its cluster.
+ */
+export async function openEnvironment(page: Page, environment: string): Promise<void> {
+  const nav = page.getByRole("navigation", { name: "Console" });
+  const pages = nav.getByRole("list", { name: environment, exact: true });
+  if (!(await pages.isVisible())) {
+    await nav.getByRole("button", { name: new RegExp(`^${environment}\\b`) }).click();
+  }
+  await pages.getByRole("link", { name: "Overview" }).click();
+}
+
+/**
+ * The menu of the user's organization, at the top of the sidebar, which
+ * leads to the organization's pages, the user's profile and signing out.
+ */
+export async function openWorkspaceMenu(page: Page): Promise<Locator> {
+  await page.getByRole("button", { name: "Workspace menu" }).click();
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/**
  * The card of the page with a heading, such as the overview's Topics: the
  * getting started guide repeats some of the cards' buttons.
  */

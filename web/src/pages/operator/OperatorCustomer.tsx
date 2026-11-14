@@ -1,7 +1,9 @@
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
 import { ApiError } from "@/api/client";
 import { useOperatorCustomer } from "@/api/queries";
-import { CustomerSummary } from "@/components/CustomerSummary";
+import { CustomerSummary, StatusBadge } from "@/components/CustomerSummary";
+import { customerLine } from "@/lib/customers";
+import { Page } from "@/components/Page";
 import { Notice } from "@/components/Notice";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDay, trialLeft } from "@/lib/trials";
@@ -25,38 +27,34 @@ export function OperatorCustomer() {
 function CustomerPage() {
   const { customerID = "" } = useParams();
   const customer = useOperatorCustomer(customerID);
-  const back = (
-    <Link
-      to="/operator"
-      className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-    >
-      ← All customers
-    </Link>
-  );
+  const crumbs = [{ label: "Customers", to: "/operator" }];
   if (customer.isPending) {
     return <Notice title="Loading" busy />;
   }
   if (customer.isError) {
     const gone = customer.error instanceof ApiError && customer.error.status === 404;
     return (
-      <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-        {back}
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {gone ? `There is no customer ${customerID}` : "The console is unavailable"}
-        </h1>
-        <p className="text-muted-foreground">
+      <Page
+        crumbs={crumbs}
+        title={gone ? `There is no customer ${customerID}` : "The console is unavailable"}
+      >
+        <p className="text-sm text-muted-foreground">
           {gone
             ? "It does not exist, or it has been deprovisioned. Its Clerk organization, if any, is kept."
             : customer.error.message}
         </p>
-      </main>
+      </Page>
     );
   }
   const c = customer.data;
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      {back}
-      <CustomerSummary customer={c} />
+    <Page
+      crumbs={crumbs}
+      title={c.displayName}
+      badge={<StatusBadge customer={c} />}
+      description={customerLine(c)}
+    >
+      <CustomerSummary customer={c} named={false} />
       {c.trial && !c.deleting && (
         <Card>
           <CardHeader>
@@ -108,6 +106,6 @@ function CustomerPage() {
           </CardContent>
         </Card>
       )}
-    </main>
+    </Page>
   );
 }

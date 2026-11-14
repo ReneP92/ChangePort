@@ -765,6 +765,9 @@ type ConditionType string
 type Config struct {
 	// ClerkPublishableKey The Clerk publishable key the web app signs in with
 	ClerkPublishableKey string `json:"clerkPublishableKey"`
+
+	// SupportEmail Where customers contact Changeport's support; without it the console offers no address
+	SupportEmail *openapi_types.Email `json:"supportEmail,omitempty"`
 }
 
 // Connection defines model for Connection.

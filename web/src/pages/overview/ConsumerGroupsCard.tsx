@@ -24,7 +24,7 @@ export function ConsumerGroupsCard() {
     0,
   );
   return (
-    <Card>
+    <Card id="consumer-groups" className="scroll-mt-4">
       <CardHeader>
         <CardTitle>
           <h2>Consumer groups</h2>

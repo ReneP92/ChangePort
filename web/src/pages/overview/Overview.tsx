@@ -1,5 +1,8 @@
 import type { Customer } from "@/api/client";
 import { StatusBadge } from "@/components/CustomerSummary";
+import { customerLine } from "@/lib/customers";
+import { Page } from "@/components/Page";
+import { useEnvironmentCrumb } from "@/lib/useEnvironment";
 import { AlertsBanner } from "@/pages/alerts/ActiveAlerts";
 import { ConnectionCard } from "@/pages/overview/ConnectionCard";
 import { ConsumerGroupsCard } from "@/pages/overview/ConsumerGroupsCard";
@@ -13,18 +16,14 @@ import { TopologyCard } from "@/pages/overview/TopologyCard";
  * throughput, how data flows through it, topics and consumer groups.
  */
 export function Overview({ customer, admin }: { customer: Customer; admin: boolean }) {
+  const crumbs = useEnvironmentCrumb();
   return (
-    <main className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-      <header className="flex flex-col gap-1">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight">{customer.displayName}</h1>
-          <StatusBadge customer={customer} />
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Customer {customer.id}, the {customer.environment} environment on a {customer.profile}{" "}
-          cluster
-        </p>
-      </header>
+    <Page
+      crumbs={crumbs}
+      title="Overview"
+      badge={<StatusBadge customer={customer} />}
+      description={customerLine(customer)}
+    >
       <AlertsBanner />
       <ConnectionCard admin={admin} />
       <HealthCard />
@@ -32,6 +31,6 @@ export function Overview({ customer, admin }: { customer: Customer; admin: boole
       <TopologyCard />
       <TopicsCard admin={admin} />
       <ConsumerGroupsCard />
-    </main>
+    </Page>
   );
 }

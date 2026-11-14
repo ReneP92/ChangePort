@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFixtures } from "./fixtures";
-import { card, connect, kafka, openOverview } from "./helpers";
+import { card, connect, kafka, openOverview, openWorkspaceMenu } from "./helpers";
 
 // The overview of customer A's cluster, which the setup waits to be ready.
 
@@ -57,16 +57,17 @@ test("an admin downloads client.properties and produces with it", async ({ page 
   await expect(row.getByText("Tiered")).toBeVisible();
 });
 
-// A user belongs to one organization, their company's: the header names
-// it and leads to its team, with no other organization to switch to.
-test("the header names the user's one organization", async ({ page }) => {
+// A user belongs to one organization, their company's: the sidebar's
+// workspace menu names it and leads to its team, with no other organization
+// to switch to.
+test("the sidebar names the user's one organization", async ({ page }) => {
   await openOverview(page, fixtures.users.adminA);
-  const organization = page
-    .getByRole("banner")
-    .getByRole("link", { name: `E2E ${fixtures.run} A` });
-  await expect(organization).toBeVisible();
+  const workspace = page.getByRole("button", { name: "Workspace menu" });
+  await expect(workspace).toHaveText(`E2E ${fixtures.run} A`);
   await expect(page.locator(".cl-organizationSwitcherTrigger")).toHaveCount(0);
-  await organization.click();
+  const menu = await openWorkspaceMenu(page);
+  await expect(menu).toContainText(fixtures.users.adminA.email);
+  await menu.getByRole("menuitem", { name: "Team" }).click();
   await expect(page).toHaveURL(/\/team$/);
   await expect(page.getByRole("heading", { name: "Team", level: 1 })).toBeVisible();
 });
