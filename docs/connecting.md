@@ -112,6 +112,37 @@ files or images, in object storage such as S3, and send a message that
 refers to them. The diagnoses flag messages refused for their size, and the
 producers that sent them.
 
+### Delivery guarantees
+
+Producers in the examples below say outright what current clients already
+default to: `acks=all`, so that a message counts as sent once every in-sync
+replica has it, and idempotence, so that a retry after a lost answer never
+writes a message twice. Say it in your code too: older clients, and
+librdkafka-based ones such as the Python and Node.js clients, are not
+idempotent unless told to be, and the Java client turns idempotence off
+silently when another setting conflicts with it, such as `acks=1`.
+
+Idempotence covers one producer's retries. For **exactly once** from one
+topic to another, a consumer that reads, processes and writes in a
+transaction commits its input's offsets and its output together, or neither
+([below](#exactly-once-read-process-write)). That holds end to end only
+with the help of the consumers downstream:
+
+- They read with `isolation.level=read_committed`, so that they never see
+  what an aborted transaction wrote. The Java client reads uncommitted
+  messages unless told otherwise; librdkafka-based clients read committed
+  ones by default.
+- What processing does outside Kafka, such as writing to a database or
+  sending an email, is not part of the transaction: a transaction aborted
+  and tried again does it twice. Make such writes safe to repeat, for
+  example keyed by the message's topic, partition and offset.
+
+A transaction left open, by a producer that hangs or stops without
+aborting, holds back every `read_committed` consumer of its partitions
+until Kafka aborts it, after the producer's `transaction.timeout.ms` (one
+minute by default). The console shows open transactions and diagnoses one
+that hangs ([console.md](console.md)).
+
 ## Examples
 
 Each example produces a message, consumes it back as a consumer group, and
@@ -143,6 +174,10 @@ public class Example {
 
         Properties producerConfig = new Properties();
         producerConfig.putAll(config);
+        // Every in-sync replica has it before it counts as sent, and a retry
+        // never writes it twice.
+        producerConfig.put("acks", "all");
+        producerConfig.put("enable.idempotence", "true");
         producerConfig.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         producerConfig.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         try (var producer = new KafkaProducer<String, String>(producerConfig)) {
@@ -201,7 +236,13 @@ config = {
 }
 topic = os.environ["TOPIC"]
 
-producer = Producer(config)
+producer = Producer({
+    **config,
+    # Every in-sync replica has it before it counts as sent, and a retry
+    # never writes it twice.
+    "acks": "all",
+    "enable.idempotence": True,
+})
 producer.produce(topic, key="order-1", value="hello from Python")
 if producer.flush(30) != 0:
     raise SystemExit("not delivered")
@@ -257,7 +298,12 @@ func main() {
 		kgo.SASL(scram.Auth{User: os.Getenv("KAFKA_USERNAME"), Pass: os.Getenv("KAFKA_PASSWORD")}.AsSha512Mechanism()),
 	}
 
-	producer, err := kgo.NewClient(opts...)
+	producer, err := kgo.NewClient(append(opts,
+		// Every in-sync replica has it before it counts as sent; franz-go
+		// is idempotent unless told otherwise, so a retry never writes it
+		// twice.
+		kgo.RequiredAcks(kgo.AllISRAcks()),
+	)...)
 	if err != nil {
 		panic(err)
 	}
@@ -315,7 +361,13 @@ const config = {
 const topic = process.env.TOPIC;
 
 async function main() {
-  const producer = new Kafka(config).producer();
+  const producer = new Kafka({
+    ...config,
+    // Every in-sync replica has it before it counts as sent, and a retry
+    // never writes it twice.
+    acks: "all",
+    "enable.idempotence": true,
+  }).producer();
   await producer.connect();
   await producer.send({ topic, messages: [{ key: "order-1", value: "hello from Node.js" }] });
   await producer.disconnect();
@@ -364,6 +416,102 @@ kafka-topics.sh --bootstrap-server "$KAFKA_BOOTSTRAP" --command-config client.pr
 
 The console producer retries only 3 times by default (see above); for more
 than a quick test, raise it with `--command-property retries=2147483647`.
+
+## Exactly once: read, process, write
+
+This Java example reads a topic, processes each message, and writes the
+result to another topic, exactly once: the output and the input's offsets
+commit in one transaction. It takes `TOPIC` to read and `OUTPUT_TOPIC` to
+write, besides the connection details.
+
+### Read, process, write in Java
+
+```java
+import java.io.FileInputStream;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Properties;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
+
+public class ExactlyOnce {
+    public static void main(String[] args) throws Exception {
+        Properties config = new Properties();
+        try (var in = new FileInputStream("client.properties")) {
+            config.load(in);
+        }
+        String input = System.getenv("TOPIC");
+        String output = System.getenv("OUTPUT_TOPIC");
+
+        Properties consumerConfig = new Properties();
+        consumerConfig.putAll(config);
+        consumerConfig.put("group.id", "example-exactly-once");
+        consumerConfig.put("auto.offset.reset", "earliest");
+        // The offsets commit with the transaction, not on their own.
+        consumerConfig.put("enable.auto.commit", "false");
+        // Never what an aborted transaction wrote.
+        consumerConfig.put("isolation.level", "read_committed");
+        consumerConfig.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        consumerConfig.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+
+        Properties producerConfig = new Properties();
+        producerConfig.putAll(config);
+        // One per instance of the application, the same after a restart, so
+        // that a restarted instance fences off its old self.
+        producerConfig.put("transactional.id", "example-exactly-once-1");
+        producerConfig.put("acks", "all");
+        producerConfig.put("enable.idempotence", "true");
+        producerConfig.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        producerConfig.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+
+        try (var consumer = new KafkaConsumer<String, String>(consumerConfig);
+                var producer = new KafkaProducer<String, String>(producerConfig)) {
+            producer.initTransactions();
+            consumer.subscribe(List.of(input));
+            for (int i = 0; i < 30; i++) {
+                var records = consumer.poll(Duration.ofSeconds(1));
+                if (records.isEmpty()) {
+                    continue;
+                }
+                producer.beginTransaction();
+                try {
+                    var offsets = new HashMap<TopicPartition, OffsetAndMetadata>();
+                    for (var record : records) {
+                        // The processing: here, in capitals.
+                        producer.send(new ProducerRecord<>(output, record.key(), record.value().toUpperCase()));
+                        offsets.put(new TopicPartition(record.topic(), record.partition()),
+                                new OffsetAndMetadata(record.offset() + 1));
+                    }
+                    // The input's offsets commit with the output, or neither does.
+                    producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());
+                    producer.commitTransaction();
+                } catch (ProducerFencedException e) {
+                    // A newer instance with the same transactional.id took over.
+                    throw e;
+                } catch (KafkaException e) {
+                    // Neither the output nor the offsets count.
+                    producer.abortTransaction();
+                    throw e;
+                }
+                System.out.println("exactly once: processed " + records.count());
+                return;
+            }
+            throw new IllegalStateException("nothing consumed");
+        }
+    }
+}
+```
+
+Consumers of `OUTPUT_TOPIC` read it with `isolation.level=read_committed`.
+A real application loops for good rather than returning, and after an
+aborted transaction seeks its consumer back to the last committed offsets
+before polling again.
 
 ## If you cannot connect
 

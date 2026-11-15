@@ -3,6 +3,7 @@ package provisioning
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"maps"
 	"net/netip"
 	"os"
@@ -461,5 +462,28 @@ func TestJVMFlags(t *testing.T) {
 	}
 	if got := jvmFlags(nil); got != "" {
 		t.Errorf("jvmFlags(nil) = %q, want none", got)
+	}
+}
+
+// Transactions are as durable as the data they commit: on clusters of
+// three brokers, the transaction log keeps three copies and refuses writes
+// with fewer than two in sync, so a committed transaction survives a lost
+// zone (docs/connecting.md, "Delivery guarantees").
+func TestRenderDurableTransactionLog(t *testing.T) {
+	for profile, want := range map[Profile][2]string{DevProfile: {"1", "1"}, DevHAProfile: {"3", "2"}, ProductionProfile: {"3", "2"}} {
+		objects, err := Render(Spec{CustomerID: "acme", Profile: profile, Platform: KindPlatform})
+		if err != nil {
+			t.Fatal(err)
+		}
+		config, _, err := unstructured.NestedMap(objectOfKind(t, objects, "Kafka").Object, "spec", "kafka", "config")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Numbers decode as floats.
+		replication, minISR := fmt.Sprint(config["transaction.state.log.replication.factor"]), fmt.Sprint(config["transaction.state.log.min.isr"])
+		if replication != want[0] || minISR != want[1] {
+			t.Errorf("%s: the transaction log keeps %s copies with %s in sync, want %s and %s",
+				profile.Name, replication, minISR, want[0], want[1])
+		}
 	}
 }
