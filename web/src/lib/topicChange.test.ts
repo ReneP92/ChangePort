@@ -98,7 +98,7 @@ describe("changeWarnings", () => {
     expect(warnings.every((w) => !w.loss)).toBe(true);
     expect(texts(warnings)).toEqual([
       "Messages with the same key always go to the same partition. With more partitions, a key's new messages may go to another partition than its earlier ones, so for a while consumers may read them out of order.",
-      "Consumers find the new partitions within 5 minutes (metadata.max.age.ms). Those with auto.offset.reset=latest, the Java client's default, skip the messages that reach a new partition before they do.",
+      "Consumers find the new partitions within 5 minutes (`metadata.max.age.ms`). Those with `auto.offset.reset=latest`, the Java client's default, skip the messages that reach a new partition before they do.",
       "Partitions can be added, never removed.",
     ]);
   });

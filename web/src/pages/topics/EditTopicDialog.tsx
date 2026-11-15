@@ -30,6 +30,7 @@ import {
 import { formatRetention } from "@/lib/format";
 import { changeWarnings, compacted } from "@/lib/topicChange";
 import { cn } from "@/lib/utils";
+import { WithCode } from "@/pages/diagnoses/Diagnoses";
 import { Field } from "@/pages/overview/CreateTopicDialog";
 
 /** The retention select's value for a topic kept forever, as it is. */
@@ -241,7 +242,9 @@ export function EditTopicForm({
                   !warning.loss && "text-amber-600 dark:text-amber-500",
                 )}
               />
-              <span className="leading-snug">{warning.text}</span>
+              <span className="leading-snug">
+                <WithCode text={warning.text} />
+              </span>
             </li>
           ))}
         </ul>
@@ -251,7 +254,7 @@ export function EditTopicForm({
       <p aria-live="polite" className="sr-only">
         {warnings
           .filter((warning) => warning.loss)
-          .map((warning) => warning.text)
+          .map((warning) => warning.text.replaceAll("`", ""))
           .join(" ")}
       </p>
 

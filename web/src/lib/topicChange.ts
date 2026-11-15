@@ -3,7 +3,8 @@ import { formatDuration, formatRetention } from "@/lib/format";
 
 /**
  * A warning about what a change to a topic does to the consumers reading it:
- * loss means messages are deleted before a group reads them.
+ * loss means messages are deleted before a group reads them. Settings in the
+ * text are between backticks, as in the diagnoses.
  */
 export interface ChangeWarning {
   loss: boolean;
@@ -70,7 +71,7 @@ export function changeWarnings(
     });
     warnings.push({
       loss: false,
-      text: "Consumers find the new partitions within 5 minutes (metadata.max.age.ms). Those with auto.offset.reset=latest, the Java client's default, skip the messages that reach a new partition before they do.",
+      text: "Consumers find the new partitions within 5 minutes (`metadata.max.age.ms`). Those with `auto.offset.reset=latest`, the Java client's default, skip the messages that reach a new partition before they do.",
     });
     warnings.push({
       loss: false,
