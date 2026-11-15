@@ -36,10 +36,11 @@ button. Operators see the operator console's pages in it instead.
 Changeport's mark at the sidebar's foot opens **Help**, as Linear's does.
 It leads to the getting started guide of the environment shown, to support
 by email when the console has an address for it (`CHANGEPORT_SUPPORT_EMAIL`,
-see the runbook), and to the keyboard shortcuts. As in Linear, G then a page's key goes to it: O the overview, S
-sources, A alerts, E environments and T the team, or for operators C
-customers and R trial requests. Cmd-/ (ctrl-/) lists them. Keys typed into
-a field, or while a dialog or menu is open, are left alone.
+see the runbook), and to the keyboard shortcuts. As in Linear, G then a
+page's key goes to it: O the overview, S sources, A alerts, E environments
+and T the team, or for operators C customers and R trial requests. Cmd-/
+(ctrl-/) lists them. Keys typed into a field, or while a dialog or menu is
+open, are left alone.
 
 ![Keyboard shortcuts](screenshots/55-keyboard-shortcuts-desktop.png)
 
