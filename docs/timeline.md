@@ -12,8 +12,8 @@ restarts, which affect everything, show everywhere.
 | Change | Recorded by | When it shows |
 | --- | --- | --- |
 | A topic created or deleted, in the console or by a client | The Kafka agent, and the console, which names who did it | Within 30 seconds |
-| A topic's configuration changed, such as its retention | The Kafka agent | Within 30 seconds |
-| A topic given more partitions | The Kafka agent | Within 30 seconds |
+| A topic's configuration changed, such as its retention | The Kafka agent, and the console for retention changed there, which names who did it | Within 30 seconds |
+| A topic given more partitions | The Kafka agent, and the console for partitions added there, which names who did it | Within 30 seconds |
 | An ACL added or removed | The Kafka agent | Within 30 seconds |
 | A consumer group rebalanced: members joined, left or rejoined | The Kafka agent | Within 30 seconds |
 | A broker restarted: a rolling update, a certificate renewal, a crash, or its pod replaced | The provisioner | At once |
@@ -61,8 +61,8 @@ For operators:
   was written, dropped and failed.
 - **The console** reads a customer's events for the graph's range, always
   in the signed-in customer's stream, and drops the agent's record of a
-  topic the console created or deleted itself, whose record names who did
-  it.
+  topic the console created, deleted, gave partitions or changed the
+  retention of itself, whose record names who did it.
 
 To read a customer's events directly:
 

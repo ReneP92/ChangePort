@@ -71,9 +71,51 @@ curl -s -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta
 Outside AWS, or if you are unsure, leave `client.rack` unset: consumers then
 read from each partition's leader, which works everywhere.
 
+### Commit offsets after processing
+
+A consumer group remembers how far it got by committing offsets. Commit a
+message's offset only once you have processed it: commit first and crash
+before processing, and the group moves on without it. Kafka clients commit
+by themselves by default (`enable.auto.commit`), every few seconds. The Java
+client commits the offsets of what earlier polls returned, which is safe
+only while you finish each message before polling again, on the same
+thread. librdkafka-based clients (Python, Node.js) and franz-go commit in
+the background what a poll returned, even while you are still processing
+it. The examples below turn automatic commits off and commit after
+processing, which is safe in every client.
+
+Committing after processing means a consumer that crashes in between
+processes those messages again when it restarts, so make processing safe to
+repeat where that matters, for example by writing with the message's key.
+Changeport cannot see when your consumers commit, so this is on you
+([diagnosis.md](diagnosis.md)).
+
+### Use keys for order
+
+Kafka keeps messages in order within a partition, not across a topic.
+Messages with the same key always go to the same partition, so a key's
+messages are read in the order they were written: use the ID of what a
+message is about, such as an order ID, as its key. Messages without a key
+are spread over the partitions, with no order between them.
+
+Adding partitions to a topic sends a key's new messages to another partition
+than its earlier ones, so for a while they may be read out of order; the
+console says so before you add them ([console.md](console.md)). A key with
+few values, such as a country, loads some partitions more than others, which
+the diagnoses flag as a hot partition.
+
+### Keep messages small
+
+Topics accept messages of up to 1 MB (`max.message.bytes`), and producers
+send up to 1 MB at once (`max.request.size`). Keep large payloads, such as
+files or images, in object storage such as S3, and send a message that
+refers to them. The diagnoses flag messages refused for their size, and the
+producers that sent them.
+
 ## Examples
 
-Each example produces a message and consumes it back as a consumer group.
+Each example produces a message, consumes it back as a consumer group, and
+commits its offset once it has processed it.
 They take the connection details from environment variables:
 `KAFKA_BOOTSTRAP`, `KAFKA_USERNAME`, `KAFKA_PASSWORD`, `KAFKA_CLIENT_RACK`
 and `TOPIC`.
@@ -111,6 +153,8 @@ public class Example {
         consumerConfig.putAll(config);
         consumerConfig.put("group.id", "example-java");
         consumerConfig.put("auto.offset.reset", "earliest");
+        // Commit after processing, not on a timer.
+        consumerConfig.put("enable.auto.commit", "false");
         // The availability zone ID your application runs in, such as use1-az1.
         consumerConfig.put("client.rack", System.getenv("KAFKA_CLIENT_RACK"));
         consumerConfig.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
@@ -118,8 +162,13 @@ public class Example {
         try (var consumer = new KafkaConsumer<String, String>(consumerConfig)) {
             consumer.subscribe(List.of(topic));
             for (int i = 0; i < 30; i++) {
-                for (var record : consumer.poll(Duration.ofSeconds(1))) {
+                var records = consumer.poll(Duration.ofSeconds(1));
+                for (var record : records) {
                     System.out.println("java consumed: " + record.value());
+                }
+                if (!records.isEmpty()) {
+                    // Processed: now the group may move past them.
+                    consumer.commitSync();
                     return;
                 }
             }
@@ -161,6 +210,8 @@ consumer = Consumer({
     **config,
     "group.id": "example-python",
     "auto.offset.reset": "earliest",
+    # Commit after processing, not on a timer.
+    "enable.auto.commit": False,
     # The availability zone ID your application runs in, such as use1-az1.
     "client.rack": os.environ["KAFKA_CLIENT_RACK"],
 })
@@ -169,6 +220,8 @@ for _ in range(30):
     message = consumer.poll(1.0)
     if message is not None and message.error() is None:
         print("python consumed:", message.value().decode())
+        # Processed: now the group may move past it.
+        consumer.commit(message=message, asynchronous=False)
         break
 else:
     raise SystemExit("nothing consumed")
@@ -217,6 +270,8 @@ func main() {
 		kgo.ConsumerGroup("example-go"),
 		kgo.ConsumeTopics(topic),
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
+		// Commit after processing, not on a timer.
+		kgo.DisableAutoCommit(),
 		// The availability zone ID your application runs in, such as use1-az1.
 		kgo.Rack(os.Getenv("KAFKA_CLIENT_RACK")),
 	)...)
@@ -228,7 +283,14 @@ func main() {
 	if err := fetches.Err(); err != nil {
 		panic(err)
 	}
-	fmt.Println("go consumed:", string(fetches.Records()[0].Value))
+	records := fetches.Records()
+	for _, record := range records {
+		fmt.Println("go consumed:", string(record.Value))
+	}
+	// Processed: now the group may move past them.
+	if err := consumer.CommitRecords(ctx, records...); err != nil {
+		panic(err)
+	}
 }
 
 ```
@@ -262,6 +324,8 @@ async function main() {
     ...config,
     "group.id": "example-node",
     "auto.offset.reset": "earliest",
+    // Commit after processing, not on a timer.
+    "enable.auto.commit": false,
     // The availability zone ID your application runs in, such as use1-az1.
     "client.rack": process.env.KAFKA_CLIENT_RACK,
   }).consumer();
@@ -270,8 +334,12 @@ async function main() {
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("nothing consumed")), 60000);
     consumer.run({
-      eachMessage: async ({ message }) => {
+      eachMessage: async ({ topic, partition, message }) => {
         console.log("node consumed:", message.value.toString());
+        // Processed: now the group may move past it.
+        await consumer.commitOffsets([
+          { topic, partition, offset: (BigInt(message.offset) + 1n).toString() },
+        ]);
         clearTimeout(timer);
         resolve();
       },

@@ -18,6 +18,7 @@ import (
 	"github.com/ReneP92/changeport/internal/console/api"
 	"github.com/ReneP92/changeport/internal/events"
 	"github.com/ReneP92/changeport/internal/metrics"
+	"github.com/ReneP92/changeport/internal/topics"
 )
 
 // Events reads customers' events for the timeline (docs/timeline.md);
@@ -139,6 +140,55 @@ func (s *Server) recordTopicChange(ctx context.Context, principal Principal, ten
 	s.recorder.Record(events.Event{
 		Time: time.Now(), Tenant: tenant, Kind: kind, Topic: topic, Actor: actor, Message: message, Source: "console",
 	})
+}
+
+// recordTopicAlteration keeps the partitions a user added to a topic and
+// the retention they changed for the timeline, with who did it; the
+// timeline then leaves out the Kafka agent's record of the same change.
+func (s *Server) recordTopicAlteration(ctx context.Context, principal Principal, tenant string, before, after TopicSettings) {
+	if s.recorder == nil {
+		return
+	}
+	actor := s.userNames.name(ctx, principal.UserID)
+	record := func(kind events.Kind, message string) {
+		s.recorder.Record(events.Event{
+			Time: time.Now(), Tenant: tenant, Kind: kind, Topic: before.Name, Actor: actor, Message: message, Source: "console",
+		})
+	}
+	if after.Partitions > before.Partitions {
+		record(events.TopicPartitionsAdded, fmt.Sprintf(
+			"%s took topic %s from %s to %s in the console; new messages spread over all of them, so messages with one key may now go to another partition.",
+			actor, before.Name, plural(before.Partitions, "partition"), plural(after.Partitions, "partition")))
+	}
+	if !equalRetention(before.RetentionMs, after.RetentionMs) {
+		record(events.TopicConfigChanged, fmt.Sprintf("%s changed the retention of topic %s from %s to %s in the console.",
+			actor, before.Name, retentionWords(before.RetentionMs), retentionWords(after.RetentionMs)))
+	}
+}
+
+func equalRetention(a, b *int64) bool {
+	return (a == nil) == (b == nil) && (a == nil || *a == *b)
+}
+
+// retentionWords says a retention as the console offers it: 1 hour, 7 days,
+// or forever.
+func retentionWords(ms *int64) string {
+	if ms == nil {
+		return "forever"
+	}
+	d := time.Duration(*ms) * time.Millisecond
+	for _, preset := range topics.RetentionPresets {
+		if preset.Duration == d {
+			return preset.Label
+		}
+	}
+	if d >= 24*time.Hour && d%(24*time.Hour) == 0 {
+		return plural(int(d/(24*time.Hour)), "day")
+	}
+	if d >= time.Hour && d%time.Hour == 0 {
+		return plural(int(d/time.Hour), "hour")
+	}
+	return d.String()
 }
 
 // timeRange returns the range a request asks for, the step of its charts,

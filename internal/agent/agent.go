@@ -11,6 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,6 +25,8 @@ import (
 const (
 	remoteStorageEnable = "remote.storage.enable"
 	cleanupPolicy       = "cleanup.policy"
+	retentionMs         = "retention.ms"
+	localRetentionMs    = "local.retention.ms"
 )
 
 // kerrUnknownTopic is the error for a topic deleted while the agent works on it.
@@ -76,6 +81,37 @@ func Decide(configs []kadm.Config) State {
 	}
 }
 
+// localRetention returns the local.retention.ms that tiering a topic
+// needs, or "" for the brokers' own: Kafka refuses tiered storage for a
+// topic whose retention is shorter than the day the brokers keep on disk
+// (log.local.retention.ms), so such a topic keeps only its retention
+// locally, as the console sets for the topics it creates
+// (internal/topics). A local retention the topic sets itself is left alone.
+func localRetention(configs []kadm.Config) string {
+	var retention, local *kadm.Config
+	for i := range configs {
+		switch configs[i].Key {
+		case retentionMs:
+			retention = &configs[i]
+		case localRetentionMs:
+			local = &configs[i]
+		}
+	}
+	if retention == nil || local == nil || local.Source == kmsg.ConfigSourceDynamicTopicConfig {
+		return ""
+	}
+	r, err := strconv.ParseInt(value(retention), 10, 64)
+	if err != nil {
+		return ""
+	}
+	l, err := strconv.ParseInt(value(local), 10, 64)
+	// -1 keeps messages for ever, and a local -2 follows the retention.
+	if err != nil || r < 0 || l < 0 || l <= r {
+		return ""
+	}
+	return value(retention)
+}
+
 func value(c *kadm.Config) string {
 	if c.Value == nil {
 		return ""
@@ -127,7 +163,8 @@ func (r *Reconciler) reconcile(ctx context.Context) error {
 		return fmt.Errorf("describe topic configs: %w", err)
 	}
 	counts := map[State]int{}
-	var enable []string
+	// The topics to tier, by the local retention they need with it.
+	enable := map[string][]string{}
 	var errs []error
 	for _, rc := range configs {
 		if rc.Err != nil {
@@ -139,16 +176,21 @@ func (r *Reconciler) reconcile(ctx context.Context) error {
 		}
 		state := Decide(rc.Configs)
 		if state == Enable {
-			enable = append(enable, rc.Name)
+			local := localRetention(rc.Configs)
+			enable[local] = append(enable[local], rc.Name)
 			continue
 		}
 		counts[state]++
 	}
-	if len(enable) > 0 {
+	for _, local := range slices.Sorted(maps.Keys(enable)) {
 		set := []kadm.AlterConfig{{Op: kadm.SetConfig, Name: remoteStorageEnable, Value: kadm.StringPtr("true")}}
-		responses, err := r.Admin.AlterTopicConfigs(ctx, set, enable...)
+		if local != "" {
+			set = append(set, kadm.AlterConfig{Op: kadm.SetConfig, Name: localRetentionMs, Value: kadm.StringPtr(local)})
+		}
+		responses, err := r.Admin.AlterTopicConfigs(ctx, set, enable[local]...)
 		if err != nil {
-			return errors.Join(append(errs, fmt.Errorf("alter topic configs: %w", err))...)
+			errs = append(errs, fmt.Errorf("alter topic configs: %w", err))
+			continue
 		}
 		for _, response := range responses {
 			if response.Err != nil {

@@ -141,3 +141,108 @@ func TestReplicaBudgetCountsReplication(t *testing.T) {
 		t.Error("Check() past the budget succeeded")
 	}
 }
+
+func TestCheckChange(t *testing.T) {
+	week := int64(7 * 24 * time.Hour / time.Millisecond)
+	weekly := Current{Partitions: 3, RetentionMs: &week}
+	partitions := func(n int) *int { return &n }
+	retention := func(d time.Duration) *time.Duration { return &d }
+	tests := []struct {
+		name    string
+		current Current
+		change  Change
+		want    Alteration
+	}{
+		{"more partitions", weekly, Change{Partitions: partitions(6)}, Alteration{Partitions: 6}},
+		{"the same partitions", weekly, Change{Partitions: partitions(3)}, Alteration{}},
+		{"the same retention", weekly, Change{Retention: retention(7 * 24 * time.Hour)}, Alteration{}},
+		{
+			"a shorter retention than the brokers' day keeps tiering valid", weekly,
+			Change{Retention: retention(time.Hour)},
+			Alteration{Set: map[string]string{"retention.ms": "3600000", "local.retention.ms": "3600000"}},
+		},
+		{
+			"a day or more leaves the brokers' default",
+			Current{Partitions: 3},
+			Change{Retention: retention(3 * 24 * time.Hour)},
+			Alteration{Set: map[string]string{"retention.ms": "259200000"}, Remove: []string{"local.retention.ms"}},
+		},
+		{
+			// The agent tiers it within 30 seconds.
+			"a topic not tiered yet",
+			Current{Partitions: 3, RetentionMs: &week},
+			Change{Retention: retention(time.Hour)},
+			Alteration{Set: map[string]string{"retention.ms": "3600000", "local.retention.ms": "3600000"}},
+		},
+		{
+			"both", weekly,
+			Change{Partitions: partitions(4), Retention: retention(14 * 24 * time.Hour)},
+			Alteration{Partitions: 4, Set: map[string]string{"retention.ms": "1209600000"}, Remove: []string{"local.retention.ms"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := devPolicy(t).CheckChange(tt.current, tt.change, quiet)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Partitions != tt.want.Partitions || !maps.Equal(got.Set, tt.want.Set) || !slices.Equal(got.Remove, tt.want.Remove) {
+				t.Errorf("CheckChange() = %+v, want %+v", got, tt.want)
+			}
+			if got.Empty() != tt.want.Empty() {
+				t.Errorf("Empty() = %v, want %v", got.Empty(), tt.want.Empty())
+			}
+		})
+	}
+}
+
+func TestCheckChangeRefuses(t *testing.T) {
+	week := int64(7 * 24 * time.Hour / time.Millisecond)
+	weekly := Current{Partitions: 3, RetentionMs: &week}
+	partitions := func(n int) *int { return &n }
+	retention := func(d time.Duration) *time.Duration { return &d }
+	tests := []struct {
+		name    string
+		current Current
+		change  Change
+		cluster Cluster
+		field   string
+		message string
+	}{
+		{"fewer partitions", weekly, Change{Partitions: partitions(2)}, quiet, "partitions", "not removed: keep at least 3"},
+		{"too many partitions", weekly, Change{Partitions: partitions(13)}, quiet, "partitions", "at most 12"},
+		{"beyond the replica budget", weekly, Change{Partitions: partitions(12)}, Cluster{Replicas: 995, Brokers: 1}, "partitions", "9 more partitions would exceed"},
+		{"a retention not offered", weekly, Change{Retention: retention(2 * time.Hour)}, quiet, "retention", "presets"},
+		{"the retention of a compacted topic", Current{Partitions: 3, Compacted: true}, Change{Retention: retention(time.Hour)}, quiet, "retention", "compacted"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := devPolicy(t).CheckChange(tt.current, tt.change, tt.cluster)
+			var fieldErr *FieldError
+			if !errors.As(err, &fieldErr) || !errors.Is(err, ErrInvalid) || fieldErr.Field != tt.field || !strings.Contains(fieldErr.Message, tt.message) {
+				t.Errorf("CheckChange() = %v, want a %s error saying %q", err, tt.field, tt.message)
+			}
+		})
+	}
+}
+
+// A topic created outside the console with more copies than the profile's
+// counts its own toward the replica budget.
+func TestCheckChangeCountsTheTopicsOwnReplicas(t *testing.T) {
+	more := 9
+	current := Current{Partitions: 3, ReplicationFactor: 3}
+	if _, err := devPolicy(t).CheckChange(current, Change{Partitions: &more}, Cluster{Replicas: 985, Brokers: 1}); err == nil {
+		t.Error("CheckChange() = nil, want the 18 more replicas to exceed the budget")
+	}
+	if _, err := devPolicy(t).CheckChange(Current{Partitions: 3}, Change{Partitions: &more}, Cluster{Replicas: 985, Brokers: 1}); err != nil {
+		t.Errorf("CheckChange() = %v, want 6 more replicas to fit", err)
+	}
+}
+
+func TestRetention(t *testing.T) {
+	for ms, want := range map[int64]bool{3600000: true, 0: false, -1: false, 288230376155311744: false} {
+		if d, ok := Retention(ms); ok != want || (ok && d.Milliseconds() != ms) {
+			t.Errorf("Retention(%d) = %v, %v, want ok %v", ms, d, ok, want)
+		}
+	}
+}

@@ -11,6 +11,7 @@ export type Topic = components["schemas"]["Topic"];
 export type Throughput = components["schemas"]["Throughput"];
 export type TopicPolicy = components["schemas"]["TopicPolicy"];
 export type NewTopic = components["schemas"]["NewTopic"];
+export type TopicChange = components["schemas"]["TopicChange"];
 export type NewCustomer = components["schemas"]["NewCustomer"];
 export type NewEnvironment = components["schemas"]["NewEnvironment"];
 export type ConsumerGroupLag = components["schemas"]["ConsumerGroupLag"];

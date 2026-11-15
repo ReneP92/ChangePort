@@ -121,8 +121,9 @@ over the last 5 minutes. Edges grow with the bytes per second along them,
 and their dashes flow while data moves. Each group says how many members it
 has and how far behind it is: amber once it is a minute behind, red while
 an alert is about it, as `search-indexer` is here. Topics and groups that
-need attention carry a mark, whose reasons show on pointing at them. Pointing at a node picks
-out its edges, and topics and groups lead to their pages.
+need attention carry a mark, whose reasons show on pointing at them.
+Pointing at a node picks out its edges, and topics and groups lead to their
+pages.
 
 Producers show once they report their own metrics (KIP-714), as clients of
 Kafka 3.7 and newer, and of librdkafka 2.5 and newer, do; what the brokers
@@ -145,6 +146,37 @@ reconfigured, rebalances, broker restarts, throttling (see
 ![A topic](screenshots/17-topic-desktop.png)
 
 ![A consumer group](screenshots/18-consumer-group-desktop.png)
+
+### Changing a topic
+
+Admins add partitions to a topic, or change how long it keeps messages,
+from **Edit** on its settings, within the same guardrails as creating one:
+up to the profile's partitions and the cluster's replica budget, and the
+retention presets. Partitions can be added, never removed, as Kafka cannot
+take them away; a compacted topic has no retention to change, and a
+Postgres source's topics keep the settings their source gives them.
+
+Before anything is saved, the dialog says what the change does to the
+consumers reading the topic:
+
+- **A shorter retention** deletes older messages for good, a log segment at
+  a time: within minutes on a busy topic, and on a quiet one once its
+  current segment closes, after up to 7 days. A consumer group further
+  behind than the new retention loses the messages it has not read yet, and
+  the save button says so; one at least half as far behind is warned it
+  would be close. While the groups' lag is not known, the dialog counts that
+  as a possible loss.
+- **More partitions** send a key's new messages to another partition than
+  its earlier ones, so for a while consumers may read them out of order.
+  Consumers find new partitions within 5 minutes, and those with
+  `auto.offset.reset=latest` skip what reaches them before they do.
+
+Every change is audited (`topic changed`, with the partitions and retention
+before and after), and shows on the topic's timeline with who made it. Here
+Ada is about to double the partitions of `payments` and keep its messages
+for 7 days rather than 30.
+
+![Changing a topic](screenshots/57-edit-topic-desktop.png)
 
 ### A topic's messages
 

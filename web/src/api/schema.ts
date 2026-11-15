@@ -137,7 +137,8 @@ export interface paths {
         delete: operations["deleteTopic"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Adds partitions to a topic or changes its retention, within the guardrails, for organization admins */
+        patch: operations["changeTopic"];
         trace?: never;
     };
     "/api/customer/topics/{topic}/consumer-groups": {
@@ -1269,6 +1270,16 @@ export interface components {
             /** @description Whether topics of this policy offload history to tiered storage */
             tiered: boolean;
         };
+        /** @description What to change of a topic; absent fields stay as they are */
+        TopicChange: {
+            /** @description The partitions the topic has after the change, at least as many as now */
+            partitions?: number;
+            /**
+             * Format: int64
+             * @description One of the retention presets; compacted topics have none
+             */
+            retentionMs?: number;
+        };
         NewTopic: {
             name: string;
             partitions: number;
@@ -1936,6 +1947,39 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["NotReady"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    changeTopic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The topic's name */
+                topic: components["parameters"]["TopicName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TopicChange"];
+            };
+        };
+        responses: {
+            /** @description The topic as changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Topic"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["NotConfigured"];
         };
     };

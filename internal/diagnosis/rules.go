@@ -2,6 +2,7 @@ package diagnosis
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -258,30 +259,136 @@ func hotPartition(s Snapshot) []Finding {
 	return found
 }
 
+// partitionsAdded notes topics that got partitions in the last day while
+// consumer groups read them: a key's new messages may go to another
+// partition than its earlier ones, so the order of a key's messages may
+// have broken for a while.
+func partitionsAdded(s Snapshot) []Finding {
+	read := map[string]bool{}
+	for _, g := range s.Groups {
+		for _, r := range g.Reads {
+			read[r.Topic] = true
+		}
+	}
+	var found []Finding
+	for _, t := range s.Topics {
+		if !t.PartitionsAdded || !read[t.Name] {
+			continue
+		}
+		found = append(found, Finding{
+			Severity: Info,
+			Subject:  Subject{Topic: t.Name},
+			Title:    t.Name + " got more partitions",
+			Explanation: fmt.Sprintf(
+				"%s got partitions in the last day, and has %s now. Messages with the same key always go to the same partition, so since then a key's new messages may go to another partition than its earlier ones, and its consumers may have read them out of order.",
+				t.Name, plural(t.Partitions, "partition")),
+			Suggestion: fmt.Sprintf(
+				"Nothing to do where the order of a key's messages does not matter. Where it does, check what the consumers of %s made of the messages around the change. Consumers find new partitions within 5 minutes (`metadata.max.age.ms`), and those with `auto.offset.reset=latest`, the Java client's default, skip what reached a new partition before they did.",
+				t.Name),
+		})
+	}
+	return found
+}
+
+// oversizedMessages finds topics that refuse messages larger than they
+// accept, and the producers that sent them, as far as they report it.
+func oversizedMessages(s Snapshot) []Finding {
+	var found []Finding
+	for _, t := range s.Topics {
+		if t.BytesRejected <= 0 {
+			continue
+		}
+		var from []string
+		for _, p := range s.Producers {
+			if p.TopicErrorsPerSecond[t.Name] > 0 {
+				from = append(from, p.ClientID)
+			}
+		}
+		limit := "the most it accepts"
+		if t.MaxMessageBytes > 0 {
+			limit = bytes(float64(t.MaxMessageBytes)) + ", the most it accepts"
+		}
+		by := ""
+		if len(from) > 0 {
+			by = fmt.Sprintf(" They came from %s.", list(from))
+		}
+		found = append(found, Finding{
+			Severity: Warning,
+			Subject:  Subject{Topic: t.Name},
+			Title:    t.Name + " refuses messages too large for it",
+			Explanation: fmt.Sprintf(
+				"Over the last %s, %s refused %s sent in batches larger than %s (`max.message.bytes`).%s A message that large on its own is not kept: unless its producer handles the error, it is lost. Java producers split batches of smaller messages and send them again.",
+				duration(s.Window.Seconds()), t.Name, bytes(t.BytesRejected), limit, by),
+			Suggestion: fmt.Sprintf(
+				"Keep large payloads, such as files or images, in object storage such as S3, and send a message that refers to them. If messages are this large by nature, compress them in the producer (`compression.type=zstd`), or raise the `max.message.bytes` of %s; the producer's `max.request.size` must then allow them too.",
+				t.Name),
+		})
+	}
+	return found
+}
+
 // producerErrors finds producers whose records fail, or need sending again.
-// A record that fails before it is sent, such as one too large or for a
-// topic that does not exist, counts as an error but not as a send, so the
-// share is of what the producer tried to send.
+// A record that fails before it is sent, such as one larger than the
+// producer's max.request.size or for a topic that does not exist, counts as
+// an error but not as a send, so the share is of what the producer tried to
+// send. Records that failed on a topic that refused messages as too large
+// are oversizedMessages'.
 func producerErrors(s Snapshot) []Finding {
+	oversized := map[string]bool{}
+	for _, t := range s.Topics {
+		oversized[t.Name] = t.BytesRejected > 0
+	}
 	var found []Finding
 	for _, p := range s.Producers {
 		tried := p.SendsPerSecond + p.ErrorsPerSecond
 		if tried < quietProducer {
 			continue
 		}
+		refused, tooLarge := 0.0, 0.0
+		var refusedOn []string
+		for _, topic := range slices.Sorted(maps.Keys(p.TopicErrorsPerSecond)) {
+			errors := p.TopicErrorsPerSecond[topic]
+			if errors <= 0 {
+				continue
+			}
+			refused += errors
+			if oversized[topic] {
+				tooLarge += errors
+			} else {
+				refusedOn = append(refusedOn, topic)
+			}
+		}
+		errors := max(0, p.ErrorsPerSecond-tooLarge)
+		before := max(0, p.ErrorsPerSecond-refused)
 		subject := Subject{ClientID: p.ClientID, Principal: p.Principal}
-		switch failed, retried := min(1, p.ErrorsPerSecond/tried), p.RetriesPerSecond/tried; {
-		case failed >= errorShare:
+		switch failed, retried := min(1, errors/tried), p.RetriesPerSecond/tried; {
+		case failed >= errorShare && before >= errors/2:
 			found = append(found, Finding{
 				Severity: Warning,
 				Subject:  subject,
-				Title:    fmt.Sprintf("Records from %s fail", p.ClientID),
+				Title:    fmt.Sprintf("Records from %s fail before reaching Kafka", p.ClientID),
 				Explanation: fmt.Sprintf(
-					"%s of the records %s tried to send in the last %s failed: %s a second of %s.",
-					percent(failed), p.ClientID, duration(s.Window.Seconds()), rate(p.ErrorsPerSecond), rate(tried)),
+					"%s of the records %s tried to send in the last %s failed in the producer itself, before reaching Kafka: %s a second of %s.",
+					percent(failed), p.ClientID, duration(s.Window.Seconds()), rate(errors), rate(tried)),
 				Suggestion: fmt.Sprintf(
-					"The log of %s says why. The usual causes are records larger than `max.request.size` or the topic's `max.message.bytes`, a topic that does not exist (topics are not created on first use), or %s lacking permission to write to it.",
+					"The log of %s says why. The usual causes are records larger than the producer's `max.request.size` (1 MB by default), a topic that does not exist (topics are not created on first use), or %s lacking permission to write to it. Large payloads belong in object storage, with a message that refers to them.",
 					p.ClientID, p.Principal),
+			})
+		case failed >= errorShare:
+			to := "Kafka"
+			if len(refusedOn) > 0 {
+				to = list(refusedOn)
+			}
+			found = append(found, Finding{
+				Severity: Warning,
+				Subject:  subject,
+				Title:    "Records from " + p.ClientID + " fail to be delivered",
+				Explanation: fmt.Sprintf(
+					"%s of the records %s tried to send in the last %s failed on their way to %s, or were refused there: %s a second of %s.",
+					percent(failed), p.ClientID, duration(s.Window.Seconds()), to, rate(errors), rate(tried)),
+				Suggestion: fmt.Sprintf(
+					"The log of %s says why. The usual causes are brokers it cannot reach within `delivery.timeout.ms`, too few in-sync replicas for `acks=all` while a broker is down, records without a key sent to a compacted topic, and messages larger than the topic's `max.message.bytes`.",
+					p.ClientID),
 			})
 		case retried >= retryShare:
 			found = append(found, Finding{

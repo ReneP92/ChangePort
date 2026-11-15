@@ -144,6 +144,36 @@ paths:
         "503":
           $ref: "#/components/responses/NotConfigured"
   /api/customer/topics/{topic}:
+    patch:
+      operationId: changeTopic
+      summary: Adds partitions to a topic or changes its retention, within the guardrails, for organization admins
+      parameters:
+        - $ref: "#/components/parameters/TopicName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TopicChange"
+      responses:
+        "200":
+          description: The topic as changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topic"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
     delete:
       operationId: deleteTopic
       summary: Deletes a topic and its messages, for organization admins
@@ -2312,6 +2342,17 @@ components:
         tiered:
           type: boolean
           description: Whether topics of this policy offload history to tiered storage
+    TopicChange:
+      type: object
+      description: What to change of a topic; absent fields stay as they are
+      properties:
+        partitions:
+          type: integer
+          description: The partitions the topic has after the change, at least as many as now
+        retentionMs:
+          type: integer
+          format: int64
+          description: One of the retention presets; compacted topics have none
     NewTopic:
       type: object
       required: [name, partitions, retentionMs, cleanupPolicy]

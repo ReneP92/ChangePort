@@ -60,6 +60,12 @@ run() {
     die "the guide's $language example failed:"$'\n'"$output"
   fi
   grep -q "consumed: hello from" <<<"$output" || die "the guide's $language example consumed nothing:"$'\n'"$output"
+  # It committed what it processed, by itself rather than on a timer: its
+  # group's offset is past the one message.
+  output=$(docker run "${KAFKA_CLIENT[@]}" --entrypoint /opt/kafka/bin/kafka-consumer-groups.sh "$KAFKA_IMAGE" \
+    --bootstrap-server "$bootstrap" --command-config /config/client.properties --describe --group "example-$language" 2>&1)
+  awk -v topic="$topic" '$2 == topic && $4 == 1 && $6 == 0 { found = 1 } END { exit !found }' <<<"$output" ||
+    die "the guide's $language example committed no offset after processing:"$'\n'"$output"
 }
 
 mkdir -p "$work/java" "$work/python" "$work/go" "$work/node"
@@ -93,6 +99,13 @@ run go "$GO_IMAGE" "go mod init example 2>/dev/null && go get github.com/twmb/fr
 
 example "### Node.js" js | sed 's|^  "sasl.password": process.env.KAFKA_PASSWORD,|&\n  "ssl.ca.location": "/config/ca.crt",|' >"$work/node/example.js"
 run node "$NODE_IMAGE" "npm install --loglevel=error --no-audit --no-fund @confluentinc/kafka-javascript@$CONFLUENT_KAFKA_JAVASCRIPT >/dev/null && node example.js"
+
+# They committed by themselves rather than on a timer: consumers that commit
+# on a timer also commit when they close, so the offsets alone cannot tell.
+for language in java python go node; do
+  grep -Eq 'enable\.auto\.commit"[,:] *("false"|false|False)|kgo\.DisableAutoCommit\(\)' "$work/$language"/* ||
+    die "the guide's $language example leaves automatic commits on"
+done
 
 # The examples leave a topic and a consumer group each behind.
 for language in java python go node; do

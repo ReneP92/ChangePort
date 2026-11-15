@@ -25,6 +25,7 @@ import {
   type Team,
   type TeamRole,
   type ThroughputRange,
+  type TopicChange,
   type TrialApproval,
   type TrialChange,
 } from "@/api/client";
@@ -473,6 +474,22 @@ export function useCreateTopic() {
   return useMutation({
     mutationFn: async (topic: NewTopic) =>
       unwrap(await api.POST("/api/customer/topics", { body: topic })),
+    onSuccess: () => queries.invalidateQueries({ queryKey: ["customer", "topics"] }),
+  });
+}
+
+/** Adds partitions to a topic or changes its retention, then refreshes the topics. */
+export function useChangeTopic() {
+  const api = useApi();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ topic, change }: { topic: string; change: TopicChange }) =>
+      unwrap(
+        await api.PATCH("/api/customer/topics/{topic}", {
+          params: { path: { topic } },
+          body: change,
+        }),
+      ),
     onSuccess: () => queries.invalidateQueries({ queryKey: ["customer", "topics"] }),
   });
 }

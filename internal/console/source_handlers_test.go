@@ -697,6 +697,9 @@ func TestSourcesTopicsStayTheirs(t *testing.T) {
 	if status, body := send(t, f.handler, http.MethodDelete, "/api/customer/topics/app.public.orders", admin, ""); status != 409 || !strings.Contains(body, "Postgres source app writes") {
 		t.Errorf("deleting a source's topic = %d %s, want 409", status, body)
 	}
+	if status, body := send(t, f.handler, http.MethodPatch, "/api/customer/topics/app.public.orders", admin, `{"partitions":6}`); status != 409 || !strings.Contains(body, "Postgres source app writes topic app.public.orders, and keeps its settings") {
+		t.Errorf("changing a source's topic = %d %s, want 409", status, body)
+	}
 	if status, body := send(t, f.handler, http.MethodPost, "/api/customer/topics", admin,
 		`{"name":"app.public.items","partitions":1,"retentionMs":3600000,"cleanupPolicy":"delete"}`); status != 400 || !strings.Contains(body, "belong to the Postgres source app") {
 		t.Errorf("creating a topic under a source's prefix = %d %s, want 400", status, body)
