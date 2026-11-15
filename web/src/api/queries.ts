@@ -451,6 +451,25 @@ export function useTopicPolicy() {
   });
 }
 
+/**
+ * The idempotent and transactional producers that write a topic, as Kafka
+ * knows them, and the messages open transactions hold back.
+ */
+export function useTopicProducers(topic: string) {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["customer", "topic-producers", topic, organization],
+    queryFn: async () =>
+      unwrap(
+        await api.GET("/api/customer/topics/{topic}/producers", {
+          params: { path: { topic } },
+        }),
+      ),
+    refetchInterval: 15_000,
+  });
+}
+
 /** The consumer groups that read a topic, while enabled. */
 export function useTopicConsumerGroups(topic: string, enabled: boolean) {
   const api = useApi();

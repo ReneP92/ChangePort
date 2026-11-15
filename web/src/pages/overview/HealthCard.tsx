@@ -1,7 +1,9 @@
-import type { Health } from "@/api/client";
+import type { Health, TransactionsSummary } from "@/api/client";
 import { useHealth } from "@/api/queries";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDuration } from "@/lib/format";
+import { useNow } from "@/lib/useNow";
 import { cn } from "@/lib/utils";
 
 /** A count that is healthy at want, with what it means. */
@@ -33,6 +35,7 @@ function Stat({
 /** The brokers, and whether every partition is in sync and led. */
 export function HealthCard() {
   const health = useHealth();
+  const now = useNow();
   return (
     <Card>
       <CardHeader>
@@ -85,10 +88,42 @@ export function HealthCard() {
                 </li>
               ))}
             </ul>
+            {health.data.transactions && (
+              <Transactions summary={health.data.transactions} now={now} />
+            )}
           </>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * The transactions open now, and how long the oldest has been: one open for
+ * a minute or more holds back read_committed consumers (docs/diagnosis.md).
+ */
+export function Transactions({ summary, now }: { summary: TransactionsSummary; now: number }) {
+  const oldest =
+    summary.oldestStartedAt === undefined
+      ? undefined
+      : Math.max(0, (now - Date.parse(summary.oldestStartedAt)) / 1000);
+  return (
+    <p className="text-muted-foreground">
+      <span className="font-medium text-foreground">Transactions:</span>{" "}
+      {summary.open === 0 ? (
+        "none open"
+      ) : (
+        <span
+          className={cn(
+            oldest !== undefined && oldest >= 60 && "text-amber-700 dark:text-amber-500",
+          )}
+        >
+          {summary.open} open
+          {oldest !== undefined &&
+            `, ${summary.open === 1 ? "" : "the oldest "}for ${formatDuration(oldest)}`}
+        </span>
+      )}
+    </p>
   );
 }
 

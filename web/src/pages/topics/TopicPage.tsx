@@ -20,13 +20,14 @@ import { SubjectHealth } from "@/pages/diagnoses/SubjectHealth";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { ThroughputCard } from "@/pages/overview/ThroughputCard";
 import { EditTopicDialog } from "@/pages/topics/EditTopicDialog";
+import { ProducersCard } from "@/pages/topics/ProducersCard";
 import { TailCard } from "@/pages/topics/TailCard";
 import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
  * One topic: its settings, which admins change, its traffic with what
- * changed meanwhile, the consumer groups reading it, and for admins its
- * messages.
+ * changed meanwhile, the producers writing it and the consumer groups
+ * reading it, and for admins its messages.
  */
 export function TopicPage() {
   const { name = "" } = useParams();
@@ -125,6 +126,7 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
         </CardContent>
       </Card>
       <ThroughputCard topic={topic.name} />
+      <ProducersCard topic={topic.name} />
       <ReadersCard topic={topic.name} />
       <TailCard topic={topic.name} admin={admin} />
     </Page>
