@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { alertsAbout } from "@/lib/alerts";
 import { formatBytes, formatLag, formatRate, formatRetention } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { HealthBadge } from "@/components/HealthBadge";
 import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
-import { DiagnosesAbout } from "@/pages/diagnoses/Diagnoses";
+import { SubjectHealth } from "@/pages/diagnoses/SubjectHealth";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { ThroughputCard } from "@/pages/overview/ThroughputCard";
 import { TailCard } from "@/pages/topics/TailCard";
@@ -69,6 +70,7 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
       badge={
         <>
           <AlertBadge alerts={alertsAbout(alerts.data, { topic: name })} />
+          <HealthBadge health={topic.health} />
           {topic.source && (
             <Badge variant="outline" asChild>
               <Link to={envPath(`/sources/${topic.source}`)}>Source {topic.source}</Link>
@@ -85,7 +87,7 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
           <AlertRows alerts={topicAlerts} />
         </section>
       )}
-      <DiagnosesAbout topic={name} />
+      <SubjectHealth topic={name} health={topic.health} />
       <Card>
         <CardHeader>
           <CardTitle>

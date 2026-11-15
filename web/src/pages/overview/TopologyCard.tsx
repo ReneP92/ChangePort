@@ -2,9 +2,8 @@ import { CircleAlert, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import type { Diagnosis } from "@/api/client";
-import { useAlerts, useTopology } from "@/api/queries";
+import { useAlerts, useDiagnoses, useTopology } from "@/api/queries";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useDiagnosesBySubject } from "@/lib/diagnoses";
 import { formatDuration, formatRate } from "@/lib/format";
 import {
   groupID,
@@ -56,17 +55,21 @@ export function TopologyCard() {
       alert.consumerGroup === undefined ? [] : [groupID(alert.consumerGroup)],
     ),
   );
-  // What needs attention about each topic and group, but notes.
-  const subjects = useDiagnosesBySubject();
-  const diagnosed = (node: MapNode): Diagnosis[] =>
-    (
-      (node.kind === "topic"
-        ? subjects.topics
+  // The diagnoses behind each topic's and group's health, unless healthy.
+  const diagnoses = useDiagnoses();
+  const byID = new Map((diagnoses.data?.diagnoses ?? []).map((d) => [d.id, d]));
+  const diagnosed = (node: MapNode): Diagnosis[] => {
+    const health =
+      node.kind === "topic"
+        ? topology.data?.topics.find((t) => t.name === node.label)?.health
         : node.kind === "group"
-          ? subjects.groups
-          : undefined
-      )?.get(node.label) ?? []
-    ).filter((diagnosis) => diagnosis.severity !== "info");
+          ? topology.data?.groups.find((g) => g.name === node.label)?.health
+          : undefined;
+    if (!health || health.level === "healthy") {
+      return [];
+    }
+    return health.diagnoses.flatMap((id) => byID.get(id) ?? []);
+  };
   return (
     // The getting started guide links here.
     <Card id="data-flow" className="scroll-mt-6">

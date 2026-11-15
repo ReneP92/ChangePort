@@ -143,34 +143,3 @@ export function DiagnosesCard() {
     </Card>
   );
 }
-
-/** The diagnoses about one topic or consumer group; nothing without. */
-export function DiagnosesAbout({
-  topic,
-  consumerGroup,
-}: {
-  topic?: string;
-  consumerGroup?: string;
-}) {
-  const diagnoses = useDiagnoses();
-  const about = (diagnoses.data?.diagnoses ?? []).filter((diagnosis) =>
-    consumerGroup !== undefined
-      ? diagnosis.consumerGroup === consumerGroup
-      : diagnosis.topic === topic,
-  );
-  if (about.length === 0) {
-    return null;
-  }
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
-          <h2>What needs attention</h2>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm">
-        <DiagnosisRows diagnoses={about} links={false} />
-      </CardContent>
-    </Card>
-  );
-}

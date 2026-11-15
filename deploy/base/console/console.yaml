@@ -111,6 +111,11 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            # The health levels (internal/console/health.go), which
+            # VictoriaMetrics scrapes; the Service leaves this port out, so
+            # it stays inside the cluster.
+            - name: metrics
+              containerPort: 9090
           livenessProbe:
             httpGet:
               path: /healthz

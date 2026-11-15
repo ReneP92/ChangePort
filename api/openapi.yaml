@@ -1068,6 +1068,36 @@ paths:
           $ref: "#/components/responses/NotReady"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/customer/health-history:
+    get:
+      operationId: getHealthHistory
+      summary: How healthy a topic or a consumer group was over the last 24 hours, in 15-minute steps
+      parameters:
+        - name: topic
+          in: query
+          schema:
+            type: string
+        - name: consumerGroup
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The levels over the last 24 hours
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthHistory"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/customer/events:
     get:
       operationId: listEvents
@@ -1665,6 +1695,8 @@ components:
       type: object
       required: [name, partitions, replicationFactor, tiered, cleanupPolicy]
       properties:
+        health:
+          $ref: "#/components/schemas/HealthStatus"
         name:
           type: string
         partitions:
@@ -2317,6 +2349,8 @@ components:
         it every 30 seconds without reading any message.
       required: [group, topic, lagSeconds, lagMessages, capped, history]
       properties:
+        health:
+          $ref: "#/components/schemas/HealthStatus"
         group:
           type: string
         topic:
@@ -2357,6 +2391,47 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Point"
+    HealthStatus:
+      type: object
+      description: >-
+        How healthy a topic or consumer group is, from the diagnoses about it (docs/diagnosis.md):
+        healthy without warnings, needing attention with some, at risk with anything critical. A
+        diagnosis about a group reading a topic is the group's. Left out while the diagnoses are
+        not known.
+      required: [level, diagnoses]
+      properties:
+        level:
+          $ref: "#/components/schemas/HealthLevel"
+        diagnoses:
+          type: array
+          description: The IDs of the diagnoses that set the level
+          items:
+            type: string
+    HealthLevel:
+      type: string
+      enum: [healthy, needsAttention, atRisk]
+    HealthHistory:
+      type: object
+      description: A topic's or consumer group's level over the last 24 hours, the worst of each step.
+      required: [stepSeconds, points]
+      properties:
+        stepSeconds:
+          type: integer
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/HealthPoint"
+    HealthPoint:
+      type: object
+      description: The level of a step, left out where the console did not look, such as while it was down
+      required: [time]
+      properties:
+        time:
+          type: string
+          format: date-time
+          description: The end of the step
+        level:
+          $ref: "#/components/schemas/HealthLevel"
     DiagnosisList:
       type: object
       required: [diagnoses, windowSeconds]
@@ -2441,6 +2516,8 @@ components:
       type: object
       required: [name, bytesInPerSecond, bytesOutPerSecond, unreportedBytesInPerSecond]
       properties:
+        health:
+          $ref: "#/components/schemas/HealthStatus"
         name:
           type: string
         bytesInPerSecond:
@@ -2459,6 +2536,8 @@ components:
       type: object
       required: [name, members]
       properties:
+        health:
+          $ref: "#/components/schemas/HealthStatus"
         name:
           type: string
         members:

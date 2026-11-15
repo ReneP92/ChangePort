@@ -65,7 +65,15 @@ func (s *Server) GetTopology(ctx context.Context, _ api.GetTopologyRequestObject
 			return nil, err
 		}
 	}
-	return api.GetTopology200JSONResponse(buildTopology(settings, groups, sources, values)), nil
+	topology := buildTopology(settings, groups, sources, values)
+	health := s.healthLevels(ctx, customer.Name)
+	for i := range topology.Topics {
+		topology.Topics[i].Health = health.topic(topology.Topics[i].Name)
+	}
+	for i := range topology.Groups {
+		topology.Groups[i].Health = health.group(topology.Groups[i].Name)
+	}
+	return api.GetTopology200JSONResponse(topology), nil
 }
 
 // value is a series' one value.

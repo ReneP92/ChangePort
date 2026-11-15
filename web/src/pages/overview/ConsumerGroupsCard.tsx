@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import type { Alert, ConsumerGroupLag } from "@/api/client";
 import { useAlerts, useConsumerGroups } from "@/api/queries";
+import { HealthBadge, HealthHeader } from "@/components/HealthBadge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkline } from "@/components/Sparkline";
 import { formatDuration, formatLag } from "@/lib/format";
+import { worstFirst } from "@/lib/health";
 import { cn } from "@/lib/utils";
 import { alertsAbout } from "@/lib/alerts";
 import { AlertBadge } from "@/pages/alerts/ActiveAlerts";
@@ -15,6 +18,10 @@ const hour = 60 * 60 * 1000;
 export function ConsumerGroupsCard() {
   const groups = useConsumerGroups();
   const alerts = useAlerts();
+  const [byHealth, setByHealth] = useState(false);
+  const rows = byHealth
+    ? [...(groups.data ?? [])].sort((a, b) => worstFirst(a.health?.level, b.health?.level))
+    : (groups.data ?? []);
   // Every sparkline spans the same hour, up to the newest point, so that
   // they line up. Without any points, no sparkline is drawn.
   const end = Math.max(
@@ -48,6 +55,12 @@ export function ConsumerGroupsCard() {
               <thead className="border-b text-muted-foreground">
                 <tr>
                   <th className="py-2 font-medium">Group</th>
+                  <HealthHeader
+                    sorted={byHealth}
+                    onToggle={() => {
+                      setByHealth(!byHealth);
+                    }}
+                  />
                   <th className="py-2 font-medium">Topic</th>
                   <th className="py-2 font-medium">Lag</th>
                   <th className="py-2 text-right font-medium">Messages</th>
@@ -55,7 +68,7 @@ export function ConsumerGroupsCard() {
                 </tr>
               </thead>
               <tbody>
-                {groups.data.map((group) => (
+                {rows.map((group) => (
                   <GroupRow
                     key={`${group.group}\u0000${group.topic}`}
                     group={group}
@@ -106,6 +119,9 @@ function GroupRow({
           </Link>
           <AlertBadge alerts={alerts} />
         </span>
+      </td>
+      <td className="py-2">
+        <HealthBadge health={group.health} />
       </td>
       <td className="py-2">
         <Link

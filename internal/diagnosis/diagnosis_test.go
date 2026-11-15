@@ -368,3 +368,33 @@ func TestDuration(t *testing.T) {
 		}
 	}
 }
+
+// A level comes from the findings about a subject: warnings need attention,
+// anything critical is at risk, and notes leave it healthy. A finding about
+// a group reading a topic is the group's.
+func TestLevels(t *testing.T) {
+	findings := []Finding{
+		{ID: "a", Severity: Warning, Subject: Subject{ConsumerGroup: "billing", Topic: "orders"}},
+		{ID: "b", Severity: Critical, Subject: Subject{ConsumerGroup: "billing", Topic: "payments"}},
+		{ID: "c", Severity: Warning, Subject: Subject{Topic: "orders"}},
+		{ID: "d", Severity: Info, Subject: Subject{Topic: "events"}},
+		{ID: "e", Severity: Info, Subject: Subject{ConsumerGroup: "audit"}},
+		{ID: "f", Severity: Warning, Subject: Subject{ClientID: "checkout"}},
+	}
+	topics, groups := Levels(findings)
+	if h := groups["billing"]; h.Level != AtRisk || !slices.Equal(h.Findings, []string{"a", "b"}) {
+		t.Errorf("billing = %+v, want at risk from a and b", h)
+	}
+	if h := topics["orders"]; h.Level != NeedsAttention || !slices.Equal(h.Findings, []string{"c"}) {
+		t.Errorf("orders = %+v, want needing attention from c alone", h)
+	}
+	if _, ok := topics["events"]; ok {
+		t.Errorf("a note made events = %+v, want it healthy", topics["events"])
+	}
+	if _, ok := groups["audit"]; ok {
+		t.Errorf("a note made audit = %+v, want it healthy", groups["audit"])
+	}
+	if len(topics) != 1 || len(groups) != 1 {
+		t.Errorf("topics %v, groups %v: a client's finding is neither's", topics, groups)
+	}
+}

@@ -119,6 +119,27 @@ scrape_configs:
       # The controllers' own health besides; not Go's or the workqueues'.
       - if: '{__name__!~"changeport_.*|controller_runtime_reconcile_(errors_)?total"}'
         action: drop
+  # The console's health monitor: the level of every customer's topics and
+  # consumer groups that are not healthy, and which customers it looked at,
+  # each series with its own tenant (internal/console/health.go).
+  - job_name: changeport-console
+    honor_labels: true
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [changeport]
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name, __meta_kubernetes_pod_container_port_name]
+        regex: changeport-console;metrics
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: instance
+    metric_relabel_configs:
+      - source_labels: [tenant]
+        regex: (.+)
+        target_label: cluster
+      - if: '{__name__!~"changeport_health_.*"}'
+        action: drop
   # cert-manager: when each certificate expires. Those of customers'
   # namespaces carry their tenant, from the certificate's namespace.
   - job_name: cert-manager

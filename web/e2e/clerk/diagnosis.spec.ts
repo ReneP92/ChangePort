@@ -104,6 +104,15 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
     );
     await expectNoSidewaysScroll(page);
 
+    // The group needs attention: in the consumer groups' table, which sorts
+    // it first by health.
+    const groups = card(page, "Consumer groups");
+    const row = groups.getByRole("row").filter({ hasText: group });
+    await expect(row).toContainText("Needs attention");
+    await groups.getByRole("button", { name: /^Health/ }).click();
+    await expect(groups.locator("th[aria-sort=descending]")).toHaveText(/Health/);
+    await expect(groups.getByRole("row").nth(1)).toContainText(/Needs attention|At risk/);
+
     // The group's page says it too, and the data flow map marks the group.
     await expect(
       card(page, "Data flow")
@@ -114,9 +123,17 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
     ).toBeVisible();
     await finding.getByRole("link", { name: `Consumer group ${group}` }).click();
     await expect(page.getByRole("heading", { level: 1, name: group })).toBeVisible();
-    await expect(card(page, "What needs attention")).toContainText(
-      `${group} can't keep up with ${topic}`,
-    );
+    const health = card(page, "Health");
+    await expect(health).toContainText(`${group} can't keep up with ${topic}`);
+    await expect(health).toContainText("Needs attention");
+    // The last 24 hours, from the console's health monitor, which looks
+    // every minute.
+    await expect(async () => {
+      await page.reload();
+      await expect(health.getByRole("img", { name: /needed attention for/ })).toBeVisible({
+        timeout: 5_000,
+      });
+    }).toPass({ timeout: 3 * 60_000, intervals: [15_000] });
 
     // A consumer that reads at full speed takes over, catches up, and the
     // diagnosis clears.
@@ -131,6 +148,10 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
       });
       await expect(finding).toHaveCount(0);
     }).toPass({ timeout: 4 * 60_000, intervals: [20_000] });
+    // And the group is healthy again.
+    await expect(
+      card(page, "Consumer groups").getByRole("row").filter({ hasText: group }),
+    ).toContainText("Healthy");
   } finally {
     // A tool may still be starting, its container not there yet.
     for (let attempt = 0; attempt < 3; attempt++) {

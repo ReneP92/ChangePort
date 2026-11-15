@@ -77,11 +77,11 @@ test("the overview says how far behind a lagging consumer group is", async ({ pa
   // messages age, minutes behind; the other is caught up. The agent may
   // measure one group before the other has committed, so each gets the
   // time of a measurement and a scrape.
-  await expect(cells(lagging).nth(3)).toHaveText("100", { timeout: 150_000 });
-  await expect(cells(lagging).nth(1)).toHaveText(topic);
-  await expect(cells(current).nth(2)).toHaveText("Caught up", { timeout: 150_000 });
-  await expect(cells(current).nth(3)).toHaveText("0");
-  await expect(cells(lagging).nth(2)).toHaveText(/^\d+ minutes? behind$/, { timeout: 150_000 });
+  await expect(cells(lagging).nth(4)).toHaveText("100", { timeout: 150_000 });
+  await expect(cells(lagging).nth(2)).toHaveText(topic);
+  await expect(cells(current).nth(3)).toHaveText("Caught up", { timeout: 150_000 });
+  await expect(cells(current).nth(4)).toHaveText("0");
+  await expect(cells(lagging).nth(3)).toHaveText(/^\d+ minutes? behind$/, { timeout: 150_000 });
   // The most behind come first: the lagging group above the caught-up one.
   // Other tests' groups share the table, and may be further behind.
   const order = await card.getByRole("row").allTextContents();

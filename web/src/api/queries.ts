@@ -321,6 +321,22 @@ export function useDiagnoses() {
   });
 }
 
+/**
+ * A topic's or a consumer group's health over the last 24 hours, in
+ * 15-minute steps, as the console's health monitor recorded it.
+ */
+export function useHealthHistory(subject: { topic: string } | { consumerGroup: string }) {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  const key = "topic" in subject ? `topic:${subject.topic}` : `group:${subject.consumerGroup}`;
+  return useQuery({
+    queryKey: ["customer", "health-history", key, organization],
+    queryFn: async () =>
+      unwrap(await api.GET("/api/customer/health-history", { params: { query: subject } })),
+    refetchInterval: 60_000,
+  });
+}
+
 /** The bytes in and out per second over range, of the cluster or a topic. */
 export function useThroughput(range: ThroughputRange, topic?: string) {
   const api = useApi();

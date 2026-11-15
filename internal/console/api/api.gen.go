@@ -196,6 +196,27 @@ func (e EnvironmentChangeDefault) Valid() bool {
 	}
 }
 
+// Defines values for HealthLevel.
+const (
+	AtRisk         HealthLevel = "atRisk"
+	Healthy        HealthLevel = "healthy"
+	NeedsAttention HealthLevel = "needsAttention"
+)
+
+// Valid indicates whether the value is a known member of the HealthLevel enum.
+func (e HealthLevel) Valid() bool {
+	switch e {
+	case AtRisk:
+		return true
+	case Healthy:
+		return true
+	case NeedsAttention:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MeAccess.
 const (
 	MeAccessCustomer MeAccess = "customer"
@@ -816,6 +837,9 @@ type ConsumerGroupLag struct {
 	Capped bool   `json:"capped"`
 	Group  string `json:"group"`
 
+	// Health How healthy a topic or consumer group is, from the diagnoses about it (docs/diagnosis.md): healthy without warnings, needing attention with some, at risk with anything critical. A diagnosis about a group reading a topic is the group's. Left out while the diagnoses are not known.
+	Health *HealthStatus `json:"health,omitempty"`
+
 	// History The lag in seconds over the last hour, a point a minute.
 	History []Point `json:"history"`
 
@@ -990,6 +1014,30 @@ type Health struct {
 	OfflinePartitions         *int     `json:"offlinePartitions,omitempty"`
 	UnderMinIsrPartitions     *int     `json:"underMinIsrPartitions,omitempty"`
 	UnderReplicatedPartitions *int     `json:"underReplicatedPartitions,omitempty"`
+}
+
+// HealthHistory A topic's or consumer group's level over the last 24 hours, the worst of each step.
+type HealthHistory struct {
+	Points      []HealthPoint `json:"points"`
+	StepSeconds int           `json:"stepSeconds"`
+}
+
+// HealthLevel defines model for HealthLevel.
+type HealthLevel string
+
+// HealthPoint The level of a step, left out where the console did not look, such as while it was down
+type HealthPoint struct {
+	Level *HealthLevel `json:"level,omitempty"`
+
+	// Time The end of the step
+	Time time.Time `json:"time"`
+}
+
+// HealthStatus How healthy a topic or consumer group is, from the diagnoses about it (docs/diagnosis.md): healthy without warnings, needing attention with some, at risk with anything critical. A diagnosis about a group reading a topic is the group's. Left out while the diagnoses are not known.
+type HealthStatus struct {
+	// Diagnoses The IDs of the diagnoses that set the level
+	Diagnoses []string    `json:"diagnoses"`
+	Level     HealthLevel `json:"level"`
 }
 
 // Me defines model for Me.
@@ -1512,6 +1560,9 @@ type Topic struct {
 	BytesOutPerSecond *float32 `json:"bytesOutPerSecond,omitempty"`
 	CleanupPolicy     string   `json:"cleanupPolicy"`
 
+	// Health How healthy a topic or consumer group is, from the diagnoses about it (docs/diagnosis.md): healthy without warnings, needing attention with some, at risk with anything critical. A diagnosis about a group reading a topic is the group's. Left out while the diagnoses are not known.
+	Health *HealthStatus `json:"health,omitempty"`
+
 	// LocalBytes Bytes on the brokers' disks, once, not counting replicas
 	LocalBytes *float32 `json:"localBytes,omitempty"`
 	Name       string   `json:"name"`
@@ -1572,7 +1623,9 @@ type Topology struct {
 
 // TopologyGroup defines model for TopologyGroup.
 type TopologyGroup struct {
-	LagMessages *int64 `json:"lagMessages,omitempty"`
+	// Health How healthy a topic or consumer group is, from the diagnoses about it (docs/diagnosis.md): healthy without warnings, needing attention with some, at risk with anything critical. A diagnosis about a group reading a topic is the group's. Left out while the diagnoses are not known.
+	Health      *HealthStatus `json:"health,omitempty"`
+	LagMessages *int64        `json:"lagMessages,omitempty"`
 
 	// LagSeconds How far behind the group is on the topic it is most behind on
 	LagSeconds *float32 `json:"lagSeconds,omitempty"`
@@ -1605,7 +1658,10 @@ type TopologyRead struct {
 type TopologyTopic struct {
 	BytesInPerSecond  float32 `json:"bytesInPerSecond"`
 	BytesOutPerSecond float32 `json:"bytesOutPerSecond"`
-	Name              string  `json:"name"`
+
+	// Health How healthy a topic or consumer group is, from the diagnoses about it (docs/diagnosis.md): healthy without warnings, needing attention with some, at risk with anything critical. A diagnosis about a group reading a topic is the group's. Left out while the diagnoses are not known.
+	Health *HealthStatus `json:"health,omitempty"`
+	Name   string        `json:"name"`
 
 	// Source The Postgres source that writes the topic, if any
 	Source *string `json:"source,omitempty"`
@@ -1745,6 +1801,12 @@ type GetConsumerGroupLagParams struct {
 type ListEventsParams struct {
 	// Range How far back to look, up to now
 	Range         *Range  `form:"range,omitempty" json:"range,omitempty"`
+	Topic         *string `form:"topic,omitempty" json:"topic,omitempty"`
+	ConsumerGroup *string `form:"consumerGroup,omitempty" json:"consumerGroup,omitempty"`
+}
+
+// GetHealthHistoryParams defines parameters for GetHealthHistory.
+type GetHealthHistoryParams struct {
 	Topic         *string `form:"topic,omitempty" json:"topic,omitempty"`
 	ConsumerGroup *string `form:"consumerGroup,omitempty" json:"consumerGroup,omitempty"`
 }
@@ -1895,6 +1957,9 @@ type ServerInterface interface {
 	// GetHealth The brokers and the partitions' health
 	// (GET /api/customer/health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
+	// GetHealthHistory How healthy a topic or a consumer group was over the last 24 hours, in 15-minute steps
+	// (GET /api/customer/health-history)
+	GetHealthHistory(w http.ResponseWriter, r *http.Request, params GetHealthHistoryParams)
 	// GetSourceOptions What a new Postgres CDC source may be, and where Changeport connects from
 	// (GET /api/customer/source-options)
 	GetSourceOptions(w http.ResponseWriter, r *http.Request)
@@ -2401,6 +2466,52 @@ func (siw *ServerInterfaceWrapper) GetHealth(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHealthHistory operation middleware
+func (siw *ServerInterfaceWrapper) GetHealthHistory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetHealthHistoryParams
+
+	// ------------- Optional query parameter "topic" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "topic", r.URL.Query(), &params.Topic, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "topic"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "topic", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "consumerGroup" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "consumerGroup", r.URL.Query(), &params.ConsumerGroup, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "consumerGroup"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "consumerGroup", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHealthHistory(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3437,6 +3548,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/throughput", wrapper.GetThroughput)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topology", wrapper.GetTopology)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/diagnoses", wrapper.ListDiagnoses)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/health-history", wrapper.GetHealthHistory)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/events", wrapper.ListEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups/{group}/lag", wrapper.GetConsumerGroupLag)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups", wrapper.ListConsumerGroups)
@@ -5086,6 +5198,98 @@ func (response GetHealth404JSONResponse) VisitGetHealthResponse(w http.ResponseW
 type GetHealth503JSONResponse struct{ NotConfiguredJSONResponse }
 
 func (response GetHealth503JSONResponse) VisitGetHealthResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHealthHistoryRequestObject struct {
+	Params GetHealthHistoryParams
+}
+
+type GetHealthHistoryResponseObject interface {
+	VisitGetHealthHistoryResponse(w http.ResponseWriter) error
+}
+
+type GetHealthHistory200JSONResponse HealthHistory
+
+func (response GetHealthHistory200JSONResponse) VisitGetHealthHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHealthHistory400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetHealthHistory400JSONResponse) VisitGetHealthHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHealthHistory401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetHealthHistory401JSONResponse) VisitGetHealthHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHealthHistory403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetHealthHistory403JSONResponse) VisitGetHealthHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHealthHistory404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetHealthHistory404JSONResponse) VisitGetHealthHistoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetHealthHistory503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response GetHealthHistory503JSONResponse) VisitGetHealthHistoryResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -8673,6 +8877,9 @@ type StrictServerInterface interface {
 	// GetHealth The brokers and the partitions' health
 	// (GET /api/customer/health)
 	GetHealth(ctx context.Context, request GetHealthRequestObject) (GetHealthResponseObject, error)
+	// GetHealthHistory How healthy a topic or a consumer group was over the last 24 hours, in 15-minute steps
+	// (GET /api/customer/health-history)
+	GetHealthHistory(ctx context.Context, request GetHealthHistoryRequestObject) (GetHealthHistoryResponseObject, error)
 	// GetSourceOptions What a new Postgres CDC source may be, and where Changeport connects from
 	// (GET /api/customer/source-options)
 	GetSourceOptions(ctx context.Context, request GetSourceOptionsRequestObject) (GetSourceOptionsResponseObject, error)
@@ -9321,6 +9528,32 @@ func (sh *strictHandler) GetHealth(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHealthResponseObject); ok {
 		if err := validResponse.VisitGetHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetHealthHistory operation middleware
+func (sh *strictHandler) GetHealthHistory(w http.ResponseWriter, r *http.Request, params GetHealthHistoryParams) {
+	var request GetHealthHistoryRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetHealthHistory(ctx, request.(GetHealthHistoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetHealthHistory")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetHealthHistoryResponseObject); ok {
+		if err := validResponse.VisitGetHealthHistoryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

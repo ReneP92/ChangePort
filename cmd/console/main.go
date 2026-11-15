@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/clientcmd"
@@ -60,6 +62,10 @@ func run(ctx context.Context, args []string) error {
 		"address of Alertmanager, which holds the customers' active alerts")
 	allowPrivateReceivers := fs.Bool("allow-private-receivers", false,
 		"let alert webhooks be on private networks and plain HTTP, as on kind, where a test webhook stands in for customers'")
+	metricsListen := fs.String("metrics-listen", ":9090",
+		"address to serve the console's own metrics on, the health levels, for VictoriaMetrics; only inside the cluster")
+	healthInterval := fs.Duration("health-interval", time.Minute,
+		"how often the console diagnoses every ready customer, for the health histories")
 	diagnosisWindow := fs.Duration("diagnosis-window", metrics.DefaultWindow,
 		"how far back the diagnoses look (docs/diagnosis.md); shorter on kind, so that the end-to-end test needs minutes")
 	maxEnvironments := fs.Int("max-environments", console.DefaultMaxEnvironments,
@@ -163,9 +169,19 @@ func run(ctx context.Context, args []string) error {
 		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       2 * time.Minute,
 	}
-	served := make(chan error, 1)
+	// Its own metrics, apart from the API, which the internet reaches.
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(server.HealthCollector())
+	metricsServer := &http.Server{
+		Addr:              *metricsListen,
+		Handler:           promhttp.HandlerFor(registry, promhttp.HandlerOpts{}),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	go server.WatchHealth(ctx, *healthInterval)
+	served := make(chan error, 2)
 	go func() { served <- httpServer.ListenAndServe() }()
-	logger.Info("console serving", "address", *listen)
+	go func() { served <- metricsServer.ListenAndServe() }()
+	logger.Info("console serving", "address", *listen, "metrics", *metricsListen)
 	select {
 	case err := <-served:
 		return err
@@ -173,7 +189,7 @@ func run(ctx context.Context, args []string) error {
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	return httpServer.Shutdown(shutdown)
+	return errors.Join(httpServer.Shutdown(shutdown), metricsServer.Shutdown(shutdown))
 }
 
 // envOr returns the environment variable name, or fallback when it is unset.

@@ -269,3 +269,54 @@ func percent(share float64) string {
 	}
 	return fmt.Sprintf("%.0f%%", share*100)
 }
+
+// Level is how healthy a topic or consumer group is, from its findings.
+type Level int
+
+const (
+	// Healthy has no findings but notes, which may be fine.
+	Healthy Level = iota
+	// NeedsAttention has warnings.
+	NeedsAttention
+	// AtRisk has something critical.
+	AtRisk
+)
+
+// Health is a topic's or a group's level, with the IDs of the findings
+// that set it, so that a level always comes with its reasons.
+type Health struct {
+	Level    Level
+	Findings []string
+}
+
+// Levels gives every topic and consumer group a finding is about its level
+// (docs/diagnosis.md). A finding about a group reading a topic is the
+// group's: the group falls behind, not the topic. Notes leave a subject
+// healthy. Subjects without findings are healthy, and left out.
+func Levels(findings []Finding) (topics, groups map[string]Health) {
+	topics, groups = map[string]Health{}, map[string]Health{}
+	for _, f := range findings {
+		level := Healthy
+		switch f.Severity {
+		case Warning:
+			level = NeedsAttention
+		case Critical:
+			level = AtRisk
+		}
+		if level == Healthy {
+			continue
+		}
+		into, name := topics, f.Subject.Topic
+		if f.Subject.ConsumerGroup != "" {
+			into, name = groups, f.Subject.ConsumerGroup
+		}
+		if name == "" {
+			continue
+		}
+		h := into[name]
+		h.Level = max(h.Level, level)
+		h.Findings = append(h.Findings, f.ID)
+		into[name] = h
+	}
+	return topics, groups
+}
