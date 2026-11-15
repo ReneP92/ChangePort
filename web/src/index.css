@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@clerk/ui/themes/shadcn.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -106,17 +107,18 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  /* Lighter teal and ink, which show on the dark background. */
+  /* Lighter teal, ink and greys, which show on the dark background. */
   --chart-1: oklch(0.72 0.12 185);
   --chart-2: oklch(0.8 0.03 250);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
+  --chart-3: oklch(0.708 0 0);
+  --chart-4: oklch(0.62 0 0);
+  --chart-5: oklch(0.556 0 0);
+  /* A frame darker than the page's panel, as the light one is greyer. */
+  --sidebar: oklch(0.115 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent: oklch(0.205 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);

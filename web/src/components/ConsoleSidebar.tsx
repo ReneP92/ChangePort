@@ -13,6 +13,7 @@ import {
   LogOut,
   Menu,
   MessageCircle,
+  Moon,
   PanelLeft,
   Settings2,
   UserRound,
@@ -24,6 +25,7 @@ import { Link, matchPath, NavLink, useLocation } from "react-router";
 import type { Environment } from "@/api/client";
 import { useSupportEmail } from "@/api/config";
 import { useEnvironmentAlerts, useMe, useTrialRequests } from "@/api/queries";
+import { ChangeportMark } from "@/components/ChangeportMark";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -59,6 +61,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Skeleton } from "@/components/ui/skeleton";
 import { environmentPath } from "@/lib/environments";
 import { modifier, useOpenShortcuts } from "@/lib/shortcuts";
+import { setTheme, useTheme } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 import { useEnvironment, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
@@ -110,7 +114,7 @@ export function MobileTopBar() {
         <Menu />
       </Button>
       <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-        <img src="/favicon.svg" alt="" className="size-6" />
+        <ChangeportMark className="size-6" />
         Changeport
       </Link>
       {me.data?.access === "customer" && environment !== undefined && (
@@ -147,7 +151,7 @@ function WorkspaceMenu() {
   ) : organization ? (
     <img src={organization.imageUrl} alt="" className="size-5 shrink-0 rounded" />
   ) : (
-    <img src="/favicon.svg" alt="" className="size-5 shrink-0" />
+    <ChangeportMark className="size-5" />
   );
   return (
     <SidebarMenuItem>
@@ -392,7 +396,7 @@ function SubItem({
               </span>
               <span
                 aria-hidden
-                className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.625rem] font-medium text-white tabular-nums"
+                className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.625rem] font-medium text-white tabular-nums dark:bg-destructive/60"
               >
                 {count.value}
               </span>
@@ -481,7 +485,7 @@ function Count({ value }: { value: number }) {
   return (
     <SidebarMenuBadge
       aria-hidden
-      className="bg-destructive text-white peer-data-active/menu-button:text-white"
+      className="bg-destructive text-white peer-data-active/menu-button:text-white dark:bg-destructive/60"
     >
       {value}
     </SidebarMenuBadge>
@@ -491,14 +495,15 @@ function Count({ value }: { value: number }) {
 /** Collapses the sidebar to icons, or expands it, on wider screens. */
 /**
  * Help, behind Changeport's mark as Linear's is behind its: the getting
- * started guide of the environment shown, the keyboard shortcuts, and
- * support's address when the console has one.
+ * started guide of the environment shown, the keyboard shortcuts, support's
+ * address when the console has one, and the theme.
  */
 function HelpMenu() {
   const me = useMe();
   const environmentPath = useEnvironmentPath();
   const openShortcuts = useOpenShortcuts();
   const supportEmail = useSupportEmail();
+  const theme = useTheme();
   const { isMobile, setOpenMobile } = useSidebar();
   const customer = me.data?.access === "customer";
   const close = () => {
@@ -517,7 +522,7 @@ function HelpMenu() {
               aria-label="Help"
               className="bg-sidebar-accent hover:bg-sidebar-border aria-expanded:bg-sidebar-border"
             >
-              <img src="/favicon.svg" alt="" className="size-5" />
+              <ChangeportMark className="size-5" />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -549,6 +554,33 @@ function HelpMenu() {
           <Keyboard />
           Keyboard shortcuts
           <DropdownMenuShortcut>{modifier()} /</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {/* A switch, which keeps the menu open to show it flip. */}
+        <DropdownMenuItem
+          role="menuitemcheckbox"
+          aria-checked={theme === "dark"}
+          onSelect={(event) => {
+            event.preventDefault();
+            setTheme(theme === "dark" ? "light" : "dark");
+          }}
+        >
+          <Moon />
+          Dark mode
+          <span
+            aria-hidden
+            className={cn(
+              "ml-auto inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors",
+              theme === "dark" ? "bg-primary" : "bg-muted-foreground/60",
+            )}
+          >
+            <span
+              className={cn(
+                "size-3 rounded-full bg-background shadow-sm transition-transform",
+                theme === "dark" && "translate-x-3",
+              )}
+            />
+          </span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

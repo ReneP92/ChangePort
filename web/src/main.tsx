@@ -4,6 +4,8 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { App } from "@/App";
 import "@/index.css";
+// Follows the viewer's theme, on every page, signed in or not.
+import "@/lib/theme";
 
 const root = document.getElementById("root");
 if (!root) {

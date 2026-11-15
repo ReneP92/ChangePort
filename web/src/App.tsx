@@ -1,9 +1,20 @@
 import { ClerkProvider } from "@clerk/react";
 import { ui } from "@clerk/ui";
+import { shadcn } from "@clerk/ui/themes";
+import type { ComponentProps } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { configQuery } from "@/api/config";
 import { Console } from "@/Console";
 import { Notice } from "@/components/Notice";
+
+/**
+ * Clerk's shadcn theme, which takes its colors from the console's own
+ * variables, light or dark. @clerk/ui types its optional cssLayerName more
+ * loosely than @clerk/react, which exactOptionalPropertyTypes tells apart.
+ */
+const appearance = { theme: shadcn } as NonNullable<
+  ComponentProps<typeof ClerkProvider>["appearance"]
+>;
 
 /**
  * The Changeport console. It learns the Clerk instance from the console's
@@ -33,7 +44,13 @@ export function App() {
     );
   }
   return (
-    <ClerkProvider publishableKey={config.data.publishableKey} ui={ui} afterSignOutUrl="/">
+    // Clerk's sign-in and profile take the console's colors, light or dark.
+    <ClerkProvider
+      publishableKey={config.data.publishableKey}
+      ui={ui}
+      appearance={appearance}
+      afterSignOutUrl="/"
+    >
       <Console />
     </ClerkProvider>
   );
