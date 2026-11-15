@@ -53,6 +53,8 @@ consumer group's lag with `consumer_group` and `topic` added:
 | `changeport_consumergroup_lag_messages` | Messages the group has not consumed yet, summed over the topic's partitions |
 | `changeport_consumergroup_lag_capped` | 1 when the lag is older than 23 hours, so `lag_seconds` is a lower bound |
 | `changeport_consumergroup_committed_timestamp_seconds` | When the group's committed offsets on the topic last moved, as far as the agent saw since it started |
+| `changeport_consumergroup_committed_offsets` | The group's committed offsets on the topic, summed over its partitions; their rate is how many messages a second the group consumes, whether or not its clients send telemetry |
+| `changeport_consumergroup_partitions_behind_log_start` | Partitions of the topic whose committed offset is below the log's start: retention deleted messages the group never read ([diagnosis.md](diagnosis.md)) |
 | `changeport_agent_last_success_timestamp_seconds` | When the agent last reconciled the cluster's topic settings |
 | `changeport_events_written_total` | Changes the agent recorded for the timeline ([timeline.md](timeline.md)); the provisioner exports its own |
 | `changeport_events_write_failures_total` | Failed writes to the timeline's store, which are retried |
@@ -258,8 +260,8 @@ partitions at replication factor 3, holds (20 × 6 + 100) × 3 = 660 partition
 replicas, 220 per broker. Each broker then sends about 135 + 220 + 22 × 8 ≈
 530 series, and the cluster about **1,600**.
 
-Consumer lag adds 3 series per consumer group and topic it reads, capped at
-2,000 pairs per cluster: 20 groups reading 3 topics each add 180 series.
+Consumer lag adds 6 series per consumer group and topic it reads, capped at
+2,000 pairs per cluster: 20 groups reading 3 topics each add 360 series.
 
 Fifty such clusters come to about **80,000** active series. At the 30-second
 scrape interval that is about 2,700 samples per second, well below the one

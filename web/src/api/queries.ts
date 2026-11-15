@@ -306,6 +306,21 @@ export function useTopology() {
   });
 }
 
+/**
+ * The common Kafka problems the cluster has, the most severe first
+ * (docs/diagnosis.md). The console works them out from the last 15 minutes,
+ * so every 30 seconds is plenty.
+ */
+export function useDiagnoses() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["customer", "diagnoses", organization],
+    queryFn: async () => unwrap(await api.GET("/api/customer/diagnoses")),
+    refetchInterval: 30_000,
+  });
+}
+
 /** The bytes in and out per second over range, of the cluster or a topic. */
 export function useThroughput(range: ThroughputRange, topic?: string) {
   const api = useApi();

@@ -34,6 +34,17 @@ func TestExpr(t *testing.T) {
 			`max by (consumer_group, topic) (changeport_consumergroup_lag_seconds{tenant="acme", consumer_group="billing"})`,
 		},
 		{
+			"a group's lag earlier", LagSecondsEarlier,
+			Filter{ConsumerGroup: "billing"},
+			`max by (consumer_group, topic) (changeport_consumergroup_lag_seconds{tenant="acme", consumer_group="billing"} offset 900s)`,
+		},
+		// Producers' totals over all their topics: their own clients only.
+		{
+			"every producer, over a shorter window", ProducerErrors,
+			Filter{Window: 5 * time.Minute},
+			`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_error_total{tenant="acme", principal!~"User:CN=.*"}[300s])))`,
+		},
+		{
 			"the whole cluster", OfflinePartitions,
 			Filter{},
 			`max(kafka_controller_kafkacontroller_offlinepartitionscount{tenant="acme"})`,
@@ -71,6 +82,7 @@ func TestExprRefuses(t *testing.T) {
 		{"a tenant that is not a customer ID", BytesIn, `acme"}`, Filter{}},
 		{"a consumer group on a broker metric", BytesIn, "acme", Filter{ConsumerGroup: "billing"}},
 		{"a topic on a cluster metric", UnderReplicated, "acme", Filter{Topic: "orders"}},
+		{"a topic on a producer's totals", ProducerSends, "acme", Filter{Topic: "orders"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -214,7 +226,7 @@ func TestQueriesAgainstVictoriaMetrics(t *testing.T) {
 			continue
 		}
 		for _, s := range series {
-			if definitions[q].scope != perCluster && s.Labels["topic"] == "" {
+			if definitions[q].scope != perCluster && definitions[q].scope != perProducer && s.Labels["topic"] == "" {
 				t.Errorf("%s returned a series without a topic: %v", q, s.Labels)
 			}
 		}

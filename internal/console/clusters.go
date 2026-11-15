@@ -46,9 +46,36 @@ type Clusters interface {
 	// TopicConsumerGroups returns the consumer groups with committed offsets
 	// on a topic, by name.
 	TopicConsumerGroups(ctx context.Context, customerID, topic string) ([]string, error)
-	// GroupMembers returns the client IDs of each consumer group's members,
-	// by group, for the topology map.
-	GroupMembers(ctx context.Context, customerID string) (map[string][]string, error)
+	// ConsumerGroups describes every consumer group: its state, and each
+	// member with what it reads, for the topology map and the diagnoses.
+	ConsumerGroups(ctx context.Context, customerID string) ([]ConsumerGroup, error)
+}
+
+// ConsumerGroup is a consumer group as Kafka describes it.
+type ConsumerGroup struct {
+	Name string
+	// State is Kafka's, such as Empty, Stable, PreparingRebalance or, for
+	// KIP-848 groups, Reconciling.
+	State   string
+	Members []GroupMember
+}
+
+// GroupMember is one member of a consumer group.
+type GroupMember struct {
+	ClientID string
+	// Assigned is how many partitions of each topic the member reads.
+	Assigned map[string]int
+}
+
+// ClientIDs are the group's members' client IDs, each once.
+func (g ConsumerGroup) ClientIDs() []string {
+	var ids []string
+	for _, member := range g.Members {
+		if !slices.Contains(ids, member.ClientID) {
+			ids = append(ids, member.ClientID)
+		}
+	}
+	return ids
 }
 
 // ErrTopicExists means a topic of that name exists already.
@@ -324,19 +351,14 @@ func (k KubeClusters) TopicConsumerGroups(ctx context.Context, customerID, topic
 	return groups, nil
 }
 
-// GroupMembers implements Clusters: classic groups through DescribeGroups,
-// KIP-848 ones through ConsumerGroupDescribe.
-func (k KubeClusters) GroupMembers(ctx context.Context, customerID string) (map[string][]string, error) {
+// ConsumerGroups implements Clusters: classic groups through
+// DescribeGroups, KIP-848 ones through ConsumerGroupDescribe.
+func (k KubeClusters) ConsumerGroups(ctx context.Context, customerID string) ([]ConsumerGroup, error) {
 	admin, err := k.Kafka.Admin(ctx, customerID)
 	if err != nil {
 		return nil, err
 	}
-	members := map[string][]string{}
-	add := func(group, clientID string) {
-		if !slices.Contains(members[group], clientID) {
-			members[group] = append(members[group], clientID)
-		}
-	}
+	var groups []ConsumerGroup
 	for _, kind := range consumerGroupTypes {
 		listed, err := admin.ListGroupsByType(ctx, []string{kind})
 		if err != nil {
@@ -351,9 +373,17 @@ func (k KubeClusters) GroupMembers(ctx context.Context, customerID string) (map[
 				return nil, fmt.Errorf("describe the groups of customer %s: %w", customerID, err)
 			}
 			for _, group := range described {
+				g := ConsumerGroup{Name: group.Group, State: group.State}
 				for _, member := range group.Members {
-					add(group.Group, member.ClientID)
+					m := GroupMember{ClientID: member.ClientID, Assigned: map[string]int{}}
+					if assigned, ok := member.Assigned.AsConsumer(); ok {
+						for _, topic := range assigned.Topics {
+							m.Assigned[topic.Topic] += len(topic.Partitions)
+						}
+					}
+					g.Members = append(g.Members, m)
 				}
+				groups = append(groups, g)
 			}
 			continue
 		}
@@ -362,10 +392,17 @@ func (k KubeClusters) GroupMembers(ctx context.Context, customerID string) (map[
 			return nil, fmt.Errorf("describe the consumer groups of customer %s: %w", customerID, err)
 		}
 		for _, group := range described {
+			g := ConsumerGroup{Name: group.Group, State: group.State}
 			for _, member := range group.Members {
-				add(group.Group, member.ClientID)
+				m := GroupMember{ClientID: member.ClientID, Assigned: map[string]int{}}
+				for topic, partitions := range member.Assignment {
+					m.Assigned[topic] += len(partitions)
+				}
+				g.Members = append(g.Members, m)
 			}
+			groups = append(groups, g)
 		}
 	}
-	return members, nil
+	slices.SortFunc(groups, func(a, b ConsumerGroup) int { return strings.Compare(a.Name, b.Name) })
+	return groups, nil
 }

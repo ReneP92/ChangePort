@@ -71,6 +71,30 @@ const (
 	// topic, as consumers report it themselves, per Kafka user, client ID
 	// and topic.
 	ConsumerBytes Query = "consumer_bytes"
+
+	// The diagnoses' (internal/diagnosis): over the filter's window, 15
+	// minutes unless it says otherwise, so that a moment's spike or dip is
+	// no diagnosis.
+
+	// MessagesInRecent is the messages per second each topic received.
+	MessagesInRecent Query = "messages_in_recent"
+	// ConsumedMessages is the messages per second each consumer group
+	// consumed of each topic, from its committed offsets: every client's,
+	// whether or not it reports telemetry.
+	ConsumedMessages Query = "consumed_messages"
+	// LagSecondsEarlier is each group's lag on each topic a window ago.
+	LagSecondsEarlier Query = "lag_seconds_earlier"
+	// LostPartitions is the partitions where retention deleted messages a
+	// group never read.
+	LostPartitions Query = "lost_partitions"
+	// PartitionSize is the bytes on the brokers' disks of each partition.
+	PartitionSize Query = "partition_size"
+	// ProducerSends, ProducerErrors and ProducerRetries are the records per
+	// second each producer sent, failed to send and sent again, as it
+	// reports them, per Kafka user and client ID.
+	ProducerSends   Query = "producer_sends"
+	ProducerErrors  Query = "producer_errors"
+	ProducerRetries Query = "producer_retries"
 )
 
 // scope is what a query's series are about, which decides its filters.
@@ -87,6 +111,9 @@ const (
 	// customer's own clients: the platform's, which connect with
 	// certificates, are left out.
 	perClient
+	// perProducer queries have a series per client, over all its topics,
+	// of the customer's own clients.
+	perProducer
 )
 
 // definition is a query's PromQL, where %s is the series selector, and its
@@ -117,6 +144,18 @@ var definitions = map[Query]definition{
 	// for a while when it moves, so each client instance counts once.
 	ProducerBytes: {`sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (rate(clients_org_apache_kafka_producer_topic_byte_total{%s}[5m])))`, perClient},
 	ConsumerBytes: {`sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (rate(clients_org_apache_kafka_consumer_fetch_manager_bytes_consumed_total{%s}[5m])))`, perClient},
+
+	MessagesInRecent: {`sum by (topic) (rate(kafka_server_brokertopicmetrics_messagesinpersec_total{%s}[{window}]))`, perTopic},
+	// Committed offsets only grow, but for a reset; the slope over the
+	// window is the rate, and a reset is no negative consumption.
+	ConsumedMessages:  {`max by (consumer_group, topic) (clamp_min(deriv(changeport_consumergroup_committed_offsets{%s}[{window}]), 0))`, perGroup},
+	LagSecondsEarlier: {`max by (consumer_group, topic) (changeport_consumergroup_lag_seconds{%s} offset {window})`, perGroup},
+	LostPartitions:    {`max by (consumer_group, topic) (changeport_consumergroup_partitions_behind_log_start{%s})`, perGroup},
+	// Each replica of a partition holds the same; the largest is the leader's.
+	PartitionSize:   {`max by (topic, partition) (kafka_log_log_size{%s})`, perTopic},
+	ProducerSends:   {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_send_total{%s}[{window}])))`, perProducer},
+	ProducerErrors:  {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_error_total{%s}[{window}])))`, perProducer},
+	ProducerRetries: {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_retry_total{%s}[{window}])))`, perProducer},
 }
 
 // Queries lists every named query.
@@ -125,6 +164,8 @@ func Queries() []Query {
 		BytesIn, BytesOut, MessagesIn, LocalSize, RemoteSize, LagSeconds, LagMessages, LagCapped,
 		UnderReplicated, UnderMinISR, OfflinePartitions, ActiveControllers, ActiveBrokers, FencedBrokers,
 		ProducerBytes, ConsumerBytes,
+		MessagesInRecent, ConsumedMessages, LagSecondsEarlier, LostPartitions, PartitionSize,
+		ProducerSends, ProducerErrors, ProducerRetries,
 	}
 }
 
@@ -140,11 +181,17 @@ func ParseQuery(name string) (Query, error) {
 }
 
 // Filter narrows a query to one topic or consumer group; empty fields match
-// everything.
+// everything. Window is how far back the diagnoses' queries look, 15
+// minutes when zero.
 type Filter struct {
 	Topic         string
 	ConsumerGroup string
+	Window        time.Duration
 }
+
+// DefaultWindow is how far back the diagnoses' queries look unless a
+// filter says otherwise.
+const DefaultWindow = 15 * time.Minute
 
 // Expr returns the PromQL of q for tenant's series that match filter.
 func Expr(q Query, tenant string, filter Filter) (string, error) {
@@ -161,6 +208,8 @@ func Expr(q Query, tenant string, filter Filter) (string, error) {
 		return "", fmt.Errorf("query %s is about the whole cluster", q)
 	case d.scope == perTopic && filter.ConsumerGroup != "":
 		return "", fmt.Errorf("query %s has no consumer groups", q)
+	case d.scope == perProducer && filter.Topic != "":
+		return "", fmt.Errorf("query %s is about clients over all their topics", q)
 	case filter.Topic != "":
 		selector = append(selector, `topic=`+quote(filter.Topic))
 	case d.scope == perTopic || d.scope == perClient:
@@ -168,7 +217,7 @@ func Expr(q Query, tenant string, filter Filter) (string, error) {
 		// as are clients' own.
 		selector = append(selector, `topic!=""`)
 	}
-	if d.scope == perClient {
+	if d.scope == perClient || d.scope == perProducer {
 		if filter.ConsumerGroup != "" {
 			return "", fmt.Errorf("query %s has no consumer groups", q)
 		}
@@ -177,7 +226,12 @@ func Expr(q Query, tenant string, filter Filter) (string, error) {
 	if filter.ConsumerGroup != "" {
 		selector = append(selector, `consumer_group=`+quote(filter.ConsumerGroup))
 	}
-	return fmt.Sprintf(d.expression, strings.Join(selector, ", ")), nil
+	window := filter.Window
+	if window <= 0 {
+		window = DefaultWindow
+	}
+	expression := strings.ReplaceAll(d.expression, "{window}", fmt.Sprintf("%ds", int(window.Seconds())))
+	return fmt.Sprintf(expression, strings.Join(selector, ", ")), nil
 }
 
 // quote writes s as a PromQL string literal.

@@ -605,6 +605,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/customer/diagnoses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The common Kafka problems the environment's cluster has, in plain language, the most severe first (docs/diagnosis.md): what is wrong, the numbers that show it and what to do */
+        get: operations["listDiagnoses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/customer/events": {
         parameters: {
             query?: never;
@@ -1269,6 +1286,31 @@ export interface components {
             stepSeconds: number;
             bytesIn: components["schemas"]["Point"][];
             bytesOut: components["schemas"]["Point"][];
+        };
+        DiagnosisList: {
+            /** @description How far back the diagnoses look, 15 minutes unless the console is set otherwise */
+            windowSeconds: number;
+            diagnoses: components["schemas"]["Diagnosis"][];
+        };
+        Diagnosis: {
+            /** @description The rule and its subject, which stay the same while the problem holds */
+            id: string;
+            /** @description The rule that found it, such as consumer-too-slow */
+            rule: string;
+            /**
+             * @description Info is worth knowing, a warning needs attention before it hurts, critical hurts now
+             * @enum {string}
+             */
+            severity: "info" | "warning" | "critical";
+            topic?: string;
+            consumerGroup?: string;
+            clientId?: string;
+            /** @description What is wrong, in a line */
+            title: string;
+            /** @description What shows it, with the numbers */
+            explanation: string;
+            /** @description What to do about it */
+            suggestion: string;
         };
         Topology: {
             /** @description The producers that report their own metrics (KIP-714), by Kafka user and client ID */
@@ -2831,6 +2873,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Topology"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["NotReady"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    listDiagnoses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The diagnoses, none when all is well */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiagnosisList"];
                 };
             };
             401: components["responses"]["Unauthorized"];

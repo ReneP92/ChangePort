@@ -48,7 +48,7 @@ func (s *Server) GetTopology(ctx context.Context, _ api.GetTopologyRequestObject
 	if err != nil {
 		return nil, err
 	}
-	members, err := s.clusters.GroupMembers(ctx, customer.Name)
+	groups, err := s.clusters.ConsumerGroups(ctx, customer.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (s *Server) GetTopology(ctx context.Context, _ api.GetTopologyRequestObject
 			return nil, err
 		}
 	}
-	return api.GetTopology200JSONResponse(buildTopology(settings, members, sources, values)), nil
+	return api.GetTopology200JSONResponse(buildTopology(settings, groups, sources, values)), nil
 }
 
 // value is a series' one value.
@@ -78,7 +78,7 @@ func value(series metrics.Series) float64 {
 
 // buildTopology puts the cluster's topics, its groups' members and the
 // metrics together.
-func buildTopology(settings []TopicSettings, members map[string][]string, sources map[string]string, values map[metrics.Query][]metrics.Series) api.Topology {
+func buildTopology(settings []TopicSettings, described []ConsumerGroup, sources map[string]string, values map[metrics.Query][]metrics.Series) api.Topology {
 	out := api.Topology{
 		Producers: []api.TopologyProducer{}, Topics: []api.TopologyTopic{}, Groups: []api.TopologyGroup{},
 		Writes: []api.TopologyWrite{}, Reads: []api.TopologyRead{},
@@ -140,13 +140,17 @@ func buildTopology(settings []TopicSettings, members map[string][]string, source
 
 	// Consumer groups: those with committed offsets on the topics they read,
 	// and those whose members have committed nothing yet.
+	members := map[string]ConsumerGroup{}
+	for _, g := range described {
+		members[g.Name] = g
+	}
 	type read struct{ group, topic string }
 	reads := map[read]*api.TopologyRead{}
 	groups := map[string]*api.TopologyGroup{}
 	group := func(name string) *api.TopologyGroup {
 		g, ok := groups[name]
 		if !ok {
-			g = &api.TopologyGroup{Name: name, Members: len(members[name])}
+			g = &api.TopologyGroup{Name: name, Members: len(members[name].Members)}
 			groups[name] = g
 		}
 		return g
@@ -175,15 +179,15 @@ func buildTopology(settings []TopicSettings, members map[string][]string, source
 			r.Capped = value(series) == 1
 		}
 	}
-	for name := range members {
-		if !platformGroup(name) && len(members[name]) > 0 {
+	for name, described := range members {
+		if !platformGroup(name) && len(described.Members) > 0 {
 			group(name)
 		}
 	}
 	// What a group's members report reading of each topic.
 	groupsOf := map[string][]string{}
-	for name, clientIDs := range members {
-		for _, clientID := range clientIDs {
+	for name, described := range members {
+		for _, clientID := range described.ClientIDs() {
 			groupsOf[clientID] = append(groupsOf[clientID], name)
 		}
 	}

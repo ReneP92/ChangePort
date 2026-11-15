@@ -64,6 +64,7 @@ More on the data plane:
 - [docs/connecting.md](docs/connecting.md): the customers' guide to connecting, with examples in Java, Python, Go and Node.js.
 - [docs/alerts.md](docs/alerts.md): the customers' guide to the alerts about their applications, and how they work.
 - [docs/timeline.md](docs/timeline.md): the change timeline over the console's graphs, and how changes are recorded.
+- [docs/diagnosis.md](docs/diagnosis.md): the common Kafka problems the console diagnoses, and how.
 - [docs/runbook.md](docs/runbook.md): the operators' procedures, from provisioning to upgrades.
 - [docs/site.md](docs/site.md): the landing site, its screenshots, its tests and its Lighthouse check.
 

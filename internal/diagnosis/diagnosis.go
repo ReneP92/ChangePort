@@ -1,0 +1,240 @@
+// Package diagnosis explains the common Kafka problems of a customer's
+// cluster in plain language (docs/diagnosis.md): each rule looks at a
+// snapshot of the cluster, its metrics over the last minutes and what Kafka
+// says of its topics and consumer groups, and returns what it finds wrong,
+// with the numbers that show it and what to do about it.
+package diagnosis
+
+import (
+	"cmp"
+	"fmt"
+	"math"
+	"slices"
+	"strings"
+	"time"
+)
+
+// Snapshot is what the rules look at.
+type Snapshot struct {
+	// Window is how far back its rates and changes look, so that a
+	// moment's spike or dip is no diagnosis.
+	Window    time.Duration
+	Topics    []Topic
+	Groups    []Group
+	Producers []Producer
+}
+
+// Topic is one of the customer's topics.
+type Topic struct {
+	Name       string
+	Partitions int
+	// RetentionMs is how long the topic keeps messages, or nil for ever.
+	RetentionMs *int64
+	// Compacted topics keep the latest message per key however old.
+	Compacted bool
+	// MessagesInPerSecond and BytesInPerSecond are what the topic received.
+	MessagesInPerSecond float64
+	BytesInPerSecond    float64
+	// UnreportedBytesInPerSecond is what reached the topic from producers
+	// that send no telemetry (KIP-714).
+	UnreportedBytesInPerSecond float64
+	// PartitionBytes is the size of each partition on the brokers' disks.
+	PartitionBytes []float64
+}
+
+// Group is a consumer group.
+type Group struct {
+	Name string
+	// State is Kafka's: Empty, Stable, PreparingRebalance and so on.
+	State   string
+	Members int
+	// IdleMembers are members assigned no partition at all.
+	IdleMembers int
+	// Rebalances is how often its members changed in the last hour.
+	Rebalances int
+	Reads      []Read
+}
+
+// Read is a consumer group reading a topic.
+type Read struct {
+	Topic string
+	// LagSeconds is the age of the oldest message the group has not read;
+	// capped means it is older than the agent looks back (23 hours).
+	LagSeconds  float64
+	LagMessages int64
+	Capped      bool
+	// LagSecondsEarlier was the lag a window ago, when known.
+	LagSecondsEarlier *float64
+	// ConsumedPerSecond is the messages a second the group consumed of the
+	// topic over the window, from its committed offsets.
+	ConsumedPerSecond float64
+	// AssignedMembers are the group's members reading the topic.
+	AssignedMembers int
+	// LostPartitions are partitions where retention deleted messages the
+	// group never read.
+	LostPartitions int
+}
+
+// Producer is a client writing to the cluster, as it reports itself.
+type Producer struct {
+	Principal string
+	ClientID  string
+	// The records a second it sent, failed to send and sent again, over
+	// the window.
+	SendsPerSecond   float64
+	ErrorsPerSecond  float64
+	RetriesPerSecond float64
+}
+
+// Severity is how much a finding matters.
+type Severity string
+
+const (
+	// Info is worth knowing, and may be fine.
+	Info Severity = "info"
+	// Warning needs attention before it hurts.
+	Warning Severity = "warning"
+	// Critical hurts now: data is lost or nothing is consumed.
+	Critical Severity = "critical"
+)
+
+func (s Severity) rank() int {
+	return slices.Index([]Severity{Info, Warning, Critical}, s)
+}
+
+// Subject is what a finding is about.
+type Subject struct {
+	// Topic, ConsumerGroup and ClientID name it; a group reading a topic
+	// has both.
+	Topic         string
+	ConsumerGroup string
+	ClientID      string
+}
+
+// Finding is one problem a rule found.
+type Finding struct {
+	// ID identifies the finding while it holds, so that the console can
+	// tell it is the same one: the rule and its subject.
+	ID       string
+	Rule     string
+	Severity Severity
+	Subject  Subject
+	// Title says what is wrong in a line; Explanation shows it with the
+	// numbers; Suggestion says what to do.
+	Title       string
+	Explanation string
+	Suggestion  string
+}
+
+// Rule finds one kind of problem.
+type Rule struct {
+	Name string
+	Find func(Snapshot) []Finding
+}
+
+// Rules are every rule, in the order docs/diagnosis.md describes them.
+var Rules = []Rule{
+	{"consumer-too-slow", consumerTooSlow},
+	{"nobody-consuming", nobodyConsuming},
+	{"behind-retention", behindRetention},
+	{"idle-consumers", idleConsumers},
+	{"frequent-rebalances", frequentRebalances},
+	{"hot-partition", hotPartition},
+	{"producer-errors", producerErrors},
+	{"producers-without-telemetry", producersWithoutTelemetry},
+}
+
+// Diagnose runs every rule over the snapshot and returns what they found,
+// the most severe first.
+func Diagnose(s Snapshot) []Finding {
+	findings := []Finding{}
+	for _, rule := range Rules {
+		for _, f := range rule.Find(s) {
+			f.Rule = rule.Name
+			f.ID = rule.Name + ":" + strings.Join(slices.DeleteFunc(
+				[]string{f.Subject.ConsumerGroup, f.Subject.Topic, f.Subject.ClientID},
+				func(s string) bool { return s == "" }), "/")
+			findings = append(findings, f)
+		}
+	}
+	slices.SortStableFunc(findings, func(a, b Finding) int {
+		return cmp.Or(cmp.Compare(b.Severity.rank(), a.Severity.rank()), cmp.Compare(a.ID, b.ID))
+	})
+	return findings
+}
+
+// topic returns the snapshot's topic of that name.
+func (s Snapshot) topic(name string) (Topic, bool) {
+	i := slices.IndexFunc(s.Topics, func(t Topic) bool { return t.Name == name })
+	if i < 0 {
+		return Topic{}, false
+	}
+	return s.Topics[i], true
+}
+
+// growing is whether the lag grew over the window, by more than the agent's
+// measurements wander.
+func (r Read) growing() bool {
+	return r.LagSecondsEarlier != nil && r.LagSeconds > *r.LagSecondsEarlier+30
+}
+
+// plural is "1 partition" or "3 partitions".
+func plural(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// duration says how long, as the console does (web/src/lib/format.ts): 45
+// seconds, 3 minutes, 1 hour 20 minutes, 12 hours, 3 days.
+func duration(seconds float64) string {
+	switch {
+	case seconds < 60:
+		return plural(int(seconds), "second")
+	case seconds < 3600:
+		return plural(int(seconds/60), "minute")
+	case seconds < 48*3600:
+		hours, minutes := int(seconds/3600), int(math.Mod(seconds, 3600)/60)
+		if hours >= 10 || minutes == 0 {
+			return plural(hours, "hour")
+		}
+		return plural(hours, "hour") + " " + plural(minutes, "minute")
+	default:
+		return plural(int(seconds/86400), "day")
+	}
+}
+
+// rate says how many messages a second, to two significant digits.
+func rate(perSecond float64) string {
+	switch {
+	case perSecond >= 10:
+		return fmt.Sprintf("%.0f", perSecond)
+	case perSecond >= 1:
+		return strings.TrimSuffix(fmt.Sprintf("%.1f", perSecond), ".0")
+	default:
+		return strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%.2f", perSecond), "0"), ".")
+	}
+}
+
+// bytes says how many bytes, in powers of 1,000, as the console does.
+func bytes(n float64) string {
+	units := []string{"B", "KB", "MB", "GB", "TB"}
+	unit := 0
+	for n >= 1000 && unit < len(units)-1 {
+		n /= 1000
+		unit++
+	}
+	if unit == 0 || n >= 100 {
+		return fmt.Sprintf("%.0f %s", n, units[unit])
+	}
+	return fmt.Sprintf("%.1f %s", n, units[unit])
+}
+
+// percent says a share as a whole percentage, or "less than 1%".
+func percent(share float64) string {
+	if share < 0.01 {
+		return "less than 1%"
+	}
+	return fmt.Sprintf("%.0f%%", share*100)
+}

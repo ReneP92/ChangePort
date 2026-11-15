@@ -21,6 +21,7 @@ import { rangeMilliseconds, ranges } from "@/lib/ranges";
 import { numberEvents } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
 import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
+import { DiagnosesAbout } from "@/pages/diagnoses/Diagnoses";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
@@ -57,11 +58,12 @@ function ConsumerGroup({ group }: { group: string }) {
       {groupAlerts.length > 0 && (
         <section
           aria-label="Alerts"
-          className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm"
+          className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm"
         >
           <AlertRows alerts={groupAlerts} />
         </section>
       )}
+      <DiagnosesAbout consumerGroup={group} />
       <Card>
         <CardHeader>
           <CardTitle>

@@ -38,6 +38,7 @@ export type ThroughputRange = components["schemas"]["TimeRange"];
 export type TimelineEvent = components["schemas"]["TimelineEvent"];
 export type TailMessage = components["schemas"]["TailMessage"];
 export type Topology = components["schemas"]["Topology"];
+export type Diagnosis = components["schemas"]["Diagnosis"];
 export type Team = components["schemas"]["Team"];
 export type Environment = components["schemas"]["Environment"];
 export type Environments = components["schemas"]["Environments"];

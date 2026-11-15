@@ -139,6 +139,27 @@ func (e CustomerProfile) Valid() bool {
 	}
 }
 
+// Defines values for DiagnosisSeverity.
+const (
+	Critical DiagnosisSeverity = "critical"
+	Info     DiagnosisSeverity = "info"
+	Warning  DiagnosisSeverity = "warning"
+)
+
+// Valid indicates whether the value is a known member of the DiagnosisSeverity enum.
+func (e DiagnosisSeverity) Valid() bool {
+	switch e {
+	case Critical:
+		return true
+	case Info:
+		return true
+	case Warning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EnvironmentProfile.
 const (
 	EnvironmentProfileDev        EnvironmentProfile = "dev"
@@ -865,6 +886,42 @@ type CustomerList struct {
 type CustomerTrial struct {
 	// EndsAt When the trial ends and the customer is deprovisioned; it is warned three days before
 	EndsAt time.Time `json:"endsAt"`
+}
+
+// Diagnosis defines model for Diagnosis.
+type Diagnosis struct {
+	ClientId      *string `json:"clientId,omitempty"`
+	ConsumerGroup *string `json:"consumerGroup,omitempty"`
+
+	// Explanation What shows it, with the numbers
+	Explanation string `json:"explanation"`
+
+	// Id The rule and its subject, which stay the same while the problem holds
+	Id string `json:"id"`
+
+	// Rule The rule that found it, such as consumer-too-slow
+	Rule string `json:"rule"`
+
+	// Severity Info is worth knowing, a warning needs attention before it hurts, critical hurts now
+	Severity DiagnosisSeverity `json:"severity"`
+
+	// Suggestion What to do about it
+	Suggestion string `json:"suggestion"`
+
+	// Title What is wrong, in a line
+	Title string  `json:"title"`
+	Topic *string `json:"topic,omitempty"`
+}
+
+// DiagnosisSeverity Info is worth knowing, a warning needs attention before it hurts, critical hurts now
+type DiagnosisSeverity string
+
+// DiagnosisList defines model for DiagnosisList.
+type DiagnosisList struct {
+	Diagnoses []Diagnosis `json:"diagnoses"`
+
+	// WindowSeconds How far back the diagnoses look, 15 minutes unless the console is set otherwise
+	WindowSeconds int `json:"windowSeconds"`
 }
 
 // Environment defines model for Environment.
@@ -1817,6 +1874,9 @@ type ServerInterface interface {
 	// GetConsumerGroupLag How far behind a consumer group was on each topic it reads, over a range
 	// (GET /api/customer/consumer-groups/{group}/lag)
 	GetConsumerGroupLag(w http.ResponseWriter, r *http.Request, group string, params GetConsumerGroupLagParams)
+	// ListDiagnoses The common Kafka problems the environment's cluster has, in plain language, the most severe first (docs/diagnosis.md): what is wrong, the numbers that show it and what to do
+	// (GET /api/customer/diagnoses)
+	ListDiagnoses(w http.ResponseWriter, r *http.Request)
 	// ListEnvironments The environments of the customer's organization, each a cluster, the default first. It ignores the environment header.
 	// (GET /api/customer/environments)
 	ListEnvironments(w http.ResponseWriter, r *http.Request)
@@ -2174,6 +2234,20 @@ func (siw *ServerInterfaceWrapper) GetConsumerGroupLag(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetConsumerGroupLag(w, r, group, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDiagnoses operation middleware
+func (siw *ServerInterfaceWrapper) ListDiagnoses(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDiagnoses(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3362,6 +3436,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.SetAlertReceiver)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/throughput", wrapper.GetThroughput)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topology", wrapper.GetTopology)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/diagnoses", wrapper.ListDiagnoses)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/events", wrapper.ListEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups/{group}/lag", wrapper.GetConsumerGroupLag)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups", wrapper.ListConsumerGroups)
@@ -4397,6 +4472,97 @@ func (response GetConsumerGroupLag404JSONResponse) VisitGetConsumerGroupLagRespo
 type GetConsumerGroupLag503JSONResponse struct{ NotConfiguredJSONResponse }
 
 func (response GetConsumerGroupLag503JSONResponse) VisitGetConsumerGroupLagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDiagnosesRequestObject struct {
+}
+
+type ListDiagnosesResponseObject interface {
+	VisitListDiagnosesResponse(w http.ResponseWriter) error
+}
+
+type ListDiagnoses200JSONResponse DiagnosisList
+
+func (response ListDiagnoses200JSONResponse) VisitListDiagnosesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDiagnoses401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListDiagnoses401JSONResponse) VisitListDiagnosesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDiagnoses403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListDiagnoses403JSONResponse) VisitListDiagnosesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDiagnoses404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListDiagnoses404JSONResponse) VisitListDiagnosesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDiagnoses409JSONResponse struct{ NotReadyJSONResponse }
+
+func (response ListDiagnoses409JSONResponse) VisitListDiagnosesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDiagnoses503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ListDiagnoses503JSONResponse) VisitListDiagnosesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -8486,6 +8652,9 @@ type StrictServerInterface interface {
 	// GetConsumerGroupLag How far behind a consumer group was on each topic it reads, over a range
 	// (GET /api/customer/consumer-groups/{group}/lag)
 	GetConsumerGroupLag(ctx context.Context, request GetConsumerGroupLagRequestObject) (GetConsumerGroupLagResponseObject, error)
+	// ListDiagnoses The common Kafka problems the environment's cluster has, in plain language, the most severe first (docs/diagnosis.md): what is wrong, the numbers that show it and what to do
+	// (GET /api/customer/diagnoses)
+	ListDiagnoses(ctx context.Context, request ListDiagnosesRequestObject) (ListDiagnosesResponseObject, error)
 	// ListEnvironments The environments of the customer's organization, each a cluster, the default first. It ignores the environment header.
 	// (GET /api/customer/environments)
 	ListEnvironments(ctx context.Context, request ListEnvironmentsRequestObject) (ListEnvironmentsResponseObject, error)
@@ -8964,6 +9133,30 @@ func (sh *strictHandler) GetConsumerGroupLag(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetConsumerGroupLagResponseObject); ok {
 		if err := validResponse.VisitGetConsumerGroupLagResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListDiagnoses operation middleware
+func (sh *strictHandler) ListDiagnoses(w http.ResponseWriter, r *http.Request) {
+	var request ListDiagnosesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListDiagnoses(ctx, request.(ListDiagnosesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListDiagnoses")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListDiagnosesResponseObject); ok {
+		if err := validResponse.VisitListDiagnosesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
