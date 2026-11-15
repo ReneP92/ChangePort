@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Thresholds of the rules (docs/diagnosis.md).
@@ -40,6 +41,9 @@ const (
 	// before they are worth mentioning: the topology map's thresholds.
 	unreportedFloor = 100.0
 	unreportedShare = 0.1
+	// openTooLong is how long a transaction may hold read_committed
+	// consumers back before it is worth looking at.
+	openTooLong = time.Minute
 )
 
 // consumerTooSlow finds groups that consume less of a topic than it
@@ -423,6 +427,171 @@ func producersWithoutTelemetry(s Snapshot) []Finding {
 				"%s receives %s a second from producers that send no telemetry, so the data flow map cannot show them, nor their errors.",
 				t.Name, bytes(t.UnreportedBytesInPerSecond)),
 			Suggestion: "Producers on Kafka's Java client 3.7 or newer, or on librdkafka 2.5 or newer, send it by themselves. Older ones work as they are, but stay unseen.",
+		})
+	}
+	return found
+}
+
+// hangingTransaction finds topics that hanging transactions block: open on
+// a partition from the same offset for longer than any transaction may
+// last, and no longer open there for their coordinator, which therefore
+// never aborts them. One finding per topic, with each partition.
+func hangingTransaction(s Snapshot) []Finding {
+	var found []Finding
+	for _, t := range s.Topics {
+		if len(t.Hanging) == 0 {
+			continue
+		}
+		var where, offsets []string
+		for _, h := range t.Hanging {
+			by := fmt.Sprintf("a producer with ID %d", h.ProducerID)
+			if h.TransactionalID != "" {
+				by = "transactional producer " + h.TransactionalID
+			}
+			where = append(where, fmt.Sprintf("partition %d has had a transaction of %s open from offset %d for at least %s", h.Partition, by, h.From, duration(h.Open.Seconds())))
+			offsets = append(offsets, fmt.Sprintf("partition %d from offset %d", h.Partition, h.From))
+		}
+		title := fmt.Sprintf("A hanging transaction blocks partition %d of %s", t.Hanging[0].Partition, t.Name)
+		if len(t.Hanging) > 1 {
+			title = fmt.Sprintf("Hanging transactions block %s of %s", plural(len(t.Hanging), "partition"), t.Name)
+		}
+		found = append(found, Finding{
+			Severity: Critical,
+			Subject:  Subject{Topic: t.Name},
+			Title:    title,
+			Explanation: fmt.Sprintf(
+				"On %s, %s: longer than any transaction may last (%s), and its coordinator no longer has it open. Kafka never aborts such a transaction by itself, so read_committed consumers of the partition read nothing past it.",
+				t.Name, strings.Join(where, "; "), duration(maxTransaction.Seconds())),
+			Suggestion: fmt.Sprintf(
+				"Aborting it takes the platform's rights (`kafka-transactions.sh abort`): write to Changeport support with %s, %s.",
+				t.Name, list(offsets)),
+		})
+	}
+	return found
+}
+
+// maxTransaction is the brokers' transaction.max.timeout.ms, which
+// Changeport leaves at Kafka's default.
+const maxTransaction = 15 * time.Minute
+
+// openTransaction finds transactions open long enough to hold back the
+// read_committed consumers of their topics, including those stuck
+// committing or aborting. A partition's held-back offsets count for the
+// oldest transaction open on it, which holds its last stable offset.
+func openTransaction(s Snapshot) []Finding {
+	oldest := map[string]string{}
+	started := map[string]time.Duration{}
+	for _, t := range s.Transactions {
+		for _, p := range t.Partitions {
+			key := fmt.Sprintf("%s/%d", p.Topic, p.Partition)
+			if t.Open > started[key] || oldest[key] == "" {
+				oldest[key], started[key] = t.ID, t.Open
+			}
+		}
+	}
+	var found []Finding
+	for _, t := range s.Transactions {
+		if t.Open < openTooLong {
+			continue
+		}
+		type held struct {
+			offsets    int64
+			partitions int
+		}
+		byTopic := map[string]*held{}
+		for _, p := range t.Partitions {
+			if p.HeldBack <= 0 || oldest[fmt.Sprintf("%s/%d", p.Topic, p.Partition)] != t.ID {
+				continue
+			}
+			h := byTopic[p.Topic]
+			if h == nil {
+				h = &held{}
+				byTopic[p.Topic] = h
+			}
+			h.offsets += p.HeldBack
+			h.partitions++
+		}
+		state := "open"
+		switch t.State {
+		case "PrepareCommit":
+			state = "committing"
+		case "PrepareAbort", "PrepareEpochFence":
+			state = "aborting"
+		}
+		for _, topic := range slices.Sorted(maps.Keys(byTopic)) {
+			h := byTopic[topic]
+			partitions := topic
+			if total := topicPartitions(s, topic); total > h.partitions {
+				partitions = fmt.Sprintf("%s of the %s of %s", plural(h.partitions, "partition"), plural(total, "partition"), topic)
+			}
+			f := Finding{
+				Severity: Warning,
+				Subject:  Subject{Topic: topic, TransactionalID: t.ID},
+				Title:    "A transaction holds back the consumers of " + topic,
+				Explanation: fmt.Sprintf(
+					"Transaction %s has been %s for %s. Until it finishes, read_committed consumers cannot read past its start on %s: about %s wait behind it.",
+					t.ID, state, duration(t.Open.Seconds()), partitions, plural(int(h.offsets), "message")),
+			}
+			if state == "open" {
+				f.Explanation += fmt.Sprintf(" Kafka aborts it once it has been open for %s.", duration(t.Timeout.Seconds()))
+				f.Suggestion = "Keep transactions short: commit every few seconds, or every few hundred messages. A producer that stops in the middle of one holds consumers back until `transaction.timeout.ms` passes, so keep that short too: a minute by default in Java and librdkafka-based clients, 40 seconds in franz-go."
+			} else {
+				f.Explanation += " Its coordinator writes the markers that finish it to every partition it wrote to, and keeps trying while one cannot take them."
+				f.Suggestion = "Check that every partition it wrote to has a leader and enough replicas in sync (the cluster's health above): markers wait for them."
+			}
+			found = append(found, f)
+		}
+	}
+	return found
+}
+
+// topicPartitions returns how many partitions a topic has, or 0.
+func topicPartitions(s Snapshot, name string) int {
+	t, _ := s.topic(name)
+	return t.Partitions
+}
+
+// transactionsAborted notes producers that aborted transactions over the
+// window, as they report it: Kafka counts aborts nowhere.
+func transactionsAborted(s Snapshot) []Finding {
+	var found []Finding
+	for _, p := range s.Producers {
+		if !p.AbortedTransactions {
+			continue
+		}
+		found = append(found, Finding{
+			Severity: Info,
+			Subject:  Subject{ClientID: p.ClientID, Principal: p.Principal},
+			Title:    p.ClientID + " aborts transactions",
+			Explanation: fmt.Sprintf(
+				"%s aborted transactions in the last %s: what they wrote is discarded, and read_committed consumers never see it. Kafka counts aborts nowhere, so how many is not known.",
+				p.ClientID, duration(s.Window.Seconds())),
+			Suggestion: fmt.Sprintf(
+				"The log of %s says why. Transactions abort after an error in processing, after `transaction.timeout.ms`, or when a newer instance with the same `transactional.id` takes over.",
+				p.ClientID),
+		})
+	}
+	return found
+}
+
+// producersNotIdempotent notes topics that received messages over the
+// window from no idempotent producer, as Kafka keeps state only for those.
+func producersNotIdempotent(s Snapshot) []Finding {
+	var found []Finding
+	for _, t := range s.Topics {
+		// A Postgres source's topics are written by Changeport's own Connect
+		// worker; too quiet a topic may have been written before the window.
+		if t.Source || t.IdempotentProducers == nil || *t.IdempotentProducers > 0 || t.MessagesInPerSecond < busyTopic {
+			continue
+		}
+		found = append(found, Finding{
+			Severity: Info,
+			Subject:  Subject{Topic: t.Name},
+			Title:    fmt.Sprintf("The producers of %s are not idempotent", t.Name),
+			Explanation: fmt.Sprintf(
+				"%s received %s messages a second over the last %s, none of them from an idempotent producer. A producer that is not sends a message again when an answer is lost, and may write it twice.",
+				t.Name, rate(t.MessagesInPerSecond), duration(s.Window.Seconds())),
+			Suggestion: "Set `enable.idempotence=true` and `acks=all` on its producers. Java clients from 3.2 are idempotent by default unless another setting turns it off, such as `acks=1`; librdkafka-based clients, such as the Python and Node.js ones, are not unless told.",
 		})
 	}
 	return found

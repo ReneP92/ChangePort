@@ -89,12 +89,12 @@ brings it back.
    ![The first message arriving](screenshots/49-welcome-first-message-desktop.png)
 
 The overview of a ready cluster: its active alerts; what needs attention;
-how to connect, with
-`client.properties` for admins; the brokers' health; throughput, with what
-changed meanwhile; how data flows from producers through topics to consumer
-groups; the topics with their retention, tiering, size and traffic; and how
-far behind each consumer group is, in plain language, with its lag over the
-last hour.
+how to connect, with `client.properties` for admins; the brokers' health,
+with the transactions open and how long the oldest has been; throughput,
+with what changed meanwhile; how data flows from producers through topics
+to consumer groups; the topics with their retention, tiering, size and
+traffic; and how far behind each consumer group is, in plain language, with
+its lag over the last hour.
 
 ![The overview](screenshots/03-overview-desktop.png)
 
@@ -137,8 +137,8 @@ sideways within its card.
 
 A topic's page and a consumer group's, from the overview's names: their
 health over the last 24 hours and what needs attention; the topic's
-settings, its traffic and the groups that read it; the group's lag on each
-topic it reads. Every graph marks what changed meanwhile, numbered,
+settings, its traffic, its producers and the groups that read it; the
+group's lag on each topic it reads. Every graph marks what changed meanwhile, numbered,
 with the changes listed under it in plain words: topics created or
 reconfigured, rebalances, broker restarts, throttling (see
 [timeline.md](timeline.md)).
@@ -146,6 +146,44 @@ reconfigured, rebalances, broker restarts, throttling (see
 ![A topic](screenshots/17-topic-desktop.png)
 
 ![A consumer group](screenshots/18-consumer-group-desktop.png)
+
+### Delivery guarantees
+
+A topic's **Producers** are those Kafka keeps state for on its partitions:
+the ones that write idempotently or in transactions, over the last day
+(`producer.id.expiration.ms`). Kafka knows them by an ID it gives each, not
+by client ID, so a transactional producer shows by its `transactional.id`
+and the others by that ID; each says whether it has a transaction open on
+the topic, how many partitions it wrote to, and the timestamp of its latest
+message, which is the producer's own clock: a replay's or a stream
+processor's may be old. Every transactional producer shows, and the 10
+idempotent ones with the latest timestamps, with how many more there are:
+short-lived producers each get an ID of their own. Producers that are not
+idempotent never show, as Kafka keeps no state for them: when a busy topic
+has no idempotent producer writing at all, the diagnoses note it. Once a
+transaction has been open on the topic for a minute, the card warns how
+many messages it holds back from `read_committed` consumers: about those
+after a partition's last stable offset. Healthy transactional producers
+hold back a moment's messages all the time.
+
+The overview's health says how many transactions are open, and how long
+the oldest has been, with a warning once that is a minute. It waits at
+most 3 seconds for Kafka, and leaves them out otherwise. The diagnoses find a
+transaction that holds consumers back for longer than a minute, a hanging
+one that its coordinator lost and Kafka never aborts, and producers that
+aborted transactions (see [diagnosis.md](diagnosis.md)). Kafka counts
+aborts nowhere, neither on the brokers nor in the clients' metrics, so the
+console shows no abort rate: it names the producers that spent time
+aborting instead.
+
+The console asks Kafka directly, on each request: open transactions with
+`ListTransactions` and `DescribeTransactions` as its own user, which may
+describe transactional IDs and nothing more; the producers with
+`DescribeProducers`, which Kafka authorizes as reading a topic, as the
+read-only user of the topic tail, which returns no messages here. The
+connection guide's examples set `acks=all` and idempotence outright, and
+show exactly once from topic to topic
+([connecting.md](connecting.md#delivery-guarantees)).
 
 ### Changing a topic
 

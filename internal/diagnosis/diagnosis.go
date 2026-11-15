@@ -22,6 +22,43 @@ type Snapshot struct {
 	Topics    []Topic
 	Groups    []Group
 	Producers []Producer
+	// Transactions are those open now.
+	Transactions []Transaction
+}
+
+// Transaction is a transaction open on the cluster.
+type Transaction struct {
+	// ID is its transactional ID.
+	ID string
+	// State is its coordinator's: Ongoing, PrepareCommit or PrepareAbort.
+	State string
+	// Open is how long it has been open, and Timeout how long it may be
+	// before its coordinator aborts it.
+	Open, Timeout time.Duration
+	Partitions    []TransactionPartition
+}
+
+// TransactionPartition is a partition a transaction wrote to, with the
+// messages read_committed consumers cannot read yet: those after its last
+// stable offset.
+type TransactionPartition struct {
+	Topic     string
+	Partition int32
+	HeldBack  int64
+}
+
+// HangingTransaction is a transaction open on a partition that its
+// coordinator no longer has open there, as kafka-transactions.sh
+// find-hanging tells it: Kafka never aborts it by itself.
+type HangingTransaction struct {
+	Partition  int32
+	ProducerID int64
+	// TransactionalID names its producer, when Kafka still knows it.
+	TransactionalID string
+	// From is the offset of its first message, and Open how long it has at
+	// least been open from there.
+	From int64
+	Open time.Duration
 }
 
 // Topic is one of the customer's topics.
@@ -44,6 +81,12 @@ type Topic struct {
 	// BytesRejected is what the topic refused as larger than that over the
 	// window.
 	BytesRejected float64
+	// IdempotentProducers are the producers Kafka keeps state for that
+	// wrote to the topic over the window: idempotent or transactional ones.
+	// Kafka keeps none for other producers. Nil when not known.
+	IdempotentProducers *int
+	// Hanging are the topic's hanging transactions.
+	Hanging []HangingTransaction
 	// Source is whether a Postgres source writes the topic: Changeport's
 	// own Connect worker, which sends no telemetry.
 	Source bool
@@ -108,6 +151,9 @@ type Producer struct {
 	// rest of its errors are records the producer refused itself, before
 	// sending them.
 	TopicErrorsPerSecond map[string]float64
+	// AbortedTransactions is whether it spent time aborting transactions
+	// over the window. Kafka counts aborts nowhere, so not how many.
+	AbortedTransactions bool
 }
 
 // Severity is how much a finding matters.
@@ -129,11 +175,13 @@ func (s Severity) rank() int {
 // Subject is what a finding is about.
 type Subject struct {
 	// Topic, ConsumerGroup and ClientID name it; a group reading a topic
-	// has both, and a client its Kafka user.
-	Topic         string
-	ConsumerGroup string
-	ClientID      string
-	Principal     string
+	// has both, and a client its Kafka user. A transaction holding back a
+	// topic has the topic and its transactional ID.
+	Topic           string
+	ConsumerGroup   string
+	ClientID        string
+	Principal       string
+	TransactionalID string
 }
 
 // Finding is one problem a rule found.
@@ -169,6 +217,10 @@ var Rules = []Rule{
 	{"oversized-messages", oversizedMessages},
 	{"producer-errors", producerErrors},
 	{"producers-without-telemetry", producersWithoutTelemetry},
+	{"hanging-transaction", hangingTransaction},
+	{"open-transaction", openTransaction},
+	{"transactions-aborted", transactionsAborted},
+	{"producers-not-idempotent", producersNotIdempotent},
 }
 
 // Diagnose runs every rule over the snapshot and returns what they found,
@@ -179,7 +231,7 @@ func Diagnose(s Snapshot) []Finding {
 		for _, f := range rule.Find(s) {
 			f.Rule = rule.Name
 			f.ID = rule.Name + ":" + strings.Join(slices.DeleteFunc(
-				[]string{f.Subject.ConsumerGroup, f.Subject.Topic, f.Subject.Principal, f.Subject.ClientID},
+				[]string{f.Subject.ConsumerGroup, f.Subject.Topic, f.Subject.TransactionalID, f.Subject.Principal, f.Subject.ClientID},
 				func(s string) bool { return s == "" }), "/")
 			findings = append(findings, f)
 		}

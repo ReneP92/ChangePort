@@ -57,6 +57,12 @@ type Clusters interface {
 	// ConsumerGroups describes every consumer group: its state, and each
 	// member with what it reads, for the topology map and the diagnoses.
 	ConsumerGroups(ctx context.Context, customerID string) ([]ConsumerGroup, error)
+	// Transactions returns the transactions open on the cluster, with the
+	// messages each holds back from read_committed consumers.
+	Transactions(ctx context.Context, customerID string) ([]Transaction, error)
+	// Producers returns the producers Kafka keeps state for on the topics'
+	// partitions: the idempotent and transactional ones.
+	Producers(ctx context.Context, customerID string, topics ...string) ([]PartitionProducer, error)
 }
 
 // ConsumerGroup is a consumer group as Kafka describes it.

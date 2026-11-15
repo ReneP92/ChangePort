@@ -379,6 +379,125 @@ func TestPartitionsAdded(t *testing.T) {
 	}
 }
 
+func TestOpenTransaction(t *testing.T) {
+	s := Snapshot{
+		Topics: []Topic{{Name: "orders", Partitions: 6}, {Name: "payments", Partitions: 1}},
+		Transactions: []Transaction{
+			{ID: "checkout-1", State: "Ongoing", Open: 4 * time.Minute, Timeout: 10 * time.Minute, Partitions: []TransactionPartition{
+				{Topic: "orders", Partition: 0, HeldBack: 80},
+				{Topic: "orders", Partition: 3, HeldBack: 40},
+				{Topic: "payments", Partition: 0, HeldBack: 5},
+				{Topic: "audit", Partition: 0},
+			}},
+			// A younger one on the same partition: its offsets are the
+			// oldest's, which holds the last stable offset.
+			{ID: "checkout-2", State: "Ongoing", Open: 2 * time.Minute, Partitions: []TransactionPartition{{Topic: "orders", Partition: 0, HeldBack: 80}}},
+			// Young, or holding nothing back: fine.
+			{ID: "fresh", State: "Ongoing", Open: 20 * time.Second, Partitions: []TransactionPartition{{Topic: "orders", Partition: 5, HeldBack: 9}}},
+			{ID: "idle", State: "Ongoing", Open: 5 * time.Minute, Partitions: []TransactionPartition{{Topic: "orders", Partition: 4}}},
+			// Stuck committing, as when a partition cannot take its markers.
+			{ID: "stuck", State: "PrepareCommit", Open: 5 * time.Minute, Partitions: []TransactionPartition{{Topic: "orders", Partition: 1, HeldBack: 7}}},
+		},
+	}
+	found := only(t, "open-transaction", s)
+	var ids []string
+	for _, f := range found {
+		ids = append(ids, f.ID)
+	}
+	if want := []string{"open-transaction:orders/checkout-1", "open-transaction:orders/stuck", "open-transaction:payments/checkout-1"}; !slices.Equal(ids, want) {
+		t.Fatalf("found %v, want %v", ids, want)
+	}
+	if want := "Transaction checkout-1 has been open for 4 minutes. Until it finishes, read_committed consumers cannot read past its start on 2 partitions of the 6 partitions of orders: about 120 messages wait behind it. Kafka aborts it once it has been open for 10 minutes."; found[0].Explanation != want {
+		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
+	}
+	if !strings.Contains(found[2].Explanation, "past its start on payments: about 5 messages") {
+		t.Errorf("explanation = %q, want the whole of payments", found[2].Explanation)
+	}
+	if !strings.Contains(found[1].Explanation, "has been committing for 5 minutes") || !strings.Contains(found[1].Suggestion, "has a leader") {
+		t.Errorf("stuck = %+v, want it committing, and what markers wait for", found[1])
+	}
+	if !strings.Contains(found[0].Suggestion, "40 seconds in franz-go") {
+		t.Errorf("suggestion = %q, want each client's default timeout", found[0].Suggestion)
+	}
+	// A transaction holding a topic back is the topic's concern.
+	topics, _ := Levels(found)
+	if topics["orders"].Level != NeedsAttention {
+		t.Errorf("orders = %+v, want it to need attention", topics["orders"])
+	}
+}
+
+func TestHangingTransaction(t *testing.T) {
+	s := Snapshot{Topics: []Topic{
+		{Name: "orders", Hanging: []HangingTransaction{
+			{Partition: 2, ProducerID: 4001, From: 1200, Open: 40 * time.Minute},
+			{Partition: 5, ProducerID: 4002, TransactionalID: "checkout-1", From: 9, Open: 2 * time.Hour},
+		}},
+		{Name: "payments", Hanging: []HangingTransaction{{Partition: 0, ProducerID: 4003, From: 3, Open: 16 * time.Minute}}},
+	}}
+	found := only(t, "hanging-transaction", s)
+	if len(found) != 2 || found[0].Severity != Critical || found[0].Title != "Hanging transactions block 2 partitions of orders" ||
+		found[1].Title != "A hanging transaction blocks partition 0 of payments" {
+		t.Fatalf("found %+v, want one critical finding per topic", found)
+	}
+	if want := "On orders, partition 2 has had a transaction of a producer with ID 4001 open from offset 1200 for at least 40 minutes; partition 5 has had a transaction of transactional producer checkout-1 open from offset 9 for at least 2 hours: longer than any transaction may last (15 minutes), and its coordinator no longer has it open."; !strings.HasPrefix(found[0].Explanation, want) {
+		t.Errorf("explanation = %q\nwant it to start %q", found[0].Explanation, want)
+	}
+	if !strings.Contains(found[0].Suggestion, "orders, partition 2 from offset 1200 and partition 5 from offset 9.") {
+		t.Errorf("suggestion = %q, want what support needs", found[0].Suggestion)
+	}
+}
+
+// Every finding has an ID of its own, which the console keys its list on.
+func TestDiagnoseGivesEachFindingItsOwnID(t *testing.T) {
+	s := Snapshot{
+		Window: 15 * time.Minute,
+		Topics: []Topic{{Name: "orders", Partitions: 6, Hanging: []HangingTransaction{{Partition: 1, ProducerID: 1, From: 1}, {Partition: 2, ProducerID: 2, From: 2}}}},
+		Transactions: []Transaction{
+			{ID: "a", State: "Ongoing", Open: time.Hour, Partitions: []TransactionPartition{{Topic: "orders", Partition: 0, HeldBack: 1}}},
+			{ID: "b", State: "Ongoing", Open: 2 * time.Hour, Partitions: []TransactionPartition{{Topic: "orders", Partition: 3, HeldBack: 1}}},
+		},
+	}
+	seen := map[string]bool{}
+	for _, f := range Diagnose(s) {
+		if seen[f.ID] {
+			t.Errorf("two findings share ID %s", f.ID)
+		}
+		seen[f.ID] = true
+	}
+}
+
+func TestTransactionsAborted(t *testing.T) {
+	s := Snapshot{Window: 15 * time.Minute, Producers: []Producer{
+		{Principal: "User:admin", ClientID: "checkout", AbortedTransactions: true},
+		{Principal: "User:admin", ClientID: "billing"},
+	}}
+	found := only(t, "transactions-aborted", s)
+	if len(found) != 1 || found[0].Severity != Info || found[0].ID != "transactions-aborted:User:admin/checkout" {
+		t.Fatalf("found %+v, want a note about checkout", found)
+	}
+	if !strings.Contains(found[0].Explanation, "Kafka counts aborts nowhere, so how many is not known.") {
+		t.Errorf("explanation = %q, want it honest about the count", found[0].Explanation)
+	}
+}
+
+func TestProducersNotIdempotent(t *testing.T) {
+	none, some := 0, 2
+	s := Snapshot{Window: 15 * time.Minute, Topics: []Topic{
+		{Name: "orders", MessagesInPerSecond: 40, IdempotentProducers: &none},
+		{Name: "payments", MessagesInPerSecond: 40, IdempotentProducers: &some},
+		{Name: "quiet", MessagesInPerSecond: 0.2, IdempotentProducers: &none},
+		{Name: "unknown", MessagesInPerSecond: 40},
+		{Name: "shop.public.orders", MessagesInPerSecond: 40, IdempotentProducers: &none, Source: true},
+	}}
+	found := only(t, "producers-not-idempotent", s)
+	if len(found) != 1 || found[0].Subject.Topic != "orders" || found[0].Severity != Info {
+		t.Fatalf("found %+v, want a note about orders only", found)
+	}
+	if !strings.Contains(found[0].Suggestion, "`enable.idempotence=true` and `acks=all`") {
+		t.Errorf("suggestion = %q", found[0].Suggestion)
+	}
+}
+
 func TestProducersWithoutTelemetry(t *testing.T) {
 	unseen := orders()
 	unseen.UnreportedBytesInPerSecond = 40_000

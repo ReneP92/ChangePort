@@ -229,6 +229,34 @@ func TestAdminConnectsWithTheConsoleCertificate(t *testing.T) {
 	}
 }
 
+// Describing producers is authorized as reading, so it goes as the tail
+// user, in a client of its own, never the console's.
+func TestReadingConnectsAsTheTailUser(t *testing.T) {
+	f := newFixture(t)
+	certPEM, keyPEM := f.clientsCA.issue(t, "tail-1", false)
+	f.secrets.set("customer-acme", "changeport-tail", map[string][]byte{"user.crt": certPEM, "user.key": keyPEM})
+	reading, err := f.pool.Reading(t.Context(), "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reading.ListTopics(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.broker.lastClient(); got != "tail-1" {
+		t.Errorf("the broker saw client certificate %q, want tail-1", got)
+	}
+	admin, err := f.pool.Admin(t.Context(), "acme")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if admin == reading {
+		t.Error("Reading and Admin share a client")
+	}
+	if again, err := f.pool.Reading(t.Context(), "acme"); err != nil || again != reading {
+		t.Errorf("a second Reading call = %v, %v, want the pooled client", again, err)
+	}
+}
+
 func TestMetadataSeesTopicsAtOnce(t *testing.T) {
 	f := newFixture(t)
 	admin, err := f.pool.Admin(t.Context(), "acme")
@@ -280,7 +308,7 @@ func TestAdminUsesRenewedCertificates(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The next connection presents the renewed certificate.
-	conn, err := f.pool.clients["acme"].dial(t.Context(), "tcp", f.broker.cluster.ListenAddrs()[0])
+	conn, err := f.pool.clients[key{"acme", provisioning.ConsoleUser}].dial(t.Context(), "tcp", f.broker.cluster.ListenAddrs()[0])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -326,7 +354,7 @@ func TestAdminClosesIdleClients(t *testing.T) {
 	if _, err := f.pool.Admin(t.Context(), "globex"); !errors.Is(err, ErrNotReady) {
 		t.Fatal(err)
 	}
-	if _, ok := f.pool.clients["acme"]; ok {
+	if _, ok := f.pool.clients[key{"acme", provisioning.ConsoleUser}]; ok {
 		t.Error("the idle client of acme is still open")
 	}
 }

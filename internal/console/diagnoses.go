@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -78,6 +79,9 @@ func (s *Server) ListDiagnoses(ctx context.Context, _ api.ListDiagnosesRequestOb
 		if f.Subject.ClientID != "" {
 			d.ClientId = ptr.To(f.Subject.ClientID)
 		}
+		if f.Subject.TransactionalID != "" {
+			d.TransactionalId = ptr.To(f.Subject.TransactionalID)
+		}
 		out.Diagnoses = append(out.Diagnoses, d)
 	}
 	return api.ListDiagnoses200JSONResponse(out), nil
@@ -144,7 +148,7 @@ var diagnosisQueries = []metrics.Query{
 	metrics.MessagesInRecent, metrics.BytesIn, metrics.ProducerBytes, metrics.PartitionSize,
 	metrics.LagSeconds, metrics.LagMessages, metrics.LagCapped, metrics.LagSecondsEarlier,
 	metrics.ConsumedMessages, metrics.LostPartitions, metrics.OffsetResets,
-	metrics.ProducerSends, metrics.ProducerErrors, metrics.ProducerRetries, metrics.ProducerTopicErrors, metrics.BytesRejected,
+	metrics.ProducerSends, metrics.ProducerErrors, metrics.ProducerRetries, metrics.ProducerTopicErrors, metrics.ProducerAborts, metrics.BytesRejected,
 }
 
 // snapshot puts together what the rules look at: what Kafka says of the
@@ -177,7 +181,103 @@ func (s *Server) snapshot(ctx context.Context, customerID string) (diagnosis.Sna
 	for i := range snapshot.Topics {
 		_, snapshot.Topics[i].Source = sources[snapshot.Topics[i].Name]
 	}
+	s.addTransactions(ctx, customerID, &snapshot, now)
 	return snapshot, nil
+}
+
+// transactionMaxTimeout is the brokers' transaction.max.timeout.ms, which
+// Changeport leaves at Kafka's default: no transaction stays open longer,
+// unless its coordinator lost it.
+const transactionMaxTimeout = 15 * time.Minute
+
+// kafkaTimeout bounds what a diagnosis waits for Kafka's Admin API, so that
+// a broker that does not answer costs the transactions, not the diagnoses.
+const kafkaTimeout = 10 * time.Second
+
+// addTransactions adds to the snapshot the producers Kafka keeps state for
+// and the transactions open now, read in that order, as kafka-transactions.sh
+// find-hanging does: a transaction found open on a partition is then looked
+// for at its coordinator, which has it open there if it is alive. They are a
+// help rather than a need: without them, the rules that read them find
+// nothing, and the others still run.
+func (s *Server) addTransactions(ctx context.Context, customerID string, snapshot *diagnosis.Snapshot, now time.Time) {
+	ctx, cancel := context.WithTimeout(ctx, kafkaTimeout)
+	defer cancel()
+	names := make([]string, 0, len(snapshot.Topics))
+	for _, t := range snapshot.Topics {
+		names = append(names, t.Name)
+	}
+	producers, producersErr := s.clusters.Producers(ctx, customerID, names...)
+	if producersErr != nil {
+		s.logger.WarnContext(ctx, "diagnoses without the producers", "customer", customerID, "error", producersErr)
+	}
+	transactions, err := s.clusters.Transactions(ctx, customerID)
+	if err != nil {
+		s.logger.WarnContext(ctx, "diagnoses without the transactions", "customer", customerID, "error", err)
+		return
+	}
+	if producersErr != nil {
+		joinTransactions(snapshot, transactions, nil, nil, now)
+		return
+	}
+	saw := s.producerMemory.look(customerID, producers, now)
+	joinTransactions(snapshot, transactions, producers, &saw, now)
+}
+
+// joinTransactions puts the open transactions into the snapshot and, with
+// what the console saw of the producers, the topics' idempotent producers
+// that wrote since its last look, when it looked recently, and their
+// hanging transactions. A transaction hangs when it has been seen open on a
+// partition from the same offset for longer than any transaction may last,
+// and its coordinator does not have it open there: Kafka then never aborts
+// it. It takes no producer's timestamp, which is the producer's clock.
+func joinTransactions(snapshot *diagnosis.Snapshot, transactions []Transaction, producers []PartitionProducer, saw *seen, now time.Time) {
+	open := map[string]map[string]bool{}
+	for _, t := range transactions {
+		d := diagnosis.Transaction{ID: t.ID, State: t.State, Open: now.Sub(t.Started), Timeout: t.Timeout}
+		open[t.ID] = map[string]bool{}
+		for _, p := range t.Partitions {
+			d.Partitions = append(d.Partitions, diagnosis.TransactionPartition{Topic: p.Topic, Partition: p.Partition, HeldBack: p.HeldBack})
+			open[t.ID][fmt.Sprintf("%s/%d", p.Topic, p.Partition)] = true
+		}
+		snapshot.Transactions = append(snapshot.Transactions, d)
+	}
+	if saw == nil {
+		return
+	}
+	byTopic := map[string]*diagnosis.Topic{}
+	for i := range snapshot.Topics {
+		t := &snapshot.Topics[i]
+		byTopic[t.Name] = t
+		if saw.wrote != nil {
+			t.IdempotentProducers = ptr.To(0)
+		}
+	}
+	writers := map[string]map[int64]bool{}
+	for _, p := range producers {
+		t, ok := byTopic[p.Topic]
+		if !ok {
+			continue
+		}
+		if saw.wrote[producerKey{p.Topic, p.Partition, p.ProducerID, p.Epoch}] {
+			if writers[p.Topic] == nil {
+				writers[p.Topic] = map[int64]bool{}
+			}
+			writers[p.Topic][p.ProducerID] = true
+			t.IdempotentProducers = ptr.To(len(writers[p.Topic]))
+		}
+		if p.OpenFrom < 0 {
+			continue
+		}
+		since, ok := saw.openSince[openKey{p.Topic, p.Partition, p.ProducerID, p.OpenFrom}]
+		if ok && now.Sub(since) > transactionMaxTimeout &&
+			(p.TransactionalID == "" || !open[p.TransactionalID][fmt.Sprintf("%s/%d", p.Topic, p.Partition)]) {
+			t.Hanging = append(t.Hanging, diagnosis.HangingTransaction{
+				Partition: p.Partition, ProducerID: p.ProducerID, TransactionalID: p.TransactionalID,
+				From: p.OpenFrom, Open: now.Sub(since),
+			})
+		}
+	}
 }
 
 // changes are what the timeline says of the last while: each group's
@@ -339,6 +439,9 @@ func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values m
 	}
 	for _, series := range values[metrics.ProducerRetries] {
 		producer(series).RetriesPerSecond = value(series)
+	}
+	for _, series := range values[metrics.ProducerAborts] {
+		producer(series).AbortedTransactions = value(series) > 0
 	}
 	for _, series := range values[metrics.ProducerTopicErrors] {
 		p := producer(series)

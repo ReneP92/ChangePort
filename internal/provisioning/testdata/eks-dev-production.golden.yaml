@@ -369,8 +369,9 @@ spec:
 ---
 # The console's user on the internal listener: it manages the customer's
 # topics within the platform's guardrails (creates and deletes them, adds
-# partitions and changes their retention), reads cluster metadata and which
-# consumer groups read a topic, and cannot read or write messages.
+# partitions and changes their retention), reads cluster metadata, which
+# consumer groups read a topic and which transactions are open, and cannot
+# read or write messages.
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaUser
 metadata:
@@ -397,13 +398,19 @@ spec:
           patternType: literal
         operations: [Describe]
       - resource:
+          type: transactionalId
+          name: "*"
+          patternType: literal
+        operations: [Describe]
+      - resource:
           type: cluster
         operations: [Describe]
 ---
 # The user the console reads messages as, only to show admins a topic's
-# recent messages: it reads and describes topics, and nothing else. Without
-# access to consumer groups it never commits offsets, so a tail cannot
-# disturb the customer's consumers.
+# recent messages, and describes the producers that write a topic, which
+# Kafka authorizes as reading it: it reads and describes topics, and nothing
+# else. Without access to consumer groups it never commits offsets, so a
+# tail cannot disturb the customer's consumers.
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaUser
 metadata:

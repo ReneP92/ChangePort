@@ -142,6 +142,9 @@ type Server struct {
 	egress []string
 	ui     fs.FS
 	logger *slog.Logger
+	// producerMemory keeps the producers of each customer as the
+	// diagnoses last saw them.
+	producerMemory *producerMemory
 	// csp is the Content-Security-Policy of the web app's pages.
 	csp string
 	// diagnoses keeps each environment's last diagnoses for a moment, and
@@ -204,31 +207,32 @@ type Options struct {
 // error: the console then serves the web app and refuses every API call.
 func New(config Config, options Options) (*Server, error) {
 	s := &Server{
-		config:        config,
-		customers:     options.Customers,
-		organizations: options.Organizations,
-		trialRequests: options.TrialRequests,
-		mail:          cmp.Or[Mail](options.Mail, &email.Mailer{Logger: options.Logger}),
-		clusters:      options.Clusters,
-		metrics:       options.Metrics,
-		sources:       options.Sources,
-		databases:     options.Databases,
-		alerts:        options.Alerts,
-		alertSettings: options.AlertSettings,
-		receivers:     options.Receivers,
-		alertPoll:     cmp.Or(options.AlertPoll, 5*time.Second),
-		events:        options.Events,
-		recorder:      options.Recorder,
-		userNames:     &userNames{users: options.Users, names: map[string]cachedName{}},
-		messages:      options.Messages,
-		tails:         &tails{running: map[string]int{}},
-		diagnoses:     diagnosisCache{entries: map[string]diagnosisEntry{}},
-		health:        &healthMonitor{},
-		registries:    map[string]*tail.Registry{},
-		registryURL:   options.RegistryURL,
-		egress:        options.EgressAddresses,
-		ui:            options.UI,
-		logger:        options.Logger,
+		config:         config,
+		customers:      options.Customers,
+		organizations:  options.Organizations,
+		trialRequests:  options.TrialRequests,
+		mail:           cmp.Or[Mail](options.Mail, &email.Mailer{Logger: options.Logger}),
+		clusters:       options.Clusters,
+		metrics:        options.Metrics,
+		sources:        options.Sources,
+		databases:      options.Databases,
+		alerts:         options.Alerts,
+		alertSettings:  options.AlertSettings,
+		receivers:      options.Receivers,
+		alertPoll:      cmp.Or(options.AlertPoll, 5*time.Second),
+		events:         options.Events,
+		recorder:       options.Recorder,
+		userNames:      &userNames{users: options.Users, names: map[string]cachedName{}},
+		messages:       options.Messages,
+		tails:          &tails{running: map[string]int{}},
+		diagnoses:      diagnosisCache{entries: map[string]diagnosisEntry{}},
+		health:         &healthMonitor{},
+		producerMemory: newProducerMemory(),
+		registries:     map[string]*tail.Registry{},
+		registryURL:    options.RegistryURL,
+		egress:         options.EgressAddresses,
+		ui:             options.UI,
+		logger:         options.Logger,
 	}
 	if missing := config.missing(); len(missing) > 0 {
 		s.logger.Warn("the console is not configured and refuses every API call", "missing", strings.Join(missing, ", "))
@@ -1037,6 +1041,9 @@ func (s *Server) GetHealth(ctx context.Context, _ api.GetHealthRequestObject) (a
 		}
 		health.Brokers = append(health.Brokers, broker)
 	}
+	// Kafka's transactions are asked for meanwhile, within their own time.
+	transactions := make(chan *api.TransactionsSummary, 1)
+	go func() { transactions <- s.transactionsSummary(ctx, customer.Name) }()
 	now := time.Now()
 	for q, field := range map[metrics.Query]**int{
 		metrics.UnderReplicated:   &health.UnderReplicatedPartitions,
@@ -1055,6 +1062,7 @@ func (s *Server) GetHealth(ctx context.Context, _ api.GetHealthRequestObject) (a
 			*field = ptr.To(int(series[0].Points[0].Value))
 		}
 	}
+	health.Transactions = <-transactions
 	return health, nil
 }
 

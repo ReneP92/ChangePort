@@ -500,6 +500,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 	routes["/api/customer/events"] = customerRoute(`"message":"Topic acme-orders was created`, `"kind":"broker.restarted"`, `"events":[]`)
 	routes["/api/customer/consumer-groups/billing/lag"] = customerRoute(`"topic":"acme-orders"`, `"lagSeconds":[{`, `"topic":"globex-orders"`)
 	routes["/api/customer/topics/acme-orders/consumer-groups"] = customerRoute(`{"groups":[]}`, `{"groups":[]}`, `{"groups":[]}`)
+	routes["/api/customer/topics/acme-orders/producers"] = customerRoute(`"producers":[]`, `"heldBack":0`, `"producers":[]`)
 	// An organization without a cluster has no environments, rather than
 	// none to act on.
 	environments := customerRoute(`"customerID":"acme","default":true`, `"limit":5`, `"customerID":"globex"`)
@@ -752,6 +753,11 @@ type fakeClusters struct {
 	alterFails error
 	// undescribed lists topics whose configs Kafka does not describe.
 	undescribed map[string]bool
+	// transactions and producers are what Kafka says of them, by customer.
+	transactions map[string][]Transaction
+	producers    map[string][]PartitionProducer
+	// transactionsFail makes Transactions fail as this.
+	transactionsFail error
 	// described are the consumer groups Kafka describes, by customer, when
 	// a test sets them.
 	described map[string][]ConsumerGroup
@@ -797,6 +803,17 @@ func (f *fakeClusters) AlterTopic(_ context.Context, id, name string, alteration
 	}
 	f.altered[id+"/"+name] = alteration
 	return alteration, nil
+}
+
+func (f *fakeClusters) Transactions(_ context.Context, id string) ([]Transaction, error) {
+	if f.transactionsFail != nil {
+		return nil, f.transactionsFail
+	}
+	return f.transactions[id], nil
+}
+
+func (f *fakeClusters) Producers(_ context.Context, id string, topics ...string) ([]PartitionProducer, error) {
+	return slices.DeleteFunc(slices.Clone(f.producers[id]), func(p PartitionProducer) bool { return !slices.Contains(topics, p.Topic) }), nil
 }
 
 func (f *fakeClusters) ConsumerGroups(_ context.Context, id string) ([]ConsumerGroup, error) {
