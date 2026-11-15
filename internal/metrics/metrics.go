@@ -94,7 +94,10 @@ const (
 	PartitionSize Query = "partition_size"
 	// ProducerSends, ProducerErrors and ProducerRetries are the records per
 	// second each producer sent, failed to send and sent again, as it
-	// reports them, per Kafka user and client ID.
+	// reports them, per Kafka user and client ID, over the window. A client
+	// instance's counters start from 0, and its series with its first push,
+	// so they count from 0 there (increase_pure): a short-lived producer's
+	// first push is not lost as the start of a rate.
 	ProducerSends   Query = "producer_sends"
 	ProducerErrors  Query = "producer_errors"
 	ProducerRetries Query = "producer_retries"
@@ -176,10 +179,10 @@ var definitions = map[Query]definition{
 	OffsetResets:      {`max by (consumer_group, topic) (resets(changeport_consumergroup_committed_offsets{%s}[{window}]))`, perGroup},
 	// Each replica of a partition holds the same; the largest is the leader's.
 	PartitionSize:       {`max by (topic, partition) (kafka_log_log_size{%s})`, perTopic},
-	ProducerSends:       {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_send_total{%s}[{window}])))`, perProducer},
-	ProducerErrors:      {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_error_total{%s}[{window}])))`, perProducer},
-	ProducerRetries:     {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_retry_total{%s}[{window}])))`, perProducer},
-	ProducerTopicErrors: {`sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (rate(clients_org_apache_kafka_producer_topic_record_error_total{%s}[{window}])))`, perClient},
+	ProducerSends:       {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (increase_pure(clients_org_apache_kafka_producer_record_send_total{%s}[{window}]) / {seconds}))`, perProducer},
+	ProducerErrors:      {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (increase_pure(clients_org_apache_kafka_producer_record_error_total{%s}[{window}]) / {seconds}))`, perProducer},
+	ProducerRetries:     {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (increase_pure(clients_org_apache_kafka_producer_record_retry_total{%s}[{window}]) / {seconds}))`, perProducer},
+	ProducerTopicErrors: {`sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (increase_pure(clients_org_apache_kafka_producer_topic_record_error_total{%s}[{window}]) / {seconds}))`, perClient},
 	BytesRejected:       {`sum by (topic) (increase_pure(kafka_server_brokertopicmetrics_bytesrejectedpersec_total{%s}[{window}]))`, perTopic},
 
 	TopicHealth:   {`max by (topic) (max_over_time(changeport_health_level{%s}[{window}]))`, perTopic},
@@ -260,7 +263,8 @@ func Expr(q Query, tenant string, filter Filter) (string, error) {
 	if window <= 0 {
 		window = DefaultWindow
 	}
-	expression := strings.ReplaceAll(d.expression, "{window}", fmt.Sprintf("%ds", int(window.Seconds())))
+	seconds := int(window.Seconds())
+	expression := strings.NewReplacer("{window}", fmt.Sprintf("%ds", seconds), "{seconds}", strconv.Itoa(seconds)).Replace(d.expression)
 	return fmt.Sprintf(expression, strings.Join(selector, ", ")), nil
 }
 

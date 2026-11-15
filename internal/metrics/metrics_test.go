@@ -42,7 +42,7 @@ func TestExpr(t *testing.T) {
 		{
 			"every producer, over a shorter window", ProducerErrors,
 			Filter{Window: 5 * time.Minute},
-			`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_error_total{tenant="acme", principal!~"User:CN=.*"}[300s])))`,
+			`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (increase_pure(clients_org_apache_kafka_producer_record_error_total{tenant="acme", principal!~"User:CN=.*"}[300s]) / 300))`,
 		},
 		{
 			"a topic's health over a step", TopicHealth,

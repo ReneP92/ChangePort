@@ -225,10 +225,10 @@ test("messages too large for their topic are diagnosed, with who sent them", asy
   const running: Promise<unknown>[] = [];
   try {
     // One producer allows itself larger records, so the brokers refuse
-    // them: only a few, as a one-off upload would, which the brokers report
-    // from their first refusal. The other refuses them itself, before they
-    // reach Kafka, for a while.
-    running.push(send(5, refused, "max.request.size=2000000"), send(120, tooLarge));
+    // them: a short burst, which the brokers report from their first
+    // refusal, long enough for the producer to push its telemetry once. The
+    // other refuses them itself, before they reach Kafka, for a while.
+    running.push(send(20, refused, "max.request.size=2000000"), send(120, tooLarge));
 
     const oversized = await expectDiagnosis(
       page,
