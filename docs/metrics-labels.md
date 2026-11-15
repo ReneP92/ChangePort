@@ -174,9 +174,11 @@ Clients push only what a client metrics subscription asks for. The Kafka
 agent keeps the platform's, named `changeport`, in place: about 30 metrics,
 by full name, in `internal/agent/telemetry.go`, pushed every minute
 (every 5 seconds on kind, for the tests). They are KIP-714's standard
-metrics, which every client library reports, and the Java clients' counts of
-records, errors and bytes: per producer 13 series and 3 per topic it writes
-to, per consumer 15 series and 2 per topic it reads. Java clients have about
+metrics, which every client library reports, the Java clients' counts of
+records, errors and bytes, and the time Java producers spend committing and
+aborting transactions, the only sign of aborts Kafka gives (see
+[diagnosis.md](diagnosis.md)): per producer 15 series and 3 per topic it
+writes to, per consumer 15 series and 2 per topic it reads. Java clients have about
 120 metrics; the per-broker ones (`node.*`) are left out, as there are as
 many of them as brokers and their `node_id` attribute clashes with the
 broker's own label.
