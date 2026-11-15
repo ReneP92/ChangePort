@@ -12,6 +12,7 @@ import (
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
 	"github.com/ReneP92/changeport/internal/console/api"
+	"github.com/ReneP92/changeport/internal/diagnosis"
 	"github.com/ReneP92/changeport/internal/metrics"
 )
 
@@ -77,5 +78,49 @@ func TestLevelsUnknown(t *testing.T) {
 	known := levels{known: true}
 	if got := known.group("billing"); got == nil || got.Level != api.Healthy || len(got.Diagnoses) != 0 {
 		t.Errorf("a group without findings = %+v, want healthy", got)
+	}
+}
+
+// The monitor exports the levels of the topics and groups that are not
+// healthy, each with its own tenant.
+func TestHealthMonitorExportsLevels(t *testing.T) {
+	m := &healthMonitor{latest: map[string]levels{
+		"acme": {known: true,
+			topics: map[string]diagnosis.Health{"orders": {Level: diagnosis.NeedsAttention}},
+			groups: map[string]diagnosis.Health{"billing": {Level: diagnosis.AtRisk}},
+		},
+	}}
+	want := `
+# HELP changeport_health_level How healthy a topic or consumer group is, from its diagnoses: 1 needs attention, 2 at risk. Healthy ones have no series.
+# TYPE changeport_health_level gauge
+changeport_health_level{consumer_group="",tenant="acme",topic="orders"} 1
+changeport_health_level{consumer_group="billing",tenant="acme",topic=""} 2
+`
+	if err := testutil.CollectAndCompare(m, strings.NewReader(want), "changeport_health_level"); err != nil {
+		t.Error(err)
+	}
+}
+
+// The lists carry each topic's and group's health.
+func TestListsCarryHealth(t *testing.T) {
+	f := newFixture(t)
+	member := f.signer.token(t, session{user: "user_2", org: "org_acme", role: "member"})
+	for _, path := range []string{"/api/customer/topics", "/api/customer/consumer-groups", "/api/customer/topology"} {
+		if status, body, _ := get(t, f.handler, path, member); status != http.StatusOK || !strings.Contains(body, `"health":{"diagnoses":[],"level":"healthy"}`) {
+			t.Errorf("GET %s = %d %s, want each with its health", path, status, body)
+		}
+	}
+}
+
+// A level beyond at risk, which no rule makes, is at risk rather than
+// healthy.
+func TestAPILevel(t *testing.T) {
+	for level, want := range map[diagnosis.Level]api.HealthLevel{
+		diagnosis.Healthy: api.Healthy, diagnosis.NeedsAttention: api.NeedsAttention,
+		diagnosis.AtRisk: api.AtRisk, 10: api.AtRisk,
+	} {
+		if got := apiLevel(level); got != want {
+			t.Errorf("apiLevel(%d) = %s, want %s", level, got, want)
+		}
 	}
 }

@@ -1316,6 +1316,7 @@ export interface components {
         HealthLevel: "healthy" | "needsAttention" | "atRisk";
         /** @description A topic's or consumer group's level over the last 24 hours, the worst of each step. */
         HealthHistory: {
+            current?: components["schemas"]["HealthStatus"];
             stepSeconds: number;
             points: components["schemas"]["HealthPoint"][];
         };

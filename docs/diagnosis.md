@@ -57,7 +57,8 @@ it, so a customer sees at a glance where to look:
 Three levels rather than a score from 0 to 100, which would invite a
 question it cannot answer ("why 73?"): a level always comes with the
 diagnoses that set it. A diagnosis about a group reading a topic is the
-group's, as the group falls behind, not the topic. The topics and consumer
+group's, as the group falls behind, not the topic: a topic's page lists
+those apart, under the consumer groups that read it. The topics and consumer
 groups tables show it, and sort by it worst first; the data flow map marks
 the nodes that are not healthy; and a topic's and a group's pages show it
 beside their names, with the last 24 hours in 15-minute steps and the
@@ -67,11 +68,15 @@ The history comes from the console's health monitor
 (`internal/console/health.go`), which diagnoses every ready customer's
 cluster every minute (`-health-interval`), whether or not anyone looks, and
 exports the levels on its own metrics port (9090, which the Service leaves
-out, so it stays inside the cluster) for VictoriaMetrics to keep:
+out and a NetworkPolicy opens to VictoriaMetrics alone) for it to keep:
 `changeport_health_level` for each topic and group that is not healthy, and
 `changeport_health_checked` for each customer it looked at. A step without
 a look, such as while the console was down, shows as unknown rather than
-healthy. The monitor's looks also keep the diagnoses fresh for the pages.
+healthy. It diagnoses four clusters at a time, each for at most 30
+seconds, so one that does not answer holds up only its own look, and its
+diagnoses stay fresh until its next look, so the pages find them ready. The
+lists wait at most 2 seconds for health, and without it show none rather
+than keep the customer waiting.
 
 ## The rules
 

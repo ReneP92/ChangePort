@@ -73,6 +73,9 @@ func run(ctx context.Context, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	if *healthInterval <= 0 || *diagnosisWindow <= 0 {
+		return errors.New("the health interval and the diagnosis window must be longer than nothing")
+	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	// The customer watch's informers log through controller-runtime, which
 	// otherwise prints a stack trace at start instead.

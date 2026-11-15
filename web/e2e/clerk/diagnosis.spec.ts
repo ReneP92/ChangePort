@@ -117,9 +117,7 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
     await expect(
       card(page, "Data flow")
         .getByRole("link", { name: new RegExp(`^${group}`) })
-        .getByRole("img", {
-          name: "Needs attention",
-        }),
+        .getByRole("img", { name: "Needs attention" }),
     ).toBeVisible();
     await finding.getByRole("link", { name: `Consumer group ${group}` }).click();
     await expect(page.getByRole("heading", { level: 1, name: group })).toBeVisible();
@@ -147,11 +145,11 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
         timeout: 10_000,
       });
       await expect(finding).toHaveCount(0);
+      // And the group is healthy again.
+      await expect(
+        card(page, "Consumer groups").getByRole("row").filter({ hasText: group }),
+      ).toContainText("Healthy", { timeout: 5_000 });
     }).toPass({ timeout: 4 * 60_000, intervals: [20_000] });
-    // And the group is healthy again.
-    await expect(
-      card(page, "Consumer groups").getByRole("row").filter({ hasText: group }),
-    ).toContainText("Healthy");
   } finally {
     // A tool may still be starting, its container not there yet.
     for (let attempt = 0; attempt < 3; attempt++) {

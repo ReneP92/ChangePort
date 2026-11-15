@@ -18,16 +18,23 @@ import (
 	"github.com/ReneP92/changeport/internal/topics"
 )
 
-// diagnosisTTL is how long an environment's diagnoses are kept: the
-// overview asks every 15 seconds, and the rules look at minutes.
+// diagnosisTTL is how long an environment's diagnoses are kept, unless the
+// health monitor looks less often: the overview asks every 15 seconds, and
+// the rules look at minutes.
 const diagnosisTTL = 30 * time.Second
 
+// snapshotTimeout bounds one diagnosis, so that a cluster that does not
+// answer, such as one whose brokers are down, holds nothing up for long.
+const snapshotTimeout = 30 * time.Second
+
 // diagnosisCache keeps each environment's last diagnoses, by customer, and
-// makes requests that miss at once share one diagnosis.
+// makes requests that miss at once share one diagnosis. ttl is how long
+// they stay fresh: diagnosisTTL, or until the health monitor's next look.
 type diagnosisCache struct {
 	mu      sync.Mutex
 	entries map[string]diagnosisEntry
 	running singleflight.Group
+	ttl     time.Duration
 }
 
 type diagnosisEntry struct {
@@ -78,14 +85,42 @@ func (s *Server) ListDiagnoses(ctx context.Context, _ api.ListDiagnosesRequestOb
 
 // diagnose returns the customer's diagnoses, from the cache while fresh.
 func (s *Server) diagnose(ctx context.Context, customerID string) ([]diagnosis.Finding, error) {
-	s.diagnoses.mu.Lock()
-	entry, ok := s.diagnoses.entries[customerID]
-	s.diagnoses.mu.Unlock()
-	if ok && time.Since(entry.at) < diagnosisTTL {
-		return entry.findings, nil
+	if findings, ok := s.diagnoses.fresh(customerID); ok {
+		return findings, nil
 	}
-	found, err, _ := s.diagnoses.running.Do(customerID, func() (any, error) {
-		snapshot, err := s.snapshot(context.WithoutCancel(ctx), customerID)
+	select {
+	case result := <-s.diagnosing(ctx, customerID):
+		if result.Err != nil {
+			return nil, result.Err
+		}
+		return result.Val.([]diagnosis.Finding), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// fresh returns the customer's diagnoses while they are fresh.
+func (c *diagnosisCache) fresh(customerID string) ([]diagnosis.Finding, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	entry, ok := c.entries[customerID]
+	if !ok || time.Since(entry.at) >= c.freshFor() {
+		return nil, false
+	}
+	return entry.findings, true
+}
+
+func (c *diagnosisCache) freshFor() time.Duration { return max(diagnosisTTL, c.ttl) }
+
+// diagnosing diagnoses the customer's cluster, or joins the diagnosis
+// already running, and keeps the result. The diagnosis outlives the
+// request that started it, up to snapshotTimeout, so that the next one
+// finds it done.
+func (s *Server) diagnosing(ctx context.Context, customerID string) <-chan singleflight.Result {
+	return s.diagnoses.running.DoChan(customerID, func() (any, error) {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), snapshotTimeout)
+		defer cancel()
+		snapshot, err := s.snapshot(ctx, customerID)
 		if err != nil {
 			return nil, err
 		}
@@ -95,17 +130,13 @@ func (s *Server) diagnose(ctx context.Context, customerID string) ([]diagnosis.F
 		defer s.diagnoses.mu.Unlock()
 		// Environments nobody looks at, or that are gone, are dropped.
 		for id, entry := range s.diagnoses.entries {
-			if now.Sub(entry.at) >= diagnosisTTL {
+			if now.Sub(entry.at) >= s.diagnoses.freshFor() {
 				delete(s.diagnoses.entries, id)
 			}
 		}
 		s.diagnoses.entries[customerID] = diagnosisEntry{at: now, findings: findings}
 		return findings, nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return found.([]diagnosis.Finding), nil
 }
 
 // diagnosisQueries are the metrics a snapshot takes.

@@ -1,10 +1,11 @@
 import { CircleAlert, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import type { Diagnosis } from "@/api/client";
+import type { HealthLevel } from "@/api/client";
 import { useAlerts, useDiagnoses, useTopology } from "@/api/queries";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDuration, formatRate } from "@/lib/format";
+import { healthLabels } from "@/lib/health";
 import {
   groupID,
   layoutTopology,
@@ -15,6 +16,12 @@ import {
 } from "@/lib/topology";
 import { cn } from "@/lib/utils";
 import { useEnvironmentPath } from "@/lib/useEnvironment";
+
+/** A node's health when it is not healthy, and the titles of its reasons. */
+interface Diagnosed {
+  level: HealthLevel;
+  reasons: string[];
+}
 
 /** The narrowest the map draws; on phones it scrolls sideways within the card. */
 const minWidth = 640;
@@ -55,10 +62,11 @@ export function TopologyCard() {
       alert.consumerGroup === undefined ? [] : [groupID(alert.consumerGroup)],
     ),
   );
-  // The diagnoses behind each topic's and group's health, unless healthy.
+  // Each topic's and group's health, with the titles of the diagnoses
+  // behind it for pointing at it, where they are in.
   const diagnoses = useDiagnoses();
-  const byID = new Map((diagnoses.data?.diagnoses ?? []).map((d) => [d.id, d]));
-  const diagnosed = (node: MapNode): Diagnosis[] => {
+  const titles = new Map((diagnoses.data?.diagnoses ?? []).map((d) => [d.id, d.title]));
+  const diagnosed = (node: MapNode): Diagnosed | undefined => {
     const health =
       node.kind === "topic"
         ? topology.data?.topics.find((t) => t.name === node.label)?.health
@@ -66,9 +74,9 @@ export function TopologyCard() {
           ? topology.data?.groups.find((g) => g.name === node.label)?.health
           : undefined;
     if (!health || health.level === "healthy") {
-      return [];
+      return undefined;
     }
-    return health.diagnoses.flatMap((id) => byID.get(id) ?? []);
+    return { level: health.level, reasons: health.diagnoses.flatMap((id) => titles.get(id) ?? []) };
   };
   return (
     // The getting started guide links here.
@@ -130,7 +138,7 @@ function TopologyMap({
   layout: MapLayout;
   focused: string | null;
   alerted: Set<string>;
-  diagnosed: (node: MapNode) => Diagnosis[];
+  diagnosed: (node: MapNode) => Diagnosed | undefined;
   onFocus: (id: string | null) => void;
 }) {
   const maxRate = Math.max(...layout.edges.map((edge) => edge.bytesPerSecond ?? 0), 1);
@@ -184,7 +192,7 @@ function TopologyMap({
           node={node}
           dim={focused !== null && node.id !== focused && !linked.has(node.id)}
           alerted={alerted.has(node.id)}
-          diagnoses={diagnosed(node)}
+          diagnosed={diagnosed(node)}
           onFocus={onFocus}
         />
       ))}
@@ -196,17 +204,17 @@ function MapNodeBox({
   node,
   dim,
   alerted,
-  diagnoses,
+  diagnosed,
   onFocus,
 }: {
   node: MapNode;
   dim: boolean;
   alerted: boolean;
-  /** What needs attention about the node: a mark, and the reasons on hover. */
-  diagnoses: Diagnosis[];
+  /** The node's health when not healthy: a mark, and the reasons on hover. */
+  diagnosed: Diagnosed | undefined;
   onFocus: (id: string | null) => void;
 }) {
-  const critical = diagnoses.some((diagnosis) => diagnosis.severity === "critical");
+  const critical = diagnosed?.level === "atRisk";
   const Mark = critical ? CircleAlert : TriangleAlert;
   const envPath = useEnvironmentPath();
   const behind = (node.lagSeconds ?? 0) >= 60;
@@ -243,10 +251,10 @@ function MapNodeBox({
         >
           {node.label}
         </span>
-        {diagnoses.length > 0 && (
+        {diagnosed && (
           <Mark
             role="img"
-            aria-label={critical ? "Critical: needs attention" : "Needs attention"}
+            aria-label={healthLabels[diagnosed.level]}
             className={cn(
               "size-3 shrink-0",
               critical ? "text-destructive" : "text-amber-600 dark:text-amber-500",
@@ -265,10 +273,7 @@ function MapNodeBox({
       </span>
     </>
   );
-  const title = [
-    `${node.label}: ${node.detail}`,
-    ...diagnoses.map((diagnosis) => diagnosis.title),
-  ].join("\n");
+  const title = [`${node.label}: ${node.detail}`, ...(diagnosed?.reasons ?? [])].join("\n");
   if (node.kind === "topic" || node.kind === "group") {
     const path =
       node.kind === "topic"

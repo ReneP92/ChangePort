@@ -492,7 +492,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 	routes["/api/customer/alerts"] = customerRoute(`"summary":"acme-billing is behind"`, `"consumerGroup":"acme-billing"`, `{"alerts":[]}`)
 	routes["/api/customer/alert-settings"] = customerRoute(`"consumerLag":{"enabled":true,"seconds":600}`, `"receivers":{}`, `"percent":5`)
 	routes["/api/customer/team"] = customerRoute(`"members":[]`, `"invitations":[]`, `"members":[]`)
-	routes["/api/customer/health-history?topic=acme-orders"] = customerRoute(`"stepSeconds":900`, `"level":"healthy"`, `"points":[`)
+	routes["/api/customer/health-history?topic=acme-orders"] = customerRoute(`"stepSeconds":900`, `"level":"healthy"`, `"current":{`)
 	routes["/api/customer/diagnoses"] = customerRoute(`"diagnoses":[`, `"diagnoses":[`, `"diagnoses":[`)
 	routes["/api/customer/topology"] = customerRoute(`"name":"acme-orders"`, `"group":"billing"`, `"name":"globex-orders"`)
 	routes["/api/customer/events"] = customerRoute(`"message":"Topic acme-orders was created`, `"kind":"broker.restarted"`, `"events":[]`)
@@ -866,6 +866,17 @@ func (fakeMetrics) Instant(_ context.Context, tenant string, q metrics.Query, fi
 }
 
 func (fakeMetrics) Range(_ context.Context, tenant string, q metrics.Query, filter metrics.Filter, start, end time.Time, step time.Duration) ([]metrics.Series, error) {
+	switch q {
+	case metrics.TopicHealth, metrics.GroupHealth:
+		// Healthy all day: no series.
+		return nil, nil
+	case metrics.HealthChecked:
+		checked := metrics.Series{Labels: map[string]string{}}
+		for t := start; !t.After(end); t = t.Add(step) {
+			checked.Points = append(checked.Points, metrics.Point{Time: t, Value: 1})
+		}
+		return []metrics.Series{checked}, nil
+	}
 	if q == metrics.LagSeconds {
 		if filter.ConsumerGroup != "" && filter.ConsumerGroup != "billing" {
 			return nil, nil

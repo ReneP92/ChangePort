@@ -1018,6 +1018,8 @@ type Health struct {
 
 // HealthHistory A topic's or consumer group's level over the last 24 hours, the worst of each step.
 type HealthHistory struct {
+	// Current How healthy a topic or consumer group is, from the diagnoses about it (docs/diagnosis.md): healthy without warnings, needing attention with some, at risk with anything critical. A diagnosis about a group reading a topic is the group's. Left out while the diagnoses are not known.
+	Current     *HealthStatus `json:"current,omitempty"`
 	Points      []HealthPoint `json:"points"`
 	StepSeconds int           `json:"stepSeconds"`
 }

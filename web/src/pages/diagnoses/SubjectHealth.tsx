@@ -6,10 +6,12 @@ import { healthLabels, historySummary } from "@/lib/health";
 import { cn } from "@/lib/utils";
 import { DiagnosisRows } from "@/pages/diagnoses/Diagnoses";
 
+// Each level by its height as well as its color, so that the strip reads
+// without telling colors apart; a step nobody looked at is a thin line.
 const cells: Record<HealthLevel, string> = {
-  healthy: "bg-emerald-500/45",
-  needsAttention: "bg-amber-500",
-  atRisk: "bg-destructive",
+  healthy: "h-1.5 bg-emerald-500/60",
+  needsAttention: "h-3.5 bg-amber-500",
+  atRisk: "h-5 bg-destructive",
 };
 
 /**
@@ -17,16 +19,27 @@ const cells: Record<HealthLevel, string> = {
  * it, and the diagnoses about it, which say why.
  */
 export function SubjectHealth({
-  health,
+  health: listed,
   ...subject
 }: ({ topic: string } | { consumerGroup: string }) & { health: HealthStatus | undefined }) {
   const diagnoses = useDiagnoses();
   const history = useHealthHistory(subject);
-  const about = (diagnoses.data?.diagnoses ?? []).filter((diagnosis) =>
+  // The history says it now too, also of a group in no list yet.
+  const health = history.data?.current ?? listed;
+  const all = diagnoses.data?.diagnoses ?? [];
+  // Its own diagnoses set its level. A topic's page also tells what the
+  // groups that read it have, which are theirs.
+  const own = all.filter((diagnosis) =>
     "topic" in subject
-      ? diagnosis.topic === subject.topic
+      ? diagnosis.topic === subject.topic && diagnosis.consumerGroup === undefined
       : diagnosis.consumerGroup === subject.consumerGroup,
   );
+  const readers =
+    "topic" in subject
+      ? all.filter(
+          (diagnosis) => diagnosis.topic === subject.topic && diagnosis.consumerGroup !== undefined,
+        )
+      : [];
   const levels = history.data?.points.map((point) => point.level) ?? [];
   const summary = history.data ? historySummary(levels, history.data.stepSeconds) : undefined;
   return (
@@ -54,7 +67,10 @@ export function SubjectHealth({
                   title={`${new Date(point.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}: ${
                     point.level ? healthLabels[point.level] : "Not looked at"
                   }`}
-                  className={cn("flex-1", point.level ? cells[point.level] : "bg-muted")}
+                  className={cn(
+                    "flex-1 rounded-[1px]",
+                    point.level ? cells[point.level] : "h-px bg-muted-foreground/50",
+                  )}
                 />
               ))}
             </div>
@@ -64,7 +80,15 @@ export function SubjectHealth({
             </figcaption>
           </figure>
         )}
-        {about.length > 0 && <DiagnosisRows diagnoses={about} links={false} />}
+        {own.length > 0 && <DiagnosisRows diagnoses={own} links={false} />}
+        {readers.length > 0 && (
+          <section aria-labelledby="readers" className="flex flex-col gap-3">
+            <h3 id="readers" className="font-medium text-muted-foreground">
+              The consumer groups that read it
+            </h3>
+            <DiagnosisRows diagnoses={readers} />
+          </section>
+        )}
       </CardContent>
     </Card>
   );

@@ -24,10 +24,15 @@ type levels struct {
 	topics, groups map[string]diagnosis.Health
 }
 
+// healthWait is how long a list waits for a diagnosis that is not ready.
+const healthWait = 2 * time.Second
+
 // healthLevels returns the customer's levels. They are a help to the lists
-// rather than a need: without the diagnoses, the lists show no health
-// rather than fail.
+// rather than a need: a list waits a moment for them, and without them it
+// shows no health rather than fail or keep the customer waiting.
 func (s *Server) healthLevels(ctx context.Context, customerID string) levels {
+	ctx, cancel := context.WithTimeout(ctx, healthWait)
+	defer cancel()
 	findings, err := s.diagnose(ctx, customerID)
 	if err != nil {
 		s.logger.WarnContext(ctx, "lists without health", "customer", customerID, "error", err)
@@ -48,12 +53,13 @@ func (l levels) of(subjects map[string]diagnosis.Health, name string) *api.Healt
 	return &api.HealthStatus{Level: apiLevel(h.Level), Diagnoses: append([]string{}, h.Findings...)}
 }
 
-// apiLevel is a level as the API names it.
+// apiLevel is a level as the API names it; anything above at risk is at
+// risk.
 func apiLevel(level diagnosis.Level) api.HealthLevel {
-	switch level {
-	case diagnosis.AtRisk:
+	switch {
+	case level >= diagnosis.AtRisk:
 		return api.AtRisk
-	case diagnosis.NeedsAttention:
+	case level >= diagnosis.NeedsAttention:
 		return api.NeedsAttention
 	default:
 		return api.Healthy
@@ -94,7 +100,15 @@ func (s *Server) GetHealthHistory(ctx context.Context, request api.GetHealthHist
 	if err != nil {
 		return nil, err
 	}
-	return api.GetHealthHistory200JSONResponse(healthHistory(start, end, levels, checked)), nil
+	history := healthHistory(start, end, levels, checked)
+	// Now, too: a group that committed nothing yet is in no list.
+	now := s.healthLevels(ctx, customer.Name)
+	if topic != "" {
+		history.Current = now.topic(topic)
+	} else {
+		history.Current = now.group(group)
+	}
+	return api.GetHealthHistory200JSONResponse(history), nil
 }
 
 // healthHistory puts each step's level together: the worst recorded, or
@@ -167,12 +181,16 @@ func (s *Server) HealthCollector() prometheus.Collector { return s.health }
 
 // WatchHealth diagnoses every ready customer's cluster every interval
 // until ctx ends, so that the health histories have no gaps while nobody
-// looks, and the next look at a page finds the diagnoses ready.
+// looks. Its diagnoses stay fresh until its next look, so the pages find
+// them ready.
 func (s *Server) WatchHealth(ctx context.Context, interval time.Duration) {
 	if len(s.config.missing()) > 0 {
 		// Without its configuration the console serves nothing to look at.
 		return
 	}
+	s.diagnoses.mu.Lock()
+	s.diagnoses.ttl = interval + diagnosisTTL/2
+	s.diagnoses.mu.Unlock()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -185,6 +203,10 @@ func (s *Server) WatchHealth(ctx context.Context, interval time.Duration) {
 	}
 }
 
+// healthLooks is how many clusters the monitor diagnoses at once, so that
+// one that does not answer holds up only its own look.
+const healthLooks = 4
+
 // lookAtHealth diagnoses each ready customer once. A customer whose cluster
 // cannot be diagnosed is left out of the look, so its history shows a gap
 // rather than health it did not see.
@@ -194,20 +216,32 @@ func (s *Server) lookAtHealth(ctx context.Context) {
 		s.logger.WarnContext(ctx, "health: list the customers", "error", err)
 		return
 	}
-	latest := map[string]levels{}
+	var (
+		mu     sync.Mutex
+		latest = map[string]levels{}
+		looks  = make(chan struct{}, healthLooks)
+		wg     sync.WaitGroup
+	)
 	for _, customer := range customers {
 		ready := meta.FindStatusCondition(customer.Status.Conditions, v1alpha1.ConditionReady)
 		if !customer.DeletionTimestamp.IsZero() || ready == nil || ready.Status != metav1.ConditionTrue {
 			continue
 		}
-		findings, err := s.diagnose(ctx, customer.Name)
-		if err != nil {
-			s.logger.WarnContext(ctx, "health: diagnose", "customer", customer.Name, "error", err)
-			continue
-		}
-		topics, groups := diagnosis.Levels(findings)
-		latest[customer.Name] = levels{known: true, topics: topics, groups: groups}
+		looks <- struct{}{}
+		wg.Go(func() {
+			defer func() { <-looks }()
+			findings, err := s.diagnose(ctx, customer.Name)
+			if err != nil {
+				s.logger.WarnContext(ctx, "health: diagnose", "customer", customer.Name, "error", err)
+				return
+			}
+			topics, groups := diagnosis.Levels(findings)
+			mu.Lock()
+			latest[customer.Name] = levels{known: true, topics: topics, groups: groups}
+			mu.Unlock()
+		})
 	}
+	wg.Wait()
 	s.health.mu.Lock()
 	s.health.latest = latest
 	s.health.mu.Unlock()

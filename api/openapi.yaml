@@ -2415,6 +2415,8 @@ components:
       description: A topic's or consumer group's level over the last 24 hours, the worst of each step.
       required: [stepSeconds, points]
       properties:
+        current:
+          $ref: "#/components/schemas/HealthStatus"
         stepSeconds:
           type: integer
         points:
