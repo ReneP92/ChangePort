@@ -1,28 +1,25 @@
 import { useSyncExternalStore } from "react";
 
-/** The viewer's choice: light, dark, or whatever their system uses. */
-export type Theme = "light" | "dark" | "system";
+/** The console's theme: light, the default, or dark. */
+export type Theme = "light" | "dark";
 
 const key = "changeport-theme";
-const media = () => window.matchMedia("(prefers-color-scheme: dark)");
 
 // The choice when the browser keeps none, as in a private window.
 let unsaved: Theme | undefined;
 
 function stored(): Theme {
   try {
-    const theme = localStorage.getItem(key);
-    return theme === "light" || theme === "dark" ? theme : (unsaved ?? "system");
+    return localStorage.getItem(key) === "dark" ? "dark" : (unsaved ?? "light");
   } catch {
-    return unsaved ?? "system";
+    return unsaved ?? "light";
   }
 }
 
 /** Applies a theme to the page, as public/theme.js does before it draws. */
 function apply(theme: Theme) {
-  const dark = theme === "dark" || (theme === "system" && media().matches);
-  document.documentElement.classList.toggle("dark", dark);
-  document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  document.documentElement.classList.toggle("dark", theme === "dark");
+  document.documentElement.style.colorScheme = theme;
 }
 
 const listeners = new Set<() => void>();
@@ -36,24 +33,22 @@ function changed() {
 
 function subscribe(listener: () => void) {
   if (listeners.size === 0) {
-    // The system's own change, and another tab's choice.
-    media().addEventListener("change", changed);
+    // Another tab's choice.
     window.addEventListener("storage", changed);
   }
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
     if (listeners.size === 0) {
-      media().removeEventListener("change", changed);
       window.removeEventListener("storage", changed);
     }
   };
 }
 
-/** Sets the viewer's theme, for this browser. */
+/** Sets the theme, for this browser. */
 export function setTheme(theme: Theme) {
   try {
-    if (theme === "system") {
+    if (theme === "light") {
       localStorage.removeItem(key);
     } else {
       localStorage.setItem(key, theme);
@@ -62,13 +57,10 @@ export function setTheme(theme: Theme) {
     // Storage may be off, as in a private window: the choice lasts the page.
     unsaved = theme;
   }
-  apply(theme);
-  for (const listener of listeners) {
-    listener();
-  }
+  changed();
 }
 
-/** The viewer's theme, which follows their system's when they chose none. */
+/** The theme the viewer chose, light unless dark. */
 export function useTheme(): Theme {
-  return useSyncExternalStore(subscribe, stored, () => "system");
+  return useSyncExternalStore(subscribe, stored, () => "light");
 }

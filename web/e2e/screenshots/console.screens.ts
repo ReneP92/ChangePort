@@ -431,14 +431,15 @@ test("every screen of the console", async ({ browser }) => {
     ).toBeVisible({ timeout: 10_000 });
   }).toPass({ timeout: 3 * 60_000, intervals: [15_000] });
   await shot(admin, "03-overview");
-  // The same in the dark theme, from the help menu, then back to the system's.
-  const theme = async (name: string) => {
+  // The same in dark mode, from the help menu, then light again.
+  const darkMode = async () => {
     await admin.getByRole("button", { name: "Help" }).click();
-    await admin.getByRole("menuitemradio", { name }).click();
+    await admin.getByRole("menuitemcheckbox", { name: "Dark mode" }).click();
+    await admin.keyboard.press("Escape");
   };
-  await theme("Dark");
+  await darkMode();
   await shot(admin, "56-dark-overview");
-  await theme("System");
+  await darkMode();
 
   // Ada's team: herself, and a colleague she invites.
   await nav.getByRole("link", { name: "Team" }).click();

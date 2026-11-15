@@ -43,11 +43,10 @@ a field, or while a dialog or menu is open, are left alone.
 
 ![Keyboard shortcuts](screenshots/55-keyboard-shortcuts-desktop.png)
 
-The help menu also sets the **theme**: light, dark, or the system's, which
-is the default and follows the system as it changes. The browser keeps the
-choice, and applies it before the page draws (`web/public/theme.js`), so a
-dark console never flashes white. Clerk's sign-in and profile take the same
-colors (its shadcn theme).
+The help menu also switches **dark mode** on and off; the console is light
+unless it is on. The browser keeps the choice, and applies it before the
+page draws (`web/public/theme.js`), so a dark console never flashes white.
+Clerk's sign-in and profile take the same colors (its shadcn theme).
 
 ![The overview, dark](screenshots/56-dark-overview-desktop.png)
 

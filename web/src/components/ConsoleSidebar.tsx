@@ -13,11 +13,9 @@ import {
   LogOut,
   Menu,
   MessageCircle,
-  Monitor,
   Moon,
   PanelLeft,
   Settings2,
-  Sun,
   UserRound,
   Users,
   type LucideIcon,
@@ -36,8 +34,6 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
@@ -65,7 +61,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Skeleton } from "@/components/ui/skeleton";
 import { environmentPath } from "@/lib/environments";
 import { modifier, useOpenShortcuts } from "@/lib/shortcuts";
-import { setTheme, useTheme, type Theme } from "@/lib/theme";
+import { setTheme, useTheme } from "@/lib/theme";
+import { cn } from "@/lib/utils";
 import { useEnvironment, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
@@ -559,30 +556,32 @@ function HelpMenu() {
           <DropdownMenuShortcut>{modifier()} /</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-            Theme
-          </DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={theme}
-            onValueChange={(value) => {
-              setTheme(value as Theme);
-            }}
+        {/* A switch, which keeps the menu open to show it flip. */}
+        <DropdownMenuItem
+          role="menuitemcheckbox"
+          aria-checked={theme === "dark"}
+          onSelect={(event) => {
+            event.preventDefault();
+            setTheme(theme === "dark" ? "light" : "dark");
+          }}
+        >
+          <Moon />
+          Dark mode
+          <span
+            aria-hidden
+            className={cn(
+              "ml-auto inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors",
+              theme === "dark" ? "bg-primary" : "bg-input",
+            )}
           >
-            <DropdownMenuRadioItem value="system">
-              <Monitor />
-              System
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="light">
-              <Sun />
-              Light
-            </DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="dark">
-              <Moon />
-              Dark
-            </DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
+            <span
+              className={cn(
+                "size-3 rounded-full bg-background shadow-sm transition-transform",
+                theme === "dark" && "translate-x-3",
+              )}
+            />
+          </span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
