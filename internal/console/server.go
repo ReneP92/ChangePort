@@ -1055,6 +1055,7 @@ func (s *Server) GetHealth(ctx context.Context, _ api.GetHealthRequestObject) (a
 			*field = ptr.To(int(series[0].Points[0].Value))
 		}
 	}
+	health.Transactions = s.transactionsSummary(ctx, customer.Name)
 	return health, nil
 }
 

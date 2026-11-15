@@ -3,6 +3,7 @@ package console
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"k8s.io/utils/ptr"
 
@@ -76,5 +77,49 @@ func TestDiagnosesFromKafkaAndMetrics(t *testing.T) {
 		if g.Name == "billing" && (g.Members != 4 || g.IdleMembers != 1 || g.Rebalances != 2 || g.Reads[0].AssignedMembers != 3) {
 			t.Errorf("billing = %+v, want 4 members, 1 idle, 2 rebalances and 3 reading orders", g)
 		}
+	}
+}
+
+// Kafka's open transactions and the partitions' producers become the
+// snapshot's transactions, idempotent producers and hanging transactions.
+func TestJoinTransactions(t *testing.T) {
+	now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	snapshot := diagnosis.Snapshot{Window: 15 * time.Minute, Topics: []diagnosis.Topic{{Name: "orders"}, {Name: "payments"}, {Name: "quiet"}}}
+	transactions := []Transaction{{
+		ID: "checkout-1", ProducerID: 7, State: "Ongoing", Started: now.Add(-3 * time.Minute), Timeout: 10 * time.Minute,
+		Partitions: []TransactionPartition{{Topic: "orders", Partition: 0, HeldBack: 12}},
+	}}
+	producers := []PartitionProducer{
+		// Open, and its coordinator has it open: not hanging.
+		{Topic: "orders", Partition: 0, ProducerID: 7, TransactionalID: "checkout-1", LastWrite: now.Add(-20 * time.Minute), OpenFrom: 100},
+		// Open, idle past any timeout, unknown to a coordinator: hanging.
+		{Topic: "orders", Partition: 1, ProducerID: 8, LastWrite: now.Add(-40 * time.Minute), OpenFrom: 55},
+		// Its coordinator has the transaction, but not on this partition.
+		{Topic: "orders", Partition: 2, ProducerID: 7, TransactionalID: "checkout-1", LastWrite: now.Add(-30 * time.Minute), OpenFrom: 9},
+		// Recent idempotent writers of payments; none of quiet.
+		{Topic: "payments", Partition: 0, ProducerID: 9, LastWrite: now.Add(-time.Minute), OpenFrom: -1},
+		{Topic: "payments", Partition: 1, ProducerID: 9, LastWrite: now.Add(-time.Minute), OpenFrom: -1},
+		{Topic: "payments", Partition: 1, ProducerID: 10, LastWrite: now.Add(-2 * time.Minute), OpenFrom: -1},
+		{Topic: "quiet", Partition: 0, ProducerID: 11, LastWrite: now.Add(-2 * time.Hour), OpenFrom: -1},
+	}
+	joinTransactions(&snapshot, transactions, producers, true, now)
+
+	if len(snapshot.Transactions) != 1 || snapshot.Transactions[0].Open != 3*time.Minute || snapshot.Transactions[0].Partitions[0].HeldBack != 12 {
+		t.Errorf("transactions = %+v", snapshot.Transactions)
+	}
+	orders, payments, quiet := snapshot.Topics[0], snapshot.Topics[1], snapshot.Topics[2]
+	if len(orders.Hanging) != 2 || orders.Hanging[0].Partition != 1 || orders.Hanging[0].Idle != 40*time.Minute || orders.Hanging[1].Partition != 2 {
+		t.Errorf("hanging on orders = %+v, want partitions 1 and 2", orders.Hanging)
+	}
+	if *payments.IdempotentProducers != 2 || *quiet.IdempotentProducers != 0 || *orders.IdempotentProducers != 0 {
+		t.Errorf("idempotent producers: orders %d, payments %d, quiet %d, want 0, 2 and 0",
+			*orders.IdempotentProducers, *payments.IdempotentProducers, *quiet.IdempotentProducers)
+	}
+
+	// Without the producers, nothing is said of them.
+	unknown := diagnosis.Snapshot{Topics: []diagnosis.Topic{{Name: "orders"}}}
+	joinTransactions(&unknown, nil, nil, false, now)
+	if unknown.Topics[0].IdempotentProducers != nil {
+		t.Errorf("idempotent producers = %v, want unknown", *unknown.Topics[0].IdempotentProducers)
 	}
 }

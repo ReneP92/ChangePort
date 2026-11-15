@@ -192,6 +192,29 @@ paths:
           $ref: "#/components/responses/NotReady"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/customer/topics/{topic}/producers:
+    get:
+      operationId: listTopicProducers
+      summary: The idempotent and transactional producers that write a topic, as Kafka knows them
+      parameters:
+        - $ref: "#/components/parameters/TopicName"
+      responses:
+        "200":
+          description: The topic's producers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopicProducers"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/NotReady"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/customer/topics/{topic}/consumer-groups:
     get:
       operationId: listTopicConsumerGroups
@@ -1701,6 +1724,54 @@ components:
           type: integer
         fencedBrokers:
           type: integer
+        transactions:
+          $ref: "#/components/schemas/TransactionsSummary"
+    TransactionsSummary:
+      type: object
+      required: [open]
+      description: The transactions open on the cluster; absent while Kafka does not describe them
+      properties:
+        open:
+          type: integer
+        oldestStartedAt:
+          type: string
+          format: date-time
+          description: When the oldest open transaction started
+    TopicProducers:
+      type: object
+      required: [producers, heldBack]
+      properties:
+        producers:
+          type: array
+          description: |
+            The producers Kafka keeps state for on the topic's partitions: those that
+            write idempotently or in transactions, by producer ID, with the transactional
+            ID of transactional ones. Kafka keeps none for other producers, and knows none
+            by client ID. The most recent first.
+          items:
+            $ref: "#/components/schemas/TopicProducer"
+        heldBack:
+          type: integer
+          format: int64
+          description: The messages read_committed consumers cannot read yet, which open transactions hold back
+    TopicProducer:
+      type: object
+      required: [producerId, partitions, lastWrite, inTransaction]
+      properties:
+        producerId:
+          type: integer
+          format: int64
+        transactionalId:
+          type: string
+        partitions:
+          type: integer
+          description: The topic's partitions it wrote to
+        lastWrite:
+          type: string
+          format: date-time
+        inTransaction:
+          type: boolean
+          description: Whether it has a transaction open on the topic
     Broker:
       type: object
       required: [name, ready, restarts]
@@ -2506,6 +2577,9 @@ components:
           type: string
         clientId:
           type: string
+        transactionalId:
+          type: string
+          description: The transactional ID of the transaction it is about
         title:
           type: string
           description: What is wrong, in a line

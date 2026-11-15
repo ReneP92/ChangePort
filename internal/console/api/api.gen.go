@@ -935,6 +935,9 @@ type Diagnosis struct {
 	// Title What is wrong, in a line
 	Title string  `json:"title"`
 	Topic *string `json:"topic,omitempty"`
+
+	// TransactionalId The transactional ID of the transaction it is about
+	TransactionalId *string `json:"transactionalId,omitempty"`
 }
 
 // DiagnosisSeverity Info is worth knowing, a warning needs attention before it hurts, critical hurts now
@@ -1007,13 +1010,16 @@ type EventList struct {
 // Health The brokers, and the partitions' health from the brokers' metrics,
 // which are absent until the metrics store has them
 type Health struct {
-	ActiveBrokers             *int     `json:"activeBrokers,omitempty"`
-	ActiveControllers         *int     `json:"activeControllers,omitempty"`
-	Brokers                   []Broker `json:"brokers"`
-	FencedBrokers             *int     `json:"fencedBrokers,omitempty"`
-	OfflinePartitions         *int     `json:"offlinePartitions,omitempty"`
-	UnderMinIsrPartitions     *int     `json:"underMinIsrPartitions,omitempty"`
-	UnderReplicatedPartitions *int     `json:"underReplicatedPartitions,omitempty"`
+	ActiveBrokers     *int     `json:"activeBrokers,omitempty"`
+	ActiveControllers *int     `json:"activeControllers,omitempty"`
+	Brokers           []Broker `json:"brokers"`
+	FencedBrokers     *int     `json:"fencedBrokers,omitempty"`
+	OfflinePartitions *int     `json:"offlinePartitions,omitempty"`
+
+	// Transactions The transactions open on the cluster; absent while Kafka does not describe them
+	Transactions              *TransactionsSummary `json:"transactions,omitempty"`
+	UnderMinIsrPartitions     *int                 `json:"underMinIsrPartitions,omitempty"`
+	UnderReplicatedPartitions *int                 `json:"underReplicatedPartitions,omitempty"`
 }
 
 // HealthHistory A topic's or consumer group's level over the last 24 hours, the worst of each step.
@@ -1617,6 +1623,30 @@ type TopicPolicy struct {
 	RetentionPresets  []RetentionPreset `json:"retentionPresets"`
 }
 
+// TopicProducer defines model for TopicProducer.
+type TopicProducer struct {
+	// InTransaction Whether it has a transaction open on the topic
+	InTransaction bool      `json:"inTransaction"`
+	LastWrite     time.Time `json:"lastWrite"`
+
+	// Partitions The topic's partitions it wrote to
+	Partitions      int     `json:"partitions"`
+	ProducerId      int64   `json:"producerId"`
+	TransactionalId *string `json:"transactionalId,omitempty"`
+}
+
+// TopicProducers defines model for TopicProducers.
+type TopicProducers struct {
+	// HeldBack The messages read_committed consumers cannot read yet, which open transactions hold back
+	HeldBack int64 `json:"heldBack"`
+
+	// Producers The producers Kafka keeps state for on the topic's partitions: those that
+	// write idempotently or in transactions, by producer ID, with the transactional
+	// ID of transactional ones. Kafka keeps none for other producers, and knows none
+	// by client ID. The most recent first.
+	Producers []TopicProducer `json:"producers"`
+}
+
 // Topology defines model for Topology.
 type Topology struct {
 	Groups []TopologyGroup `json:"groups"`
@@ -1686,6 +1716,13 @@ type TopologyWrite struct {
 	BytesPerSecond float32 `json:"bytesPerSecond"`
 	Producer       string  `json:"producer"`
 	Topic          string  `json:"topic"`
+}
+
+// TransactionsSummary The transactions open on the cluster; absent while Kafka does not describe them
+type TransactionsSummary struct {
+	// OldestStartedAt When the oldest open transaction started
+	OldestStartedAt *time.Time `json:"oldestStartedAt,omitempty"`
+	Open            int        `json:"open"`
 }
 
 // TrialApproval defines model for TrialApproval.
@@ -2052,6 +2089,9 @@ type ServerInterface interface {
 	// ListTopicConsumerGroups The consumer groups with committed offsets on a topic
 	// (GET /api/customer/topics/{topic}/consumer-groups)
 	ListTopicConsumerGroups(w http.ResponseWriter, r *http.Request, topic TopicName)
+	// ListTopicProducers The idempotent and transactional producers that write a topic, as Kafka knows them
+	// (GET /api/customer/topics/{topic}/producers)
+	ListTopicProducers(w http.ResponseWriter, r *http.Request, topic TopicName)
 	// TailTopic The topic's recent messages and then new ones as they arrive, as server-sent events, for organization admins: a message event with a TailMessage per message, and a skipped event with a TailSkipped when more arrive than the stream shows. Each tail is audited; no message is kept. The stream ends when the session token expires; open it again with resume, to go on where it ended.
 	// (GET /api/customer/topics/{topic}/tail)
 	TailTopic(w http.ResponseWriter, r *http.Request, topic TopicName, params TailTopicParams)
@@ -3118,6 +3158,32 @@ func (siw *ServerInterfaceWrapper) ListTopicConsumerGroups(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// ListTopicProducers operation middleware
+func (siw *ServerInterfaceWrapper) ListTopicProducers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "topic" -------------
+	var topic TopicName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "topic", r.PathValue("topic"), &topic, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "topic", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTopicProducers(w, r, topic)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // TailTopic operation middleware
 func (siw *ServerInterfaceWrapper) TailTopic(w http.ResponseWriter, r *http.Request) {
 
@@ -3556,6 +3622,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topic-policy", wrapper.GetTopicPolicy)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/topics/{topic}", wrapper.DeleteTopic)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/customer/topics/{topic}", wrapper.ChangeTopic)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topics/{topic}/producers", wrapper.ListTopicProducers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topics/{topic}/consumer-groups", wrapper.ListTopicConsumerGroups)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topics/{topic}/tail", wrapper.TailTopic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topics", wrapper.ListTopics)
@@ -7728,6 +7795,98 @@ func (response ListTopicConsumerGroups503JSONResponse) VisitListTopicConsumerGro
 	return err
 }
 
+type ListTopicProducersRequestObject struct {
+	Topic TopicName `json:"topic"`
+}
+
+type ListTopicProducersResponseObject interface {
+	VisitListTopicProducersResponse(w http.ResponseWriter) error
+}
+
+type ListTopicProducers200JSONResponse TopicProducers
+
+func (response ListTopicProducers200JSONResponse) VisitListTopicProducersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTopicProducers401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListTopicProducers401JSONResponse) VisitListTopicProducersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTopicProducers403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListTopicProducers403JSONResponse) VisitListTopicProducersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTopicProducers404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListTopicProducers404JSONResponse) VisitListTopicProducersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTopicProducers409JSONResponse struct{ NotReadyJSONResponse }
+
+func (response ListTopicProducers409JSONResponse) VisitListTopicProducersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTopicProducers503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ListTopicProducers503JSONResponse) VisitListTopicProducersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type TailTopicRequestObject struct {
 	Topic  TopicName `json:"topic"`
 	Params TailTopicParams
@@ -9109,6 +9268,9 @@ type StrictServerInterface interface {
 	// ListTopicConsumerGroups The consumer groups with committed offsets on a topic
 	// (GET /api/customer/topics/{topic}/consumer-groups)
 	ListTopicConsumerGroups(ctx context.Context, request ListTopicConsumerGroupsRequestObject) (ListTopicConsumerGroupsResponseObject, error)
+	// ListTopicProducers The idempotent and transactional producers that write a topic, as Kafka knows them
+	// (GET /api/customer/topics/{topic}/producers)
+	ListTopicProducers(ctx context.Context, request ListTopicProducersRequestObject) (ListTopicProducersResponseObject, error)
 	// TailTopic The topic's recent messages and then new ones as they arrive, as server-sent events, for organization admins: a message event with a TailMessage per message, and a skipped event with a TailSkipped when more arrive than the stream shows. Each tail is audited; no message is kept. The stream ends when the session token expires; open it again with resume, to go on where it ended.
 	// (GET /api/customer/topics/{topic}/tail)
 	TailTopic(ctx context.Context, request TailTopicRequestObject) (TailTopicResponseObject, error)
@@ -10440,6 +10602,32 @@ func (sh *strictHandler) ListTopicConsumerGroups(w http.ResponseWriter, r *http.
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListTopicConsumerGroupsResponseObject); ok {
 		if err := validResponse.VisitListTopicConsumerGroupsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTopicProducers operation middleware
+func (sh *strictHandler) ListTopicProducers(w http.ResponseWriter, r *http.Request, topic TopicName) {
+	var request ListTopicProducersRequestObject
+
+	request.Topic = topic
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTopicProducers(ctx, request.(ListTopicProducersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTopicProducers")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTopicProducersResponseObject); ok {
+		if err := validResponse.VisitListTopicProducersResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

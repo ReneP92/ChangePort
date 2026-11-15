@@ -1,8 +1,9 @@
 // Package clusters gives the console a Kafka admin client for each customer's
 // cluster, connected on demand over the internal mTLS listener as the
 // changeport-console Kafka user, which may manage topics but never read or
-// write messages; and, for the tail of a topic only, a reader as the
-// changeport-tail user, which may read topics and nothing else.
+// write messages; and, as the changeport-tail user, which may read topics and
+// nothing else, a reader for the tail of a topic, and an admin client for
+// describing producers, which Kafka authorizes as reading.
 package clusters
 
 import (
@@ -58,7 +59,12 @@ type Pool struct {
 
 	now     func() time.Time
 	mu      sync.Mutex
-	clients map[string]*pooled
+	clients map[key]*pooled
+}
+
+// key is a customer's client as one of the platform's Kafka users.
+type key struct {
+	customerID, user string
 }
 
 // pooled is one customer's client and the certificates its connections use.
@@ -81,7 +87,7 @@ func NewPool(secrets Secrets, logger *slog.Logger) *Pool {
 		IdleTimeout:     10 * time.Minute,
 		Bootstrap:       provisioning.Spec.InternalBootstrapAddress,
 		now:             time.Now,
-		clients:         map[string]*pooled{},
+		clients:         map[key]*pooled{},
 	}
 }
 
@@ -92,7 +98,18 @@ func NewPool(secrets Secrets, logger *slog.Logger) *Pool {
 // Its methods answer from metadata up to kgo.MetadataMinAge (5s) old where
 // they can; Metadata reads the cluster's current metadata instead.
 func (p *Pool) Admin(ctx context.Context, customerID string) (*kadm.Client, error) {
-	entry, err := p.entry(ctx, customerID)
+	entry, err := p.entry(ctx, customerID, provisioning.ConsoleUser)
+	if err != nil {
+		return nil, err
+	}
+	return entry.admin, nil
+}
+
+// Reading returns an admin client of the customer's cluster as the tail
+// user, pooled like Admin's, for what Kafka authorizes as reading a topic
+// without returning its messages: describing the producers that write it.
+func (p *Pool) Reading(ctx context.Context, customerID string) (*kadm.Client, error) {
+	entry, err := p.entry(ctx, customerID, provisioning.TailUser)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +120,7 @@ func (p *Pool) Admin(ctx context.Context, customerID string) (*kadm.Client, erro
 // bypassing the client's metadata cache, which can miss a topic created a
 // moment ago or still hold one just deleted.
 func (p *Pool) Metadata(ctx context.Context, customerID string) (*kmsg.MetadataResponse, error) {
-	entry, err := p.entry(ctx, customerID)
+	entry, err := p.entry(ctx, customerID, provisioning.ConsoleUser)
 	if err != nil {
 		return nil, err
 	}
@@ -111,9 +128,9 @@ func (p *Pool) Metadata(ctx context.Context, customerID string) (*kmsg.MetadataR
 	return kmsg.NewPtrMetadataRequest().RequestWith(ctx, entry.client)
 }
 
-// entry returns the customer's pooled client, connecting it first if
-// needed.
-func (p *Pool) entry(ctx context.Context, customerID string) (*pooled, error) {
+// entry returns the customer's pooled client as a user, connecting it
+// first if needed.
+func (p *Pool) entry(ctx context.Context, customerID, user string) (*pooled, error) {
 	if err := provisioning.ValidateCustomerID(customerID); err != nil {
 		return nil, err
 	}
@@ -123,12 +140,13 @@ func (p *Pool) entry(ctx context.Context, customerID string) (*pooled, error) {
 	now := p.now()
 	p.closeIdle(now)
 
-	entry, ok := p.clients[customerID]
+	k := key{customerID, user}
+	entry, ok := p.clients[k]
 	if ok && now.Sub(entry.checked) < p.RefreshInterval {
 		entry.used = now
 		return entry, nil
 	}
-	config, versions, err := p.loadTLS(ctx, spec, provisioning.ConsoleUser)
+	config, versions, err := p.loadTLS(ctx, spec, user)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +154,7 @@ func (p *Pool) entry(ctx context.Context, customerID string) (*pooled, error) {
 		if versions != entry.versions {
 			entry.tls.Store(config)
 			entry.versions = versions
-			p.logger.Info("reloaded the console's certificates", "tenant", customerID)
+			p.logger.Info("reloaded the console's certificates", "tenant", customerID, "user", user)
 		}
 		entry.checked, entry.used = now, now
 		return entry, nil
@@ -147,13 +165,13 @@ func (p *Pool) entry(ctx context.Context, customerID string) (*pooled, error) {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(p.Bootstrap(spec)),
 		kgo.Dialer(entry.dial),
-		kgo.ClientID("changeport-console"),
+		kgo.ClientID(user),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create the Kafka client of customer %s: %w", customerID, err)
+		return nil, fmt.Errorf("create the Kafka client of customer %s as %s: %w", customerID, user, err)
 	}
 	entry.client, entry.admin = client, kadm.NewClient(client)
-	p.clients[customerID] = entry
+	p.clients[k] = entry
 	return entry, nil
 }
 

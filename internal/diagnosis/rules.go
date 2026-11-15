@@ -5,6 +5,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"time"
 )
 
 // Thresholds of the rules (docs/diagnosis.md).
@@ -40,6 +41,9 @@ const (
 	// before they are worth mentioning: the topology map's thresholds.
 	unreportedFloor = 100.0
 	unreportedShare = 0.1
+	// openTooLong is how long a transaction may hold read_committed
+	// consumers back before it is worth looking at.
+	openTooLong = time.Minute
 )
 
 // consumerTooSlow finds groups that consume less of a topic than it
@@ -423,6 +427,130 @@ func producersWithoutTelemetry(s Snapshot) []Finding {
 				"%s receives %s a second from producers that send no telemetry, so the data flow map cannot show them, nor their errors.",
 				t.Name, bytes(t.UnreportedBytesInPerSecond)),
 			Suggestion: "Producers on Kafka's Java client 3.7 or newer, or on librdkafka 2.5 or newer, send it by themselves. Older ones work as they are, but stay unseen.",
+		})
+	}
+	return found
+}
+
+// hangingTransaction finds partitions a hanging transaction blocks: open
+// on the partition, idle for longer than any transaction may last, and no
+// longer open there for its coordinator, which therefore never aborts it.
+func hangingTransaction(s Snapshot) []Finding {
+	var found []Finding
+	for _, t := range s.Topics {
+		for _, h := range t.Hanging {
+			by := fmt.Sprintf("a producer with ID %d", h.ProducerID)
+			if h.TransactionalID != "" {
+				by = "transactional producer " + h.TransactionalID
+			}
+			found = append(found, Finding{
+				Severity: Critical,
+				Subject:  Subject{Topic: t.Name},
+				Title:    fmt.Sprintf("A hanging transaction blocks partition %d of %s", h.Partition, t.Name),
+				Explanation: fmt.Sprintf(
+					"Partition %d of %s has a transaction of %s open from offset %d, last written to %s ago, which its coordinator no longer has open. Kafka never aborts such a transaction by itself, so read_committed consumers of the partition read nothing past it.",
+					h.Partition, t.Name, by, h.From, duration(h.Idle.Seconds())),
+				Suggestion: fmt.Sprintf(
+					"Aborting it takes the platform's rights (`kafka-transactions.sh abort`): write to Changeport support with %s, partition %d and offset %d.",
+					t.Name, h.Partition, h.From),
+			})
+		}
+	}
+	return found
+}
+
+// openTransaction finds transactions open long enough to hold back the
+// read_committed consumers of their topics.
+func openTransaction(s Snapshot) []Finding {
+	var found []Finding
+	for _, t := range s.Transactions {
+		if t.State != "Ongoing" || t.Open < openTooLong {
+			continue
+		}
+		type held struct {
+			messages   int64
+			partitions int
+		}
+		byTopic := map[string]*held{}
+		for _, p := range t.Partitions {
+			if p.HeldBack <= 0 {
+				continue
+			}
+			h := byTopic[p.Topic]
+			if h == nil {
+				h = &held{}
+				byTopic[p.Topic] = h
+			}
+			h.messages += p.HeldBack
+			h.partitions++
+		}
+		for _, topic := range slices.Sorted(maps.Keys(byTopic)) {
+			h := byTopic[topic]
+			partitions := topic
+			if total := topicPartitions(s, topic); total > h.partitions {
+				partitions = fmt.Sprintf("%s of the %s of %s", plural(h.partitions, "partition"), plural(total, "partition"), topic)
+			}
+			found = append(found, Finding{
+				Severity: Warning,
+				Subject:  Subject{Topic: topic, TransactionalID: t.ID},
+				Title:    "A transaction holds back the consumers of " + topic,
+				Explanation: fmt.Sprintf(
+					"Transaction %s has been open for %s. Until it commits or aborts, read_committed consumers cannot read the %s after its start on %s. Kafka aborts it once it has been open for %s.",
+					t.ID, duration(t.Open.Seconds()), plural(int(h.messages), "message"), partitions, duration(t.Timeout.Seconds())),
+				Suggestion: "Keep transactions short: commit every few seconds, or every few hundred messages. A producer that stops in the middle of one holds consumers back until `transaction.timeout.ms` passes, so keep that short too (1 minute by default).",
+			})
+		}
+	}
+	return found
+}
+
+// topicPartitions returns how many partitions a topic has, or 0.
+func topicPartitions(s Snapshot, name string) int {
+	t, _ := s.topic(name)
+	return t.Partitions
+}
+
+// transactionsAborted notes producers that aborted transactions over the
+// window, as they report it: Kafka counts aborts nowhere.
+func transactionsAborted(s Snapshot) []Finding {
+	var found []Finding
+	for _, p := range s.Producers {
+		if !p.AbortedTransactions {
+			continue
+		}
+		found = append(found, Finding{
+			Severity: Info,
+			Subject:  Subject{ClientID: p.ClientID, Principal: p.Principal},
+			Title:    p.ClientID + " aborts transactions",
+			Explanation: fmt.Sprintf(
+				"%s aborted transactions in the last %s: what they wrote is discarded, and read_committed consumers never see it. Kafka counts aborts nowhere, so how many is not known.",
+				p.ClientID, duration(s.Window.Seconds())),
+			Suggestion: fmt.Sprintf(
+				"The log of %s says why. Transactions abort after an error in processing, after `transaction.timeout.ms`, or when a newer instance with the same `transactional.id` takes over.",
+				p.ClientID),
+		})
+	}
+	return found
+}
+
+// producersNotIdempotent notes topics that received messages over the
+// window from no idempotent producer, as Kafka keeps state only for those.
+func producersNotIdempotent(s Snapshot) []Finding {
+	var found []Finding
+	for _, t := range s.Topics {
+		// A Postgres source's topics are written by Changeport's own Connect
+		// worker; too quiet a topic may have been written before the window.
+		if t.Source || t.IdempotentProducers == nil || *t.IdempotentProducers > 0 || t.MessagesInPerSecond < busyTopic {
+			continue
+		}
+		found = append(found, Finding{
+			Severity: Info,
+			Subject:  Subject{Topic: t.Name},
+			Title:    fmt.Sprintf("The producers of %s are not idempotent", t.Name),
+			Explanation: fmt.Sprintf(
+				"%s received %s messages a second over the last %s, none of them from an idempotent producer. A producer that is not sends a message again when an answer is lost, and may write it twice.",
+				t.Name, rate(t.MessagesInPerSecond), duration(s.Window.Seconds())),
+			Suggestion: "Set `enable.idempotence=true` and `acks=all` on its producers. Java clients from 3.0 are idempotent by default unless another setting turns it off, such as `acks=1`; librdkafka-based clients, such as the Python and Node.js ones, are not unless told.",
 		})
 	}
 	return found

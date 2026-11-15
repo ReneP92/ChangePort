@@ -41,9 +41,12 @@ const SubscriptionName = "changeport"
 // name: a subscription matches metric names by prefix, so a full name
 // matches only itself and the set of series stays fixed. They are the
 // metrics KIP-714 asks every client to report, which non-Java clients such as
-// librdkafka do too, and the Java clients' counts of records, errors and
-// bytes. Per-broker metrics (node.*) are left out: there are as many of them
-// as brokers, and their node_id attribute clashes with the broker's own.
+// librdkafka do too, the Java clients' counts of records, errors and bytes,
+// and the time Java producers spend committing and aborting transactions:
+// Kafka counts aborts nowhere, so time spent aborting is the sign of them
+// (docs/diagnosis.md). Per-broker metrics (node.*) are left out: there are as
+// many of them as brokers, and their node_id attribute clashes with the
+// broker's own.
 var SubscribedMetrics = []string{
 	"org.apache.kafka.producer.record.send.total",
 	"org.apache.kafka.producer.record.error.total",
@@ -61,6 +64,8 @@ var SubscribedMetrics = []string{
 	"org.apache.kafka.producer.buffer.available.bytes",
 	"org.apache.kafka.producer.connection.count",
 	"org.apache.kafka.producer.connection.creation.total",
+	"org.apache.kafka.producer.txn.commit.time.ns.total",
+	"org.apache.kafka.producer.txn.abort.time.ns.total",
 	"org.apache.kafka.consumer.fetch.manager.records.consumed.total",
 	"org.apache.kafka.consumer.fetch.manager.bytes.consumed.total",
 	"org.apache.kafka.consumer.fetch.manager.fetch.latency.avg",

@@ -141,6 +141,23 @@ export interface paths {
         patch: operations["changeTopic"];
         trace?: never;
     };
+    "/api/customer/topics/{topic}/producers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The idempotent and transactional producers that write a topic, as Kafka knows them */
+        get: operations["listTopicProducers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/customer/topics/{topic}/consumer-groups": {
         parameters: {
             query?: never;
@@ -932,6 +949,41 @@ export interface components {
             activeControllers?: number;
             activeBrokers?: number;
             fencedBrokers?: number;
+            transactions?: components["schemas"]["TransactionsSummary"];
+        };
+        /** @description The transactions open on the cluster; absent while Kafka does not describe them */
+        TransactionsSummary: {
+            open: number;
+            /**
+             * Format: date-time
+             * @description When the oldest open transaction started
+             */
+            oldestStartedAt?: string;
+        };
+        TopicProducers: {
+            /**
+             * @description The producers Kafka keeps state for on the topic's partitions: those that
+             *     write idempotently or in transactions, by producer ID, with the transactional
+             *     ID of transactional ones. Kafka keeps none for other producers, and knows none
+             *     by client ID. The most recent first.
+             */
+            producers: components["schemas"]["TopicProducer"][];
+            /**
+             * Format: int64
+             * @description The messages read_committed consumers cannot read yet, which open transactions hold back
+             */
+            heldBack: number;
+        };
+        TopicProducer: {
+            /** Format: int64 */
+            producerId: number;
+            transactionalId?: string;
+            /** @description The topic's partitions it wrote to */
+            partitions: number;
+            /** Format: date-time */
+            lastWrite: string;
+            /** @description Whether it has a transaction open on the topic */
+            inTransaction: boolean;
         };
         Broker: {
             name: string;
@@ -1358,6 +1410,8 @@ export interface components {
             topic?: string;
             consumerGroup?: string;
             clientId?: string;
+            /** @description The transactional ID of the transaction it is about */
+            transactionalId?: string;
             /** @description What is wrong, in a line */
             title: string;
             /** @description What shows it, with the numbers */
@@ -1980,6 +2034,34 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    listTopicProducers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The topic's name */
+                topic: components["parameters"]["TopicName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The topic's producers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopicProducers"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["NotReady"];
             503: components["responses"]["NotConfigured"];
         };
     };

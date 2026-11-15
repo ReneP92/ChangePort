@@ -106,6 +106,10 @@ const (
 	// Records the producer refused itself, before sending, count only in
 	// ProducerErrors.
 	ProducerTopicErrors Query = "producer_topic_errors"
+	// ProducerAborts is the nanoseconds each producer spent aborting
+	// transactions over the window, as it reports it: Kafka counts aborts
+	// nowhere, so time spent aborting is the sign of them.
+	ProducerAborts Query = "producer_aborts"
 	// BytesRejected is the bytes each topic refused over the window as
 	// larger than its max.message.bytes. Brokers create a topic's meter at
 	// its first refusal, so the counter is taken to start from 0 there
@@ -183,6 +187,7 @@ var definitions = map[Query]definition{
 	ProducerErrors:      {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (increase_pure(clients_org_apache_kafka_producer_record_error_total{%s}[{window}]) / {seconds}))`, perProducer},
 	ProducerRetries:     {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (increase_pure(clients_org_apache_kafka_producer_record_retry_total{%s}[{window}]) / {seconds}))`, perProducer},
 	ProducerTopicErrors: {`sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (increase_pure(clients_org_apache_kafka_producer_topic_record_error_total{%s}[{window}]) / {seconds}))`, perClient},
+	ProducerAborts:      {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (increase_pure(clients_org_apache_kafka_producer_txn_abort_time_ns_total{%s}[{window}])))`, perProducer},
 	BytesRejected:       {`sum by (topic) (increase_pure(kafka_server_brokertopicmetrics_bytesrejectedpersec_total{%s}[{window}]))`, perTopic},
 
 	TopicHealth:   {`max by (topic) (max_over_time(changeport_health_level{%s}[{window}]))`, perTopic},
@@ -197,7 +202,7 @@ func Queries() []Query {
 		UnderReplicated, UnderMinISR, OfflinePartitions, ActiveControllers, ActiveBrokers, FencedBrokers,
 		ProducerBytes, ConsumerBytes,
 		MessagesInRecent, ConsumedMessages, LagSecondsEarlier, LostPartitions, OffsetResets, PartitionSize,
-		ProducerSends, ProducerErrors, ProducerRetries, ProducerTopicErrors, BytesRejected,
+		ProducerSends, ProducerErrors, ProducerRetries, ProducerTopicErrors, ProducerAborts, BytesRejected,
 		TopicHealth, GroupHealth, HealthChecked,
 	}
 }
