@@ -99,6 +99,12 @@ consumers running while `orders` keeps receiving. A topic's and a group's
 pages show what is about them, and the data flow map marks them.
 [diagnosis.md](diagnosis.md) describes every rule.
 
+Each topic and consumer group has a health level from them: **Healthy**,
+**Needs attention** with warnings, **At risk** with anything critical. The
+topics and consumer groups tables show it in a column whose header sorts
+them worst first, and a topic's and a group's pages show it beside their
+names, with a strip of the last 24 hours and the diagnoses behind it.
+
 The overview's data flow map shows how data moves through the cluster now:
 the producers on the left, by client ID and Kafka user, the topics they
 write in the middle, and the consumer groups that read them on the right,
@@ -119,9 +125,10 @@ their groups by the groups' members, as Kafka lists them, and each member
 counts, even when several share a client ID. On a phone the map scrolls
 sideways within its card.
 
-A topic's page and a consumer group's, from the overview's names: the
-topic's settings, its traffic and the groups that read it; the group's lag
-on each topic it reads. Every graph marks what changed meanwhile, numbered,
+A topic's page and a consumer group's, from the overview's names: their
+health over the last 24 hours and what needs attention; the topic's
+settings, its traffic and the groups that read it; the group's lag on each
+topic it reads. Every graph marks what changed meanwhile, numbered,
 with the changes listed under it in plain words: topics created or
 reconfigured, rebalances, broker restarts, throttling (see
 [timeline.md](timeline.md)).

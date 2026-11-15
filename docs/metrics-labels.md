@@ -75,6 +75,21 @@ measurement still waits on the same message, so its lag carries forward
 older by the time since, and its messages behind are counted again; a group
 that did consume keeps its last value instead of reporting a wrong one.
 
+## Health
+
+The console exports the health level of each customer's topics and consumer
+groups ([diagnosis.md](diagnosis.md#health)), with `tenant` and either
+`topic` or `consumer_group`; the `changeport-console` job copies `tenant`
+into `cluster`, and keeps nothing else of the console's.
+
+| Metric | Meaning |
+| --- | --- |
+| `changeport_health_level` | 1 for a topic or group that needs attention, 2 at risk; healthy ones have no series |
+| `changeport_health_checked` | 1 for each customer the console diagnosed in its last look, every minute |
+
+A healthy cluster adds one series; each topic or group that is not healthy
+one more, while it is not.
+
 ## Customers, certificates and volumes
 
 The provisioning controller, in the provisioner, exports each customer's

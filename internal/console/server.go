@@ -140,8 +140,10 @@ type Server struct {
 	logger *slog.Logger
 	// csp is the Content-Security-Policy of the web app's pages.
 	csp string
-	// diagnoses keeps each environment's last diagnoses for a moment.
+	// diagnoses keeps each environment's last diagnoses for a moment, and
+	// health the levels WatchHealth last recorded.
 	diagnoses diagnosisCache
+	health    *healthMonitor
 }
 
 // Options holds what New needs besides the configuration.
@@ -217,6 +219,7 @@ func New(config Config, options Options) (*Server, error) {
 		messages:      options.Messages,
 		tails:         &tails{running: map[string]int{}},
 		diagnoses:     diagnosisCache{entries: map[string]diagnosisEntry{}},
+		health:        &healthMonitor{},
 		registries:    map[string]*tail.Registry{},
 		registryURL:   options.RegistryURL,
 		egress:        options.EgressAddresses,
@@ -1069,6 +1072,7 @@ func (s *Server) ListTopics(ctx context.Context, _ api.ListTopicsRequestObject) 
 	if err != nil {
 		return nil, err
 	}
+	health := s.healthLevels(ctx, customer.Name)
 	list := api.ListTopics200JSONResponse{Topics: make([]api.Topic, 0, len(settings))}
 	for _, t := range settings {
 		// The platform's own topics, such as Kafka Connect's, are not the
@@ -1081,6 +1085,7 @@ func (s *Server) ListTopics(ctx context.Context, _ api.ListTopicsRequestObject) 
 			source = ptr.To(owner)
 		}
 		list.Topics = append(list.Topics, api.Topic{
+			Health:            health.topic(t.Name),
 			Source:            source,
 			Name:              t.Name,
 			Partitions:        t.Partitions,
@@ -1240,6 +1245,10 @@ func (s *Server) ListConsumerGroups(ctx context.Context, _ api.ListConsumerGroup
 			strings.Compare(a.Topic, b.Topic),
 		)
 	})
+	health := s.healthLevels(ctx, customer.Name)
+	for i := range list.Groups {
+		list.Groups[i].Health = health.group(list.Groups[i].Group)
+	}
 	return list, nil
 }
 

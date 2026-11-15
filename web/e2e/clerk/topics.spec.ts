@@ -35,8 +35,8 @@ test("an admin creates a tiered one-hour topic and deletes it", async ({ page },
 
   const row = main.getByRole("row").filter({ hasText: topic });
   await expect(row).toBeVisible();
-  await expect(row.getByRole("cell").nth(1)).toHaveText("2");
-  await expect(row.getByRole("cell").nth(2)).toHaveText("1 hour");
+  await expect(row.getByRole("cell").nth(2)).toHaveText("2");
+  await expect(row.getByRole("cell").nth(3)).toHaveText("1 hour");
   await expect(row.getByText("Tiered")).toBeVisible();
   // The table with its actions scrolls sideways on a phone; the page does not.
   await expectNoSidewaysScroll(page);

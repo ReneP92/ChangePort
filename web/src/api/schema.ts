@@ -622,6 +622,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/customer/health-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How healthy a topic or a consumer group was over the last 24 hours, in 15-minute steps */
+        get: operations["getHealthHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/customer/events": {
         parameters: {
             query?: never;
@@ -925,6 +942,7 @@ export interface components {
             topics: components["schemas"]["Topic"][];
         };
         Topic: {
+            health?: components["schemas"]["HealthStatus"];
             name: string;
             partitions: number;
             replicationFactor: number;
@@ -1267,6 +1285,7 @@ export interface components {
         };
         /** @description How far a consumer group is behind on one topic, as the agent measures it every 30 seconds without reading any message. */
         ConsumerGroupLag: {
+            health?: components["schemas"]["HealthStatus"];
             group: string;
             topic: string;
             /** @description The age of the oldest message the group has not consumed yet, the highest over the topic's partitions; 0 when it has consumed every message. */
@@ -1286,6 +1305,29 @@ export interface components {
             stepSeconds: number;
             bytesIn: components["schemas"]["Point"][];
             bytesOut: components["schemas"]["Point"][];
+        };
+        /** @description How healthy a topic or consumer group is, from the diagnoses about it (docs/diagnosis.md): healthy without warnings, needing attention with some, at risk with anything critical. A diagnosis about a group reading a topic is the group's. Left out while the diagnoses are not known. */
+        HealthStatus: {
+            level: components["schemas"]["HealthLevel"];
+            /** @description The IDs of the diagnoses that set the level */
+            diagnoses: string[];
+        };
+        /** @enum {string} */
+        HealthLevel: "healthy" | "needsAttention" | "atRisk";
+        /** @description A topic's or consumer group's level over the last 24 hours, the worst of each step. */
+        HealthHistory: {
+            current?: components["schemas"]["HealthStatus"];
+            stepSeconds: number;
+            points: components["schemas"]["HealthPoint"][];
+        };
+        /** @description The level of a step, left out where the console did not look, such as while it was down */
+        HealthPoint: {
+            /**
+             * Format: date-time
+             * @description The end of the step
+             */
+            time: string;
+            level?: components["schemas"]["HealthLevel"];
         };
         DiagnosisList: {
             /** @description How far back the diagnoses look, 15 minutes unless the console is set otherwise */
@@ -1330,6 +1372,7 @@ export interface components {
             bytesPerSecond: number;
         };
         TopologyTopic: {
+            health?: components["schemas"]["HealthStatus"];
             name: string;
             bytesInPerSecond: number;
             bytesOutPerSecond: number;
@@ -1339,6 +1382,7 @@ export interface components {
             source?: string;
         };
         TopologyGroup: {
+            health?: components["schemas"]["HealthStatus"];
             name: string;
             members: number;
             /** @description How far behind the group is on the topic it is most behind on */
@@ -2904,6 +2948,34 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["NotReady"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    getHealthHistory: {
+        parameters: {
+            query?: {
+                topic?: string;
+                consumerGroup?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The levels over the last 24 hours */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthHistory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             503: components["responses"]["NotConfigured"];
         };
     };

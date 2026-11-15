@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link } from "react-router";
 import { useAlerts, useTopics } from "@/api/queries";
+import { HealthBadge, HealthHeader } from "@/components/HealthBadge";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatBytes, formatRate, formatRetention } from "@/lib/format";
@@ -7,6 +9,7 @@ import { alertsAbout } from "@/lib/alerts";
 import { AlertBadge } from "@/pages/alerts/ActiveAlerts";
 import { CreateTopicDialog } from "@/pages/overview/CreateTopicDialog";
 import { DeleteTopicDialog } from "@/pages/overview/DeleteTopicDialog";
+import { worstFirst } from "@/lib/health";
 import { useEnvironmentPath } from "@/lib/useEnvironment";
 
 /** The topics with their settings, size and throughput. */
@@ -14,6 +17,10 @@ export function TopicsCard({ admin }: { admin: boolean }) {
   const envPath = useEnvironmentPath();
   const topics = useTopics();
   const alerts = useAlerts();
+  const [byHealth, setByHealth] = useState(false);
+  const rows = byHealth
+    ? [...(topics.data ?? [])].sort((a, b) => worstFirst(a.health?.level, b.health?.level))
+    : (topics.data ?? []);
   return (
     <Card id="topics" className="scroll-mt-4">
       <CardHeader className="flex flex-row items-start justify-between gap-4">
@@ -42,6 +49,12 @@ export function TopicsCard({ admin }: { admin: boolean }) {
               <thead className="border-b text-muted-foreground">
                 <tr>
                   <th className="py-2 font-medium">Topic</th>
+                  <HealthHeader
+                    sorted={byHealth}
+                    onToggle={() => {
+                      setByHealth(!byHealth);
+                    }}
+                  />
                   <th className="py-2 text-right font-medium">Partitions</th>
                   <th className="py-2 font-medium">Retention</th>
                   <th className="py-2 font-medium">Storage</th>
@@ -56,7 +69,7 @@ export function TopicsCard({ admin }: { admin: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {topics.data.map((topic) => (
+                {rows.map((topic) => (
                   <tr key={topic.name} className="border-b last:border-0">
                     <td className="py-2 font-medium">
                       <span className="flex items-center gap-2">
@@ -78,6 +91,9 @@ export function TopicsCard({ admin }: { admin: boolean }) {
                           </Badge>
                         )}
                       </span>
+                    </td>
+                    <td className="py-2">
+                      <HealthBadge health={topic.health} />
                     </td>
                     <td className="py-2 text-right tabular-nums">{topic.partitions}</td>
                     <td className="py-2">

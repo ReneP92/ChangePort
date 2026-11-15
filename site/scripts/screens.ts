@@ -64,7 +64,7 @@ const crops = [
     left: 264,
     top: 1636,
     width: 1000,
-    height: 315,
+    height: 371,
   },
   {
     name: "topology-phone",
@@ -72,23 +72,23 @@ const crops = [
     left: 0,
     top: 2351,
     width: 390,
-    height: 352,
+    height: 408,
   },
   // A consumer group's lag in time, and what changed meanwhile: on the
-  // desktop with what needs attention about it.
+  // desktop with its health.
   {
     name: "lag",
     from: "18-consumer-group-desktop.png",
     left: 264,
-    top: 163,
+    top: 167,
     width: 1000,
-    height: 726,
+    height: 800,
   },
   {
     name: "lag-phone",
     from: "18-consumer-group-phone.png",
     left: 0,
-    top: 576,
+    top: 698,
     width: 390,
     height: 652,
   },

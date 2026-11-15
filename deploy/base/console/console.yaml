@@ -111,6 +111,11 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            # The health levels (internal/console/health.go), which
+            # VictoriaMetrics scrapes; the Service leaves this port out, so
+            # it stays inside the cluster.
+            - name: metrics
+              containerPort: 9090
           livenessProbe:
             httpGet:
               path: /healthz
@@ -144,3 +149,29 @@ spec:
     - name: http
       port: 80
       targetPort: http
+---
+# The console's API and pages stay open; its metrics, which name every
+# customer's topics and groups that are not healthy, only VictoriaMetrics
+# reads.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: changeport-console
+  namespace: changeport
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: changeport-console
+  policyTypes: [Ingress]
+  ingress:
+    - ports:
+        - {protocol: TCP, port: 8080}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: metrics
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: victoria-metrics
+      ports:
+        - {protocol: TCP, port: 9090}

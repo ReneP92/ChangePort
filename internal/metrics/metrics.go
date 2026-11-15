@@ -98,6 +98,15 @@ const (
 	ProducerSends   Query = "producer_sends"
 	ProducerErrors  Query = "producer_errors"
 	ProducerRetries Query = "producer_retries"
+
+	// TopicHealth and GroupHealth are the worst level of each topic and
+	// consumer group over the filter's window, as the console exports it
+	// (internal/console/health.go): 1 needs attention, 2 at risk; healthy
+	// subjects have no series. HealthChecked is whether the console looked
+	// at the cluster at all over the window.
+	TopicHealth   Query = "topic_health"
+	GroupHealth   Query = "group_health"
+	HealthChecked Query = "health_checked"
 )
 
 // scope is what a query's series are about, which decides its filters.
@@ -160,6 +169,10 @@ var definitions = map[Query]definition{
 	ProducerSends:   {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_send_total{%s}[{window}])))`, perProducer},
 	ProducerErrors:  {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_error_total{%s}[{window}])))`, perProducer},
 	ProducerRetries: {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_retry_total{%s}[{window}])))`, perProducer},
+
+	TopicHealth:   {`max by (topic) (max_over_time(changeport_health_level{%s}[{window}]))`, perTopic},
+	GroupHealth:   {`max by (consumer_group) (max_over_time(changeport_health_level{%s, consumer_group!=""}[{window}]))`, perGroup},
+	HealthChecked: {`max(max_over_time(changeport_health_checked{%s}[{window}]))`, perCluster},
 }
 
 // Queries lists every named query.
@@ -170,6 +183,7 @@ func Queries() []Query {
 		ProducerBytes, ConsumerBytes,
 		MessagesInRecent, ConsumedMessages, LagSecondsEarlier, LostPartitions, OffsetResets, PartitionSize,
 		ProducerSends, ProducerErrors, ProducerRetries,
+		TopicHealth, GroupHealth, HealthChecked,
 	}
 }
 

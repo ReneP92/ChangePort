@@ -51,9 +51,9 @@ test("an admin downloads client.properties and produces with it", async ({ page 
   await expect(async () => {
     await page.reload();
     await expect(row).toBeVisible();
-    await expect(row.getByRole("cell").nth(4)).not.toHaveText("–");
+    await expect(row.getByRole("cell").nth(5)).not.toHaveText("–");
   }).toPass({ timeout: 150_000, intervals: [10_000] });
-  await expect(row.getByRole("cell").nth(1)).toHaveText("3");
+  await expect(row.getByRole("cell").nth(2)).toHaveText("3");
   await expect(row.getByText("Tiered")).toBeVisible();
 });
 

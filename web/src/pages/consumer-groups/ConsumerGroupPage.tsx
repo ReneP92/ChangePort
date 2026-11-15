@@ -20,8 +20,9 @@ import { durationTicks, formatDuration, formatLag } from "@/lib/format";
 import { rangeMilliseconds, ranges } from "@/lib/ranges";
 import { numberEvents } from "@/lib/timeline";
 import { cn } from "@/lib/utils";
+import { HealthBadge } from "@/components/HealthBadge";
 import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
-import { DiagnosesAbout } from "@/pages/diagnoses/Diagnoses";
+import { SubjectHealth } from "@/pages/diagnoses/SubjectHealth";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
@@ -53,7 +54,12 @@ function ConsumerGroup({ group }: { group: string }) {
     <Page
       crumbs={[...crumbs, { label: "Consumer groups", to: envPath("/#consumer-groups") }]}
       title={<span className="[overflow-wrap:anywhere]">{group}</span>}
-      badge={<AlertBadge alerts={groupAlerts} />}
+      badge={
+        <>
+          <AlertBadge alerts={groupAlerts} />
+          <HealthBadge health={rows[0]?.health} />
+        </>
+      }
     >
       {groupAlerts.length > 0 && (
         <section
@@ -63,7 +69,7 @@ function ConsumerGroup({ group }: { group: string }) {
           <AlertRows alerts={groupAlerts} />
         </section>
       )}
-      <DiagnosesAbout consumerGroup={group} />
+      <SubjectHealth consumerGroup={group} health={rows[0]?.health} />
       <Card>
         <CardHeader>
           <CardTitle>

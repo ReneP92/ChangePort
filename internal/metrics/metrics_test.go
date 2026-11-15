@@ -45,6 +45,21 @@ func TestExpr(t *testing.T) {
 			`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_error_total{tenant="acme", principal!~"User:CN=.*"}[300s])))`,
 		},
 		{
+			"a topic's health over a step", TopicHealth,
+			Filter{Topic: "orders", Window: 15 * time.Minute},
+			`max by (topic) (max_over_time(changeport_health_level{tenant="acme", topic="orders"}[900s]))`,
+		},
+		{
+			"a group's health", GroupHealth,
+			Filter{ConsumerGroup: "billing"},
+			`max by (consumer_group) (max_over_time(changeport_health_level{tenant="acme", consumer_group="billing", consumer_group!=""}[900s]))`,
+		},
+		{
+			"whether the console looked", HealthChecked,
+			Filter{Window: 15 * time.Minute},
+			`max(max_over_time(changeport_health_checked{tenant="acme"}[900s]))`,
+		},
+		{
 			"the whole cluster", OfflinePartitions,
 			Filter{},
 			`max(kafka_controller_kafkacontroller_offlinepartitionscount{tenant="acme"})`,
