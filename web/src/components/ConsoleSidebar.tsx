@@ -13,8 +13,11 @@ import {
   LogOut,
   Menu,
   MessageCircle,
+  Monitor,
+  Moon,
   PanelLeft,
   Settings2,
+  Sun,
   UserRound,
   Users,
   type LucideIcon,
@@ -24,6 +27,7 @@ import { Link, matchPath, NavLink, useLocation } from "react-router";
 import type { Environment } from "@/api/client";
 import { useSupportEmail } from "@/api/config";
 import { useEnvironmentAlerts, useMe, useTrialRequests } from "@/api/queries";
+import { ChangeportMark } from "@/components/ChangeportMark";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -32,6 +36,8 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
@@ -59,6 +65,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Skeleton } from "@/components/ui/skeleton";
 import { environmentPath } from "@/lib/environments";
 import { modifier, useOpenShortcuts } from "@/lib/shortcuts";
+import { setTheme, useTheme, type Theme } from "@/lib/theme";
 import { useEnvironment, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
@@ -110,7 +117,7 @@ export function MobileTopBar() {
         <Menu />
       </Button>
       <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight">
-        <img src="/favicon.svg" alt="" className="size-6" />
+        <ChangeportMark className="size-6" />
         Changeport
       </Link>
       {me.data?.access === "customer" && environment !== undefined && (
@@ -147,7 +154,7 @@ function WorkspaceMenu() {
   ) : organization ? (
     <img src={organization.imageUrl} alt="" className="size-5 shrink-0 rounded" />
   ) : (
-    <img src="/favicon.svg" alt="" className="size-5 shrink-0" />
+    <ChangeportMark className="size-5" />
   );
   return (
     <SidebarMenuItem>
@@ -491,14 +498,15 @@ function Count({ value }: { value: number }) {
 /** Collapses the sidebar to icons, or expands it, on wider screens. */
 /**
  * Help, behind Changeport's mark as Linear's is behind its: the getting
- * started guide of the environment shown, the keyboard shortcuts, and
- * support's address when the console has one.
+ * started guide of the environment shown, the keyboard shortcuts, support's
+ * address when the console has one, and the theme.
  */
 function HelpMenu() {
   const me = useMe();
   const environmentPath = useEnvironmentPath();
   const openShortcuts = useOpenShortcuts();
   const supportEmail = useSupportEmail();
+  const theme = useTheme();
   const { isMobile, setOpenMobile } = useSidebar();
   const customer = me.data?.access === "customer";
   const close = () => {
@@ -517,7 +525,7 @@ function HelpMenu() {
               aria-label="Help"
               className="bg-sidebar-accent hover:bg-sidebar-border aria-expanded:bg-sidebar-border"
             >
-              <img src="/favicon.svg" alt="" className="size-5" />
+              <ChangeportMark className="size-5" />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -550,6 +558,31 @@ function HelpMenu() {
           Keyboard shortcuts
           <DropdownMenuShortcut>{modifier()} /</DropdownMenuShortcut>
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+            Theme
+          </DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={theme}
+            onValueChange={(value) => {
+              setTheme(value as Theme);
+            }}
+          >
+            <DropdownMenuRadioItem value="system">
+              <Monitor />
+              System
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="light">
+              <Sun />
+              Light
+            </DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="dark">
+              <Moon />
+              Dark
+            </DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
