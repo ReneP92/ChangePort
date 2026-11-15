@@ -125,11 +125,18 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
     await page.goto("/");
     await expect(async () => {
       await page.reload();
-      await expect(card(page, "What needs attention")).toBeVisible({ timeout: 5_000 });
+      // Once the diagnoses are in, not while the card waits for them.
+      await expect(card(page, "What needs attention")).toHaveAttribute("aria-busy", "false", {
+        timeout: 10_000,
+      });
       await expect(finding).toHaveCount(0);
     }).toPass({ timeout: 4 * 60_000, intervals: [20_000] });
   } finally {
-    stopKafkaTools(topic);
+    // A tool may still be starting, its container not there yet.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      stopKafkaTools(topic);
+      await page.waitForTimeout(5_000);
+    }
     kafka(a.id, properties, "kafka-topics.sh", [...connect(a.id), "--delete", "--topic", topic]);
     await Promise.all(running);
   }

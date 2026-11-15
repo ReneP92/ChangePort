@@ -87,6 +87,9 @@ const (
 	// LostPartitions is the partitions where retention deleted messages a
 	// group never read.
 	LostPartitions Query = "lost_partitions"
+	// OffsetResets is how often a group's offsets on a topic went back in
+	// the window, as when it replays the topic.
+	OffsetResets Query = "offset_resets"
 	// PartitionSize is the bytes on the brokers' disks of each partition.
 	PartitionSize Query = "partition_size"
 	// ProducerSends, ProducerErrors and ProducerRetries are the records per
@@ -151,6 +154,7 @@ var definitions = map[Query]definition{
 	ConsumedMessages:  {`max by (consumer_group, topic) (clamp_min(deriv(changeport_consumergroup_committed_offsets{%s}[{window}]), 0))`, perGroup},
 	LagSecondsEarlier: {`max by (consumer_group, topic) (changeport_consumergroup_lag_seconds{%s} offset {window})`, perGroup},
 	LostPartitions:    {`max by (consumer_group, topic) (changeport_consumergroup_partitions_behind_log_start{%s})`, perGroup},
+	OffsetResets:      {`max by (consumer_group, topic) (resets(changeport_consumergroup_committed_offsets{%s}[{window}]))`, perGroup},
 	// Each replica of a partition holds the same; the largest is the leader's.
 	PartitionSize:   {`max by (topic, partition) (kafka_log_log_size{%s})`, perTopic},
 	ProducerSends:   {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_send_total{%s}[{window}])))`, perProducer},
@@ -164,7 +168,7 @@ func Queries() []Query {
 		BytesIn, BytesOut, MessagesIn, LocalSize, RemoteSize, LagSeconds, LagMessages, LagCapped,
 		UnderReplicated, UnderMinISR, OfflinePartitions, ActiveControllers, ActiveBrokers, FencedBrokers,
 		ProducerBytes, ConsumerBytes,
-		MessagesInRecent, ConsumedMessages, LagSecondsEarlier, LostPartitions, PartitionSize,
+		MessagesInRecent, ConsumedMessages, LagSecondsEarlier, LostPartitions, OffsetResets, PartitionSize,
 		ProducerSends, ProducerErrors, ProducerRetries,
 	}
 }

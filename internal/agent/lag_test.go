@@ -103,9 +103,11 @@ type fakeLagAdmin struct {
 	groups    map[string]string                     // group name to type
 	committed map[string]map[string]map[int32]int64 // group, topic, partition
 	ends      map[string]map[int32]int64
-	// starts are where partitions' logs start, after retention; 0 unless set.
-	starts map[string]map[int32]int64
-	listed [][]string // the topics of every ListOffsetsAfterMilli call
+	// starts are where partitions' logs start, after retention; 0 unless
+	// set. startsErr fails their lookup.
+	starts    map[string]map[int32]int64
+	startsErr error
+	listed    [][]string // the topics of every ListOffsetsAfterMilli call
 	// anchorErr, when set, fails every partition of anchor lookups with it.
 	anchorErr error
 }
@@ -148,6 +150,9 @@ func (f *fakeLagAdmin) offsets(topics []string, at func(end int64) int64) kadm.L
 }
 
 func (f *fakeLagAdmin) ListStartOffsets(_ context.Context, topics ...string) (kadm.ListedOffsets, error) {
+	if f.startsErr != nil {
+		return nil, f.startsErr
+	}
 	listed := f.offsets(topics, func(int64) int64 { return 0 })
 	for topic, partitions := range listed {
 		for partition, o := range partitions {
@@ -255,6 +260,23 @@ changeport_consumergroup_partitions_behind_log_start{consumer_group="shipping",t
 	if err := testutil.CollectAndCompare(c, strings.NewReader(want), "changeport_consumergroup_committed_offsets",
 		"changeport_consumergroup_partitions_behind_log_start"); err != nil {
 		t.Error(err)
+	}
+}
+
+// Without the logs' starts, the lag is measured all the same, and the lost
+// partitions are not reported rather than reported as none.
+func TestLagCollectorMeasuresWithoutLogStarts(t *testing.T) {
+	admin := newFakeLagAdmin()
+	admin.startsErr = errors.New("not the leader")
+	c := newTestLagCollector(admin)
+	if err := c.Measure(t.Context()); err == nil {
+		t.Error("Measure() hid the failed lookup")
+	}
+	if n := testutil.CollectAndCount(c, "changeport_consumergroup_lag_seconds"); n != 2 {
+		t.Errorf("%d lag series, want 2", n)
+	}
+	if n := testutil.CollectAndCount(c, "changeport_consumergroup_partitions_behind_log_start"); n != 0 {
+		t.Errorf("%d lost partition series without the starts, want none", n)
 	}
 }
 

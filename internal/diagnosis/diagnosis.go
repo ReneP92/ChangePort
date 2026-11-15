@@ -32,6 +32,15 @@ type Topic struct {
 	RetentionMs *int64
 	// Compacted topics keep the latest message per key however old.
 	Compacted bool
+	// Tiered topics keep only their last day on the brokers' disks, so
+	// PartitionBytes shows how the last day's messages spread.
+	Tiered bool
+	// PartitionsAdded is whether the topic got partitions in the last day,
+	// which start empty.
+	PartitionsAdded bool
+	// Source is whether a Postgres source writes the topic: Changeport's
+	// own Connect worker, which sends no telemetry.
+	Source bool
 	// MessagesInPerSecond and BytesInPerSecond are what the topic received.
 	MessagesInPerSecond float64
 	BytesInPerSecond    float64
@@ -50,7 +59,8 @@ type Group struct {
 	Members int
 	// IdleMembers are members assigned no partition at all.
 	IdleMembers int
-	// Rebalances is how often its members changed in the last hour.
+	// Rebalances is how often it shared its partitions out again in the
+	// last hour, as members joined or left while it consumed.
 	Rebalances int
 	Reads      []Read
 }
@@ -73,6 +83,9 @@ type Read struct {
 	// LostPartitions are partitions where retention deleted messages the
 	// group never read.
 	LostPartitions int
+	// OffsetsReset is whether the group's offsets went back in the window,
+	// as when it replays a topic: its pace then reads as nothing.
+	OffsetsReset bool
 }
 
 // Producer is a client writing to the cluster, as it reports itself.
@@ -105,10 +118,11 @@ func (s Severity) rank() int {
 // Subject is what a finding is about.
 type Subject struct {
 	// Topic, ConsumerGroup and ClientID name it; a group reading a topic
-	// has both.
+	// has both, and a client its Kafka user.
 	Topic         string
 	ConsumerGroup string
 	ClientID      string
+	Principal     string
 }
 
 // Finding is one problem a rule found.
@@ -152,7 +166,7 @@ func Diagnose(s Snapshot) []Finding {
 		for _, f := range rule.Find(s) {
 			f.Rule = rule.Name
 			f.ID = rule.Name + ":" + strings.Join(slices.DeleteFunc(
-				[]string{f.Subject.ConsumerGroup, f.Subject.Topic, f.Subject.ClientID},
+				[]string{f.Subject.ConsumerGroup, f.Subject.Topic, f.Subject.Principal, f.Subject.ClientID},
 				func(s string) bool { return s == "" }), "/")
 			findings = append(findings, f)
 		}
@@ -173,8 +187,12 @@ func (s Snapshot) topic(name string) (Topic, bool) {
 }
 
 // growing is whether the lag grew over the window, by more than the agent's
-// measurements wander.
+// measurements wander. Lag older than the agent looks back reads the same
+// each time, so it counts as growing while messages wait.
 func (r Read) growing() bool {
+	if r.Capped {
+		return r.LagMessages > 0
+	}
 	return r.LagSecondsEarlier != nil && r.LagSeconds > *r.LagSecondsEarlier+30
 }
 
@@ -205,16 +223,29 @@ func duration(seconds float64) string {
 	}
 }
 
-// rate says how many messages a second, to two significant digits.
+// rate says how many messages a second, to two significant digits, with
+// thousands set apart: 1,250.
 func rate(perSecond float64) string {
 	switch {
 	case perSecond >= 10:
-		return fmt.Sprintf("%.0f", perSecond)
+		digits := fmt.Sprintf("%.0f", perSecond)
+		for i := len(digits) - 3; i > 0; i -= 3 {
+			digits = digits[:i] + "," + digits[i:]
+		}
+		return digits
 	case perSecond >= 1:
 		return strings.TrimSuffix(fmt.Sprintf("%.1f", perSecond), ".0")
 	default:
 		return strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%.2f", perSecond), "0"), ".")
 	}
+}
+
+// behind says how far behind, with less than a minute as such.
+func behind(seconds float64) string {
+	if seconds < 60 {
+		return "less than a minute"
+	}
+	return duration(seconds)
 }
 
 // bytes says how many bytes, in powers of 1,000, as the console does.

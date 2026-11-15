@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	"k8s.io/utils/ptr"
 
 	"github.com/ReneP92/changeport/internal/clusters"
@@ -21,10 +22,12 @@ import (
 // overview asks every 15 seconds, and the rules look at minutes.
 const diagnosisTTL = 30 * time.Second
 
-// diagnosisCache keeps each environment's last diagnoses, by customer.
+// diagnosisCache keeps each environment's last diagnoses, by customer, and
+// makes requests that miss at once share one diagnosis.
 type diagnosisCache struct {
 	mu      sync.Mutex
 	entries map[string]diagnosisEntry
+	running singleflight.Group
 }
 
 type diagnosisEntry struct {
@@ -81,22 +84,35 @@ func (s *Server) diagnose(ctx context.Context, customerID string) ([]diagnosis.F
 	if ok && time.Since(entry.at) < diagnosisTTL {
 		return entry.findings, nil
 	}
-	snapshot, err := s.snapshot(ctx, customerID)
+	found, err, _ := s.diagnoses.running.Do(customerID, func() (any, error) {
+		snapshot, err := s.snapshot(context.WithoutCancel(ctx), customerID)
+		if err != nil {
+			return nil, err
+		}
+		findings := diagnosis.Diagnose(snapshot)
+		now := time.Now()
+		s.diagnoses.mu.Lock()
+		defer s.diagnoses.mu.Unlock()
+		// Environments nobody looks at, or that are gone, are dropped.
+		for id, entry := range s.diagnoses.entries {
+			if now.Sub(entry.at) >= diagnosisTTL {
+				delete(s.diagnoses.entries, id)
+			}
+		}
+		s.diagnoses.entries[customerID] = diagnosisEntry{at: now, findings: findings}
+		return findings, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	findings := diagnosis.Diagnose(snapshot)
-	s.diagnoses.mu.Lock()
-	s.diagnoses.entries[customerID] = diagnosisEntry{at: time.Now(), findings: findings}
-	s.diagnoses.mu.Unlock()
-	return findings, nil
+	return found.([]diagnosis.Finding), nil
 }
 
 // diagnosisQueries are the metrics a snapshot takes.
 var diagnosisQueries = []metrics.Query{
 	metrics.MessagesInRecent, metrics.BytesIn, metrics.ProducerBytes, metrics.PartitionSize,
 	metrics.LagSeconds, metrics.LagMessages, metrics.LagCapped, metrics.LagSecondsEarlier,
-	metrics.ConsumedMessages, metrics.LostPartitions,
+	metrics.ConsumedMessages, metrics.LostPartitions, metrics.OffsetResets,
 	metrics.ProducerSends, metrics.ProducerErrors, metrics.ProducerRetries,
 }
 
@@ -120,34 +136,55 @@ func (s *Server) snapshot(ctx context.Context, customerID string) (diagnosis.Sna
 			return diagnosis.Snapshot{}, err
 		}
 	}
-	snapshot := buildSnapshot(settings, described, values, s.rebalances(ctx, customerID, now))
+	sources, _, err := s.sourceTopics(ctx, customerID)
+	if err != nil {
+		return diagnosis.Snapshot{}, err
+	}
+	changes := s.recentChanges(ctx, customerID, now)
+	snapshot := buildSnapshot(settings, described, values, changes)
 	snapshot.Window = window
+	for i := range snapshot.Topics {
+		_, snapshot.Topics[i].Source = sources[snapshot.Topics[i].Name]
+	}
 	return snapshot, nil
 }
 
-// rebalances counts each group's membership changes in the last hour. The
-// timeline is a help rather than a need: without it, the rule that reads
-// them finds nothing, and the others still run.
-func (s *Server) rebalances(ctx context.Context, customerID string, now time.Time) map[string]int {
-	changes, _, err := s.events.Read(ctx, events.Query{
-		Tenant: customerID, Start: now.Add(-time.Hour), End: now, Limit: events.MaxEvents,
-	})
-	if err != nil {
-		s.logger.WarnContext(ctx, "diagnoses without the timeline", "customer", customerID, "error", err)
-		return nil
+// changes are what the timeline says of the last while: each group's
+// rebalances in the last hour, and the topics that got partitions in the
+// last day.
+type changes struct {
+	rebalances      map[string]int
+	partitionsAdded map[string]bool
+}
+
+// recentChanges reads the changes from the timeline. It is a help rather
+// than a need: without it, the rules that read it find nothing, and the
+// others still run.
+func (s *Server) recentChanges(ctx context.Context, customerID string, now time.Time) changes {
+	found := changes{rebalances: map[string]int{}, partitionsAdded: map[string]bool{}}
+	read := func(since time.Duration, kind events.Kind) []events.Event {
+		read, _, err := s.events.Read(ctx, events.Query{
+			Tenant: customerID, Start: now.Add(-since), End: now, Kinds: []events.Kind{kind}, Limit: events.MaxEvents,
+		})
+		if err != nil {
+			s.logger.WarnContext(ctx, "diagnoses without the timeline", "customer", customerID, "error", err)
+		}
+		return read
 	}
-	counts := map[string]int{}
-	for _, change := range changes {
-		if change.Kind == events.GroupRebalanced && change.ConsumerGroup != "" {
-			counts[change.ConsumerGroup]++
+	for _, change := range read(time.Hour, events.GroupRebalanced) {
+		if change.Rebalance && change.ConsumerGroup != "" {
+			found.rebalances[change.ConsumerGroup]++
 		}
 	}
-	return counts
+	for _, change := range read(24*time.Hour, events.TopicPartitionsAdded) {
+		found.partitionsAdded[change.Topic] = true
+	}
+	return found
 }
 
 // buildSnapshot joins Kafka's description of the topics and groups with
 // their metrics, by name.
-func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values map[metrics.Query][]metrics.Series, rebalances map[string]int) diagnosis.Snapshot {
+func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values map[metrics.Query][]metrics.Series, recent changes) diagnosis.Snapshot {
 	var snapshot diagnosis.Snapshot
 	byTopic := map[string]*diagnosis.Topic{}
 	snapshot.Topics = make([]diagnosis.Topic, 0, len(settings))
@@ -157,7 +194,8 @@ func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values m
 		}
 		snapshot.Topics = append(snapshot.Topics, diagnosis.Topic{
 			Name: t.Name, Partitions: t.Partitions, RetentionMs: t.RetentionMs,
-			Compacted: t.CleanupPolicy == "compact",
+			Compacted: t.CleanupPolicy == "compact", Tiered: t.Tiered,
+			PartitionsAdded: recent.partitionsAdded[t.Name],
 		})
 	}
 	for i := range snapshot.Topics {
@@ -191,7 +229,7 @@ func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values m
 		if g, ok := byGroup[name]; ok {
 			return g
 		}
-		g := &diagnosis.Group{Name: name, Rebalances: rebalances[name]}
+		g := &diagnosis.Group{Name: name, Rebalances: recent.rebalances[name]}
 		byGroup[name] = g
 		return g
 	}
@@ -240,6 +278,7 @@ func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values m
 	read(metrics.LagSecondsEarlier, func(r *diagnosis.Read, v float64) { r.LagSecondsEarlier = ptr.To(v) })
 	read(metrics.ConsumedMessages, func(r *diagnosis.Read, v float64) { r.ConsumedPerSecond = v })
 	read(metrics.LostPartitions, func(r *diagnosis.Read, v float64) { r.LostPartitions = int(v) })
+	read(metrics.OffsetResets, func(r *diagnosis.Read, v float64) { r.OffsetsReset = v > 0 })
 	for _, k := range order {
 		g := byGroup[k.group]
 		g.Reads = append(g.Reads, *reads[k])

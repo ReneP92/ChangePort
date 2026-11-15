@@ -20,6 +20,9 @@ const severities: Record<
   info: { icon: Info, label: "Note", className: "text-muted-foreground" },
 };
 
+/** The ID of a diagnosis's title, which names its row. */
+const titleID = (id: string) => `diagnosis-${id.replace(/[^\w-]/g, "_")}`;
+
 /**
  * The diagnoses, one per row: what is wrong, what shows it, what to do,
  * and, with links, where to look.
@@ -40,14 +43,14 @@ export function DiagnosisRows({
         return (
           <li
             key={diagnosis.id}
-            aria-label={diagnosis.title}
+            aria-labelledby={titleID(diagnosis.id)}
             className="flex gap-3 py-3 first:pt-0 last:pb-0"
           >
             <Icon aria-hidden className={cn("mt-0.5 size-4 shrink-0", severity.className)} />
             <div className="flex min-w-0 flex-col gap-1">
               <p className="font-medium [overflow-wrap:anywhere]">
                 <span className="sr-only">{severity.label}: </span>
-                {diagnosis.title}
+                <span id={titleID(diagnosis.id)}>{diagnosis.title}</span>
               </p>
               <p className="text-muted-foreground [overflow-wrap:anywhere]">
                 {diagnosis.explanation}
@@ -95,7 +98,7 @@ export function DiagnosesCard() {
   const count = diagnoses.data?.diagnoses.length ?? 0;
   const window = formatDuration(diagnoses.data?.windowSeconds ?? 15 * 60);
   return (
-    <Card>
+    <Card aria-busy={diagnoses.isPending}>
       <CardHeader>
         <CardTitle>
           <h2>What needs attention</h2>
@@ -103,9 +106,11 @@ export function DiagnosesCard() {
         <CardDescription>
           {diagnoses.isPending
             ? "Changeport is looking at your topics, consumer groups and producers."
-            : count === 0
-              ? `Nothing. Changeport looks at your topics, consumer groups and producers for the common Kafka problems, over the last ${window}.`
-              : `Common Kafka problems Changeport found in your topics, consumer groups and producers, over the last ${window}, the most pressing first.`}
+            : !diagnoses.data
+              ? "Changeport could not look at your cluster just now."
+              : count === 0
+                ? `Nothing. Changeport looks at your topics, consumer groups and producers for the common Kafka problems, over the last ${window}.`
+                : `Common Kafka problems Changeport found in your topics, consumer groups and producers, over the last ${window}, the most pressing first.`}
         </CardDescription>
       </CardHeader>
       {(diagnoses.isError || count > 0) && (

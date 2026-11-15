@@ -45,7 +45,7 @@ func TestDiagnosesFromKafkaAndMetrics(t *testing.T) {
 		metrics.ConsumedMessages:  {group(200, "billing", "orders"), group(10, "audit", "payments")},
 		metrics.LostPartitions:    {group(0, "billing", "orders"), group(1, "audit", "payments")},
 	}
-	snapshot := buildSnapshot(settings, groups, values, map[string]int{"billing": 2})
+	snapshot := buildSnapshot(settings, groups, values, changes{rebalances: map[string]int{"billing": 2}})
 
 	if len(snapshot.Topics) != 2 {
 		t.Errorf("topics = %+v, want orders and payments only", snapshot.Topics)

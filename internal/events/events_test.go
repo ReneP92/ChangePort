@@ -42,6 +42,11 @@ func TestQueriesSelectTheTenant(t *testing.T) {
 			Query{Tenant: "acme", Start: at, End: at.Add(time.Hour), Topics: []string{"a", "b"}, ConsumerGroup: `odd "group" \ name`},
 			`{tenant="acme"} _time:[2026-10-31T12:00:00Z, 2026-10-31T13:00:00Z) (topic:="a" or topic:="b" or consumer_group:="odd \"group\" \\ name" or kind:="broker.restarted") | sort by (_time) desc`,
 		},
+		{
+			"some kinds",
+			Query{Tenant: "acme", Start: at, End: at.Add(time.Hour), Kinds: []Kind{GroupRebalanced, TopicPartitionsAdded}},
+			`{tenant="acme"} _time:[2026-10-31T12:00:00Z, 2026-10-31T13:00:00Z) (kind:="group.rebalanced" or kind:="topic.partitions") | sort by (_time) desc`,
+		},
 	} {
 		got, err := c.query.LogsQL()
 		if err != nil || got != c.want {

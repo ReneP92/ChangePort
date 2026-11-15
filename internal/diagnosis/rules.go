@@ -46,15 +46,23 @@ const (
 func consumerTooSlow(s Snapshot) []Finding {
 	var found []Finding
 	for _, g := range s.Groups {
-		if g.Members == 0 {
-			// Nobody consuming is its own diagnosis.
+		// Nobody consuming is its own diagnosis, and while a group shares
+		// its partitions out, its members read nothing for a moment.
+		if g.Members == 0 || g.State != "Stable" {
 			continue
 		}
 		for _, r := range g.Reads {
 			t, ok := s.topic(r.Topic)
-			if !ok || t.MessagesInPerSecond < busyTopic || r.ConsumedPerSecond >= slowShare*t.MessagesInPerSecond ||
-				r.LagSeconds < behindFloor || !r.growing() {
+			// A group none of whose members read the topic any more has
+			// old offsets on it, not a slow consumer; one that went back to
+			// replay it reads as consuming nothing for a while.
+			if !ok || r.AssignedMembers == 0 || r.OffsetsReset || t.MessagesInPerSecond < busyTopic ||
+				r.ConsumedPerSecond >= slowShare*t.MessagesInPerSecond || r.LagSeconds < behindFloor || !r.growing() {
 				continue
+			}
+			earlier := "behind as much"
+			if r.LagSecondsEarlier != nil && !r.Capped {
+				earlier = behind(*r.LagSecondsEarlier)
 			}
 			f := Finding{
 				Severity: Warning,
@@ -63,7 +71,7 @@ func consumerTooSlow(s Snapshot) []Finding {
 				Explanation: fmt.Sprintf(
 					"%s consumes %s messages a second of %s, which receives %s, so it falls further behind: %s now, %s %s ago.",
 					g.Name, rate(r.ConsumedPerSecond), r.Topic, rate(t.MessagesInPerSecond),
-					duration(r.LagSeconds), duration(*r.LagSecondsEarlier), duration(s.Window.Seconds())),
+					duration(r.LagSeconds), earlier, duration(s.Window.Seconds())),
 			}
 			if spare := t.Partitions - r.AssignedMembers; spare > 0 {
 				f.Suggestion = fmt.Sprintf(
@@ -89,8 +97,9 @@ func nobodyConsuming(s Snapshot) []Finding {
 			continue
 		}
 		for _, r := range g.Reads {
+			// Without consumers, messages that keep arriving pile up.
 			t, ok := s.topic(r.Topic)
-			if !ok || t.MessagesInPerSecond <= 0 || r.LagMessages == 0 || !r.growing() {
+			if !ok || t.MessagesInPerSecond <= 0 || r.LagMessages == 0 {
 				continue
 			}
 			found = append(found, Finding{
@@ -123,13 +132,17 @@ func behindRetention(s Snapshot) []Finding {
 			subject := Subject{ConsumerGroup: g.Name, Topic: r.Topic}
 			switch {
 			case r.LostPartitions > 0:
+				where := fmt.Sprintf(", on %d of its %s", r.LostPartitions, plural(t.Partitions, "partition"))
+				if r.LostPartitions >= t.Partitions {
+					where = ""
+				}
 				found = append(found, Finding{
 					Severity: Critical,
 					Subject:  subject,
 					Title:    fmt.Sprintf("%s lost messages of %s to retention", g.Name, r.Topic),
 					Explanation: fmt.Sprintf(
-						"%s keeps messages for %s, and on %d of its %s it deleted messages %s had not read yet.",
-						r.Topic, duration(retention), r.LostPartitions, plural(t.Partitions, "partition"), g.Name),
+						"%s keeps messages for %s, and deleted messages %s had not read yet%s.",
+						r.Topic, duration(retention), g.Name, where),
 					Suggestion: fmt.Sprintf(
 						"The consumers of %s continue from where auto.offset.reset points them: the oldest message kept, or the newest. Check what the missed messages were for, then keep %s from falling that far behind, or keep the messages of %s longer.",
 						g.Name, g.Name, r.Topic),
@@ -151,7 +164,7 @@ func behindRetention(s Snapshot) []Finding {
 	return found
 }
 
-// idleConsumers finds groups with more consumers than partitions to share.
+// idleConsumers finds groups with consumers that read nothing.
 func idleConsumers(s Snapshot) []Finding {
 	var found []Finding
 	for _, g := range s.Groups {
@@ -166,17 +179,27 @@ func idleConsumers(s Snapshot) []Finding {
 				partitions += t.Partitions
 			}
 		}
-		found = append(found, Finding{
+		f := Finding{
 			Severity: Info,
 			Subject:  Subject{ConsumerGroup: g.Name},
 			Title:    fmt.Sprintf("%s has idle consumers", g.Name),
-			Explanation: fmt.Sprintf(
+		}
+		if g.Members > partitions {
+			f.Explanation = fmt.Sprintf(
 				"%s runs %s, but %d of them read nothing: a partition is read by one consumer of a group at a time, and %s %s %s.",
-				g.Name, plural(g.Members, "consumer"), g.IdleMembers, list(topics), have(len(topics)), plural(partitions, "partition")),
-			Suggestion: fmt.Sprintf(
+				g.Name, plural(g.Members, "consumer"), g.IdleMembers, list(topics), have(len(topics)), plural(partitions, "partition"))
+			f.Suggestion = fmt.Sprintf(
 				"Idle consumers take over when another stops, which may be what you want. To have them share the work, add partitions to %s.",
-				list(topics)),
-		})
+				list(topics))
+		} else {
+			// Enough partitions, spread unevenly: the range assignor gives
+			// each topic's to the first consumers.
+			f.Explanation = fmt.Sprintf(
+				"%s runs %s, but %d of them read nothing, though %s %s %s to share: they are handed out topic by topic, to the same consumers each time.",
+				g.Name, plural(g.Members, "consumer"), g.IdleMembers, list(topics), have(len(topics)), plural(partitions, "partition"))
+			f.Suggestion = "Spread them over every consumer with the cooperative-sticky assignor (partition.assignment.strategy), or with Kafka's own consumer group protocol (group.protocol=consumer, from Kafka 4.0 clients)."
+		}
+		found = append(found, f)
 	}
 	return found
 }
@@ -208,7 +231,10 @@ func hotPartition(s Snapshot) []Finding {
 	var found []Finding
 	for _, t := range s.Topics {
 		n := len(t.PartitionBytes)
-		if n < 3 {
+		// Only tiered topics keep just their last day on the brokers, where
+		// sizes show how messages spread now; partitions added within the
+		// day start empty and would make the rest look hot.
+		if n < 3 || !t.Tiered || t.PartitionsAdded {
 			continue
 		}
 		total, largest := 0.0, 0.0
@@ -224,7 +250,7 @@ func hotPartition(s Snapshot) []Finding {
 			Subject:  Subject{Topic: t.Name},
 			Title:    fmt.Sprintf("One partition of %s takes more than its share", t.Name),
 			Explanation: fmt.Sprintf(
-				"One of the %s of %s holds %s of its data on the brokers, where each would hold %s if keys were spread evenly. Messages with the same key always go to the same partition, so a few busy keys load one partition, and the one consumer reading it, more than the rest.",
+				"One of the %s of %s received %s of its messages' bytes over the last day, where each would get %s if keys were spread evenly. Messages with the same key always go to the same partition, so a few busy keys load one partition, and the one consumer reading it, more than the rest.",
 				plural(n, "partition"), t.Name, percent(largest/total), percent(1/float64(n))),
 			Suggestion: "Pick a key with more distinct values, such as an order ID rather than a country, or leave the key out where the order of messages does not matter.",
 		})
@@ -233,22 +259,26 @@ func hotPartition(s Snapshot) []Finding {
 }
 
 // producerErrors finds producers whose records fail, or need sending again.
+// A record that fails before it is sent, such as one too large or for a
+// topic that does not exist, counts as an error but not as a send, so the
+// share is of what the producer tried to send.
 func producerErrors(s Snapshot) []Finding {
 	var found []Finding
 	for _, p := range s.Producers {
-		if p.SendsPerSecond < quietProducer {
+		tried := p.SendsPerSecond + p.ErrorsPerSecond
+		if tried < quietProducer {
 			continue
 		}
-		subject := Subject{ClientID: p.ClientID}
-		switch failed, retried := p.ErrorsPerSecond/p.SendsPerSecond, p.RetriesPerSecond/p.SendsPerSecond; {
+		subject := Subject{ClientID: p.ClientID, Principal: p.Principal}
+		switch failed, retried := min(1, p.ErrorsPerSecond/tried), p.RetriesPerSecond/tried; {
 		case failed >= errorShare:
 			found = append(found, Finding{
 				Severity: Warning,
 				Subject:  subject,
 				Title:    fmt.Sprintf("Records from %s fail", p.ClientID),
 				Explanation: fmt.Sprintf(
-					"%s of the records %s sent in the last %s failed: %s a second of %s.",
-					percent(failed), p.ClientID, duration(s.Window.Seconds()), rate(p.ErrorsPerSecond), rate(p.SendsPerSecond)),
+					"%s of the records %s tried to send in the last %s failed: %s a second of %s.",
+					percent(failed), p.ClientID, duration(s.Window.Seconds()), rate(p.ErrorsPerSecond), rate(tried)),
 				Suggestion: fmt.Sprintf(
 					"The log of %s says why. The usual causes are records larger than max.request.size or the topic's max.message.bytes, a topic that does not exist (topics are not created on first use), or %s lacking permission to write to it.",
 					p.ClientID, p.Principal),
@@ -260,7 +290,7 @@ func producerErrors(s Snapshot) []Finding {
 				Title:    fmt.Sprintf("%s sends many records twice", p.ClientID),
 				Explanation: fmt.Sprintf(
 					"%s sent %s of its records again in the last %s. They arrive in the end, but late.",
-					p.ClientID, percent(retried), duration(s.Window.Seconds())),
+					p.ClientID, percent(min(1, retried)), duration(s.Window.Seconds())),
 				Suggestion: "Retries follow timeouts and brokers that move partitions, such as during a restart. If they go on, check the network between the producer and the cluster, and request.timeout.ms.",
 			})
 		}
@@ -273,7 +303,9 @@ func producerErrors(s Snapshot) []Finding {
 func producersWithoutTelemetry(s Snapshot) []Finding {
 	var found []Finding
 	for _, t := range s.Topics {
-		if t.UnreportedBytesInPerSecond <= unreportedFloor || t.UnreportedBytesInPerSecond <= unreportedShare*t.BytesInPerSecond {
+		// A Postgres source's topics are written by Changeport's own
+		// Connect worker.
+		if t.Source || t.UnreportedBytesInPerSecond <= unreportedFloor || t.UnreportedBytesInPerSecond <= unreportedShare*t.BytesInPerSecond {
 			continue
 		}
 		found = append(found, Finding{

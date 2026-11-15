@@ -373,6 +373,11 @@ func (k KubeClusters) ConsumerGroups(ctx context.Context, customerID string) ([]
 				return nil, fmt.Errorf("describe the groups of customer %s: %w", customerID, err)
 			}
 			for _, group := range described {
+				if group.Err != nil {
+					// Its coordinator is loading or moving: it is described
+					// next time, rather than as a group without members now.
+					continue
+				}
 				g := ConsumerGroup{Name: group.Group, State: group.State}
 				for _, member := range group.Members {
 					m := GroupMember{ClientID: member.ClientID, Assigned: map[string]int{}}
@@ -392,6 +397,9 @@ func (k KubeClusters) ConsumerGroups(ctx context.Context, customerID string) ([]
 			return nil, fmt.Errorf("describe the consumer groups of customer %s: %w", customerID, err)
 		}
 		for _, group := range described {
+			if group.Err != nil {
+				continue
+			}
 			g := ConsumerGroup{Name: group.Group, State: group.State}
 			for _, member := range group.Members {
 				m := GroupMember{ClientID: member.ClientID, Assigned: map[string]int{}}

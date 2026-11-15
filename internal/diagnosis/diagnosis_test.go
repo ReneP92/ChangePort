@@ -2,6 +2,7 @@ package diagnosis
 
 import (
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -92,6 +93,21 @@ func TestConsumerTooSlow(t *testing.T) {
 			g.Reads[0].LagSecondsEarlier = nil
 			return g
 		}()}}},
+		{"sharing its partitions out", Snapshot{Window: 15 * time.Minute, Topics: []Topic{orders()}, Groups: []Group{func() Group {
+			g := billing(200, 720, 240)
+			g.State, g.Reads[0].AssignedMembers = "PreparingRebalance", 0
+			return g
+		}()}}},
+		{"members that no longer read the topic", Snapshot{Window: 15 * time.Minute, Topics: []Topic{orders()}, Groups: []Group{func() Group {
+			g := billing(0, 720, 240)
+			g.Reads[0].AssignedMembers = 0
+			return g
+		}()}}},
+		{"replaying the topic from the start", Snapshot{Window: 15 * time.Minute, Topics: []Topic{orders()}, Groups: []Group{func() Group {
+			g := billing(0, 720, 240)
+			g.Reads[0].OffsetsReset = true
+			return g
+		}()}}},
 		{"nobody consuming, which is another diagnosis", Snapshot{Window: 15 * time.Minute, Topics: []Topic{orders()}, Groups: []Group{func() Group {
 			g := billing(0, 720, 240)
 			g.Members, g.State = 0, "Empty"
@@ -116,6 +132,14 @@ func TestNobodyConsuming(t *testing.T) {
 	}
 	if want := "billing has no consumers running, while orders receives 350 messages a second: it is 12 minutes behind, and falls further behind."; found[0].Explanation != want {
 		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
+	}
+
+	// Lag older than the agent looks back reads the same each time; the
+	// group still has nobody consuming.
+	capped := g
+	capped.Reads = []Read{{Topic: "orders", LagSeconds: 82800, Capped: true, LagMessages: 1e8, LagSecondsEarlier: ptr.To(82800.0)}}
+	if found := only(t, "nobody-consuming", Snapshot{Window: 15 * time.Minute, Topics: []Topic{orders()}, Groups: []Group{capped}}); len(found) != 1 {
+		t.Errorf("found %+v for a group over 23 hours behind, want one finding", found)
 	}
 
 	// A group nobody runs whose topic is quiet is no news.
@@ -146,8 +170,14 @@ func TestBehindRetention(t *testing.T) {
 	if len(found) != 1 || found[0].Severity != Critical {
 		t.Fatalf("found %v, want one critical finding", found)
 	}
-	if want := "orders keeps messages for 24 hours, and on 2 of its 6 partitions it deleted messages billing had not read yet."; found[0].Explanation != want {
+	if want := "orders keeps messages for 24 hours, and deleted messages billing had not read yet, on 2 of its 6 partitions."; found[0].Explanation != want {
 		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
+	}
+	// On every partition, it says no more than that.
+	lost.Reads[0].LostPartitions = 6
+	found = only(t, "behind-retention", Snapshot{Window: 15 * time.Minute, Topics: []Topic{short}, Groups: []Group{lost}})
+	if want := "orders keeps messages for 24 hours, and deleted messages billing had not read yet."; len(found) != 1 || found[0].Explanation != want {
+		t.Errorf("found %+v, want %q", found, want)
 	}
 
 	// Compacted topics keep each key's latest message, however old.
@@ -172,6 +202,16 @@ func TestIdleConsumers(t *testing.T) {
 	if want := "billing runs 8 consumers, but 2 of them read nothing: a partition is read by one consumer of a group at a time, and orders has 6 partitions."; found[0].Explanation != want {
 		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
 	}
+	// Enough partitions, handed out topic by topic: another assignor.
+	uneven := billing(350, 0, 0)
+	uneven.Members, uneven.IdleMembers = 4, 1
+	uneven.Reads = append(uneven.Reads, Read{Topic: "payments"})
+	payments := Topic{Name: "payments", Partitions: 3}
+	found = only(t, "idle-consumers", Snapshot{Window: 15 * time.Minute, Topics: []Topic{orders(), payments}, Groups: []Group{uneven}})
+	if len(found) != 1 || !strings.Contains(found[0].Suggestion, "cooperative-sticky") {
+		t.Errorf("found %+v, want a hint at the assignor", found)
+	}
+
 	// While a group rebalances, its members wait for partitions.
 	g.State = "PreparingRebalance"
 	if found := only(t, "idle-consumers", Snapshot{Window: 15 * time.Minute, Topics: []Topic{orders()}, Groups: []Group{g}}); len(found) > 0 {
@@ -194,20 +234,28 @@ func TestFrequentRebalances(t *testing.T) {
 
 func TestHotPartition(t *testing.T) {
 	hot := orders()
+	hot.Tiered = true
 	hot.PartitionBytes = []float64{700e6, 60e6, 60e6, 60e6, 60e6, 60e6}
 	found := only(t, "hot-partition", Snapshot{Window: 15 * time.Minute, Topics: []Topic{hot}})
 	if len(found) != 1 {
 		t.Fatalf("found %v, want one finding", found)
 	}
-	if want := "One of the 6 partitions of orders holds 70% of its data on the brokers, where each would hold 17% if keys were spread evenly. Messages with the same key always go to the same partition, so a few busy keys load one partition, and the one consumer reading it, more than the rest."; found[0].Explanation != want {
+	if want := "One of the 6 partitions of orders received 70% of its messages' bytes over the last day, where each would get 17% if keys were spread evenly. Messages with the same key always go to the same partition, so a few busy keys load one partition, and the one consumer reading it, more than the rest."; found[0].Explanation != want {
 		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
 	}
 
-	even := orders()
+	even := hot
 	even.PartitionBytes = []float64{100e6, 110e6, 90e6, 100e6, 105e6, 95e6}
-	small := orders()
+	small := hot
 	small.PartitionBytes = []float64{7e6, 1e5, 1e5}
-	for _, topic := range []Topic{even, small} {
+	// Partitions added within the day start empty.
+	grown := hot
+	grown.PartitionsAdded = true
+	// Topics that keep everything on the brokers show their whole history,
+	// not how messages spread now.
+	untiered := hot
+	untiered.Tiered = false
+	for _, topic := range []Topic{even, small, grown, untiered} {
 		if found := only(t, "hot-partition", Snapshot{Window: 15 * time.Minute, Topics: []Topic{topic}}); len(found) > 0 {
 			t.Errorf("found %+v for %v, want nothing", found, topic.PartitionBytes)
 		}
@@ -217,11 +265,29 @@ func TestHotPartition(t *testing.T) {
 func TestProducerErrors(t *testing.T) {
 	failing := Producer{Principal: "User:admin", ClientID: "checkout", SendsPerSecond: 100, ErrorsPerSecond: 3, RetriesPerSecond: 3}
 	found := only(t, "producer-errors", Snapshot{Window: 15 * time.Minute, Producers: []Producer{failing}})
-	if len(found) != 1 || found[0].Severity != Warning || found[0].ID != "producer-errors:checkout" {
+	if len(found) != 1 || found[0].Severity != Warning || found[0].ID != "producer-errors:User:admin/checkout" {
 		t.Fatalf("found %+v, want one warning", found)
 	}
-	if want := "3% of the records checkout sent in the last 15 minutes failed: 3 a second of 100."; found[0].Explanation != want {
+	if want := "3% of the records checkout tried to send in the last 15 minutes failed: 3 a second of 103."; found[0].Explanation != want {
 		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
+	}
+
+	// Records that fail before they are sent count as errors only: a
+	// producer all of whose records fail is still found, at 100%.
+	stuck := Producer{Principal: "User:admin", ClientID: "checkout", ErrorsPerSecond: 50}
+	found = only(t, "producer-errors", Snapshot{Window: 15 * time.Minute, Producers: []Producer{stuck}})
+	if len(found) != 1 || !strings.HasPrefix(found[0].Explanation, "100% of the records") {
+		t.Errorf("found %+v, want 100%% failing", found)
+	}
+
+	// Two applications with the default client ID, under different users.
+	twins := []Producer{
+		{Principal: "User:a", ClientID: "producer-1", SendsPerSecond: 10, ErrorsPerSecond: 1},
+		{Principal: "User:b", ClientID: "producer-1", SendsPerSecond: 10, ErrorsPerSecond: 1},
+	}
+	found = only(t, "producer-errors", Snapshot{Window: 15 * time.Minute, Producers: twins})
+	if len(found) != 2 || found[0].ID == found[1].ID {
+		t.Errorf("found %+v, want two findings with their own IDs", found)
 	}
 
 	retrying := Producer{ClientID: "checkout", SendsPerSecond: 100, RetriesPerSecond: 20}
@@ -232,7 +298,7 @@ func TestProducerErrors(t *testing.T) {
 
 	for _, p := range []Producer{
 		{ClientID: "fine", SendsPerSecond: 100, ErrorsPerSecond: 0.1, RetriesPerSecond: 1},
-		{ClientID: "quiet", SendsPerSecond: 0.05, ErrorsPerSecond: 0.05},
+		{ClientID: "quiet", SendsPerSecond: 0.04, ErrorsPerSecond: 0.04},
 	} {
 		if found := only(t, "producer-errors", Snapshot{Window: 15 * time.Minute, Producers: []Producer{p}}); len(found) > 0 {
 			t.Errorf("found %+v for %s, want nothing", found, p.ClientID)
@@ -246,6 +312,13 @@ func TestProducersWithoutTelemetry(t *testing.T) {
 	found := only(t, "producers-without-telemetry", Snapshot{Window: 15 * time.Minute, Topics: []Topic{unseen}})
 	if len(found) != 1 || found[0].Explanation != "orders receives 40.0 KB a second from producers that send no telemetry, so the data flow map cannot show them, nor their errors." {
 		t.Fatalf("found %+v", found)
+	}
+	// A Postgres source's topics are written by Changeport's own Connect
+	// worker.
+	source := unseen
+	source.Source = true
+	if found := only(t, "producers-without-telemetry", Snapshot{Window: 15 * time.Minute, Topics: []Topic{source}}); len(found) > 0 {
+		t.Errorf("found %+v for a source's topic, want nothing", found)
 	}
 	// A sliver of a busy topic's traffic is no news.
 	unseen.UnreportedBytesInPerSecond = 10_000
@@ -272,6 +345,16 @@ func TestDiagnoseOrdersBySeverity(t *testing.T) {
 	}
 	if found := Diagnose(Snapshot{Window: 15 * time.Minute}); found == nil || len(found) != 0 {
 		t.Errorf("Diagnose(empty) = %#v, want an empty list", found)
+	}
+}
+
+func TestRate(t *testing.T) {
+	for perSecond, want := range map[float64]string{
+		0.004: "0", 0.25: "0.25", 2: "2", 2.5: "2.5", 350: "350", 1250.4: "1,250", 1234567: "1,234,567",
+	} {
+		if got := rate(perSecond); got != want {
+			t.Errorf("rate(%v) = %q, want %q", perSecond, got, want)
+		}
 	}
 }
 

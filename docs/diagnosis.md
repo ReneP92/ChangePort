@@ -17,9 +17,11 @@ for its topic, which says why and what to do.
 of the cluster, which `internal/console/diagnoses.go` puts together on
 request:
 
-- **What Kafka says now:** the topics with their partitions, retention and
-  cleanup policy, and the consumer groups with their state and every member
-  with the partitions it reads.
+- **What Kafka says now:** the topics with their partitions, retention,
+  cleanup policy and tiering, and the consumer groups with their state and
+  every member with the partitions it reads. The console asks Kafka on each
+  diagnosis rather than keep these as metrics, so they are never older
+  than the request.
 - **The metrics over a window,** 15 minutes by default (`-diagnosis-window`
   on the console; 5 minutes on kind, so that the end-to-end test needs
   minutes rather than a quarter of an hour), so that a moment's spike or
@@ -27,7 +29,8 @@ request:
   each group consumed (from its committed offsets, so every client counts,
   with or without telemetry), each group's lag now and a window ago, each
   partition's size, and each producer's sends, errors and retries.
-- **The timeline's last hour:** how often each group's members changed.
+- **The timeline:** each group's rebalances in the last hour, and the
+  topics that got partitions in the last day.
 
 The console keeps an environment's diagnoses for 30 seconds, as the overview
 asks every 15. `GET /api/customer/diagnoses` returns them, the most severe
@@ -50,14 +53,14 @@ and groups are left out.
 
 | Rule | Finds | Severity |
 | --- | --- | --- |
-| `consumer-too-slow` | A group with members that consumed less than 90% of what its topic received over the window, at least a minute behind, and further behind than a window ago. Topics below a message a second are too quiet to tell. | warning |
-| `nobody-consuming` | A group without members whose topic still receives messages, so its lag grows. | warning |
+| `consumer-too-slow` | A stable group, some of whose members read the topic, that consumed less than 90% of what the topic received over the window, at least a minute behind, and further behind than a window ago. Topics below a message a second are too quiet to tell, and a group whose offsets went back in the window (replaying the topic) is left alone. | warning |
+| `nobody-consuming` | A group without members, with messages waiting, whose topic still receives more. | warning |
 | `behind-retention` | A group behind by half its topic's retention or more: messages may be deleted before it reads them. Critical once retention deleted messages it never read (its committed offset is below the log's start). Compacted topics keep each key's latest message, so they are left out. | warning, critical |
-| `idle-consumers` | A stable group with members assigned no partition: more consumers than partitions. | info |
-| `frequent-rebalances` | A group whose members changed 6 times or more in the last hour, from the timeline. | warning |
-| `hot-partition` | A topic of 3 partitions or more, with at least 64 MB on the brokers, where one partition holds twice its fair share or more: a few busy keys. | warning |
-| `producer-errors` | A producer sending a record a second or more whose records fail, 1% or more; or, short of that, that sends 10% or more of its records again. | warning, info |
-| `producers-without-telemetry` | A topic that receives more than 100 B/s, and more than a tenth of its bytes, from producers that send no telemetry (KIP-714), which leaves them off the data flow map. | info |
+| `idle-consumers` | A stable group with members assigned no partition: more consumers than partitions, or partitions handed out topic by topic to the same consumers. | info |
+| `frequent-rebalances` | A group that shared its partitions out again 6 times or more in the last hour, as members joined or left while it consumed, from the timeline. A group starting, or its last member leaving, does not count. | warning |
+| `hot-partition` | A tiered topic of 3 partitions or more, with at least 64 MB on the brokers, where one partition holds twice its fair share or more: a few busy keys. Tiered topics keep only their last day on the brokers, so the sizes show how messages spread now; topics that got partitions within the day are left out, as new partitions start empty. | warning |
+| `producer-errors` | A producer trying to send a record every 10 seconds or more, 1% or more of whose records fail; or, short of that, that sends 10% or more of its records again. Records that fail before they are sent, such as one too large or for a topic that does not exist, count as tried. | warning, info |
+| `producers-without-telemetry` | A topic that receives more than 100 B/s, and more than a tenth of its bytes, from producers that send no telemetry (KIP-714), which leaves them off the data flow map. A Postgres source's topics, written by Changeport's own Connect worker, are left out. | info |
 
 What each suggests:
 
@@ -70,7 +73,9 @@ What each suggests:
 - **Behind retention:** help the group catch up, or keep the topic's
   messages longer; once messages were lost, check what they were for, and
   where `auto.offset.reset` sent the consumers.
-- **Idle consumers:** fine as standbys; to share the work, add partitions.
+- **Idle consumers:** fine as standbys; to share the work, add partitions,
+  or, when there are enough, spread them with the cooperative-sticky
+  assignor or Kafka's own consumer group protocol.
 - **Rebalances:** `group.instance.id`, so that a restart keeps its
   partitions, and short work between polls (`max.poll.interval.ms`,
   `max.poll.records`).
@@ -87,10 +92,15 @@ What each suggests:
 
 - **Lag older than 23 hours** is reported as 23 hours (the agent's oldest
   lookup, [metrics-labels.md](metrics-labels.md)), so a group behind a topic
-  kept for more than 46 hours is only flagged once messages were lost.
+  kept for more than 46 hours is only flagged as close to retention once
+  messages were lost. Such a group still counts as falling behind while
+  messages wait.
+- **Hot partitions of compacted or untiered topics,** whose sizes on the
+  brokers hold their whole history rather than how messages spread now.
 - **Unkeyed messages where order matters, and offsets committed before the
   messages are processed,** happen inside clients and leave no trace on the
   brokers; the connection guide's settings and snippets cover them instead
   (#177).
 - **Rebalances shorter than the agent's 30 seconds** between looks may be
-  missed, so the count is a lower bound.
+  missed, so the count is a lower bound. The agent marks a change of
+  members as a rebalance when the group had members before and after it.

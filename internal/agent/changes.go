@@ -310,6 +310,9 @@ func Diff(before, after Snapshot, tenant string, now time.Time) []events.Event {
 		if ok {
 			e := event(events.GroupRebalanced, message)
 			e.ConsumerGroup = name
+			// Members before and after: the group stopped to share its
+			// partitions out again, rather than started or emptied.
+			e.Rebalance = existed && len(was.Members) > 0 && len(after.Groups[name].Members) > 0
 			found = append(found, e)
 		}
 	}
