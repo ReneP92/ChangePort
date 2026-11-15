@@ -60,9 +60,9 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
         `bootstrap.servers=${bootstrap}`,
       ]).catch(() => ""),
     );
-    // One consumer that takes a single small batch of each partition every
-    // half second: about 2 messages a second.
-    const consume = (...throttle: string[]) =>
+    // A consumer of the group that gives up after idle seconds without a
+    // message.
+    const consume = (idle: number, ...throttle: string[]) =>
       kafkaInBackground(a.id, properties, "kafka-console-consumer.sh", [
         ...connect(a.id),
         "--topic",
@@ -70,11 +70,14 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
         "--group",
         group,
         "--timeout-ms",
-        "30000",
+        String(idle * 1000),
         ...throttle,
       ]).catch(() => "");
+    // One that takes a single small batch of each partition every half
+    // second: about 2 messages a second.
     running.push(
       consume(
+        30,
         "--consumer-property",
         "max.partition.fetch.bytes=1",
         "--consumer-property",
@@ -134,9 +137,11 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
     }).toPass({ timeout: 3 * 60_000, intervals: [15_000] });
 
     // A consumer that reads at full speed takes over, catches up, and the
-    // diagnosis clears.
+    // diagnosis clears. It gets nothing until the group has dropped the one
+    // stopped, once its session times out (45 seconds), so it waits longer
+    // than that before it gives up.
     stopKafkaTools(group);
-    running.push(consume());
+    running.push(consume(120));
     await page.goto("/");
     await expect(async () => {
       await page.reload();
@@ -144,7 +149,11 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
       await expect(card(page, "What needs attention")).toHaveAttribute("aria-busy", "false", {
         timeout: 10_000,
       });
-      await expect(finding).toHaveCount(0);
+      // Nothing about the group at all: not "can't keep up", and not
+      // "nothing is consuming" either.
+      await expect(
+        card(page, "What needs attention").getByRole("listitem").filter({ hasText: group }),
+      ).toHaveCount(0);
       // And the group is healthy again.
       await expect(
         card(page, "Consumer groups").getByRole("row").filter({ hasText: group }),
