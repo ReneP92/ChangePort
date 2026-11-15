@@ -55,10 +55,10 @@ type HangingTransaction struct {
 	ProducerID int64
 	// TransactionalID names its producer, when Kafka still knows it.
 	TransactionalID string
-	// From is the offset of its first message, and Idle how long ago its
-	// producer last wrote to the partition.
+	// From is the offset of its first message, and Open how long it has at
+	// least been open from there.
 	From int64
-	Idle time.Duration
+	Open time.Duration
 }
 
 // Topic is one of the customer's topics.

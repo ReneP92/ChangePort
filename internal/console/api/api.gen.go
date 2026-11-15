@@ -1626,8 +1626,11 @@ type TopicPolicy struct {
 // TopicProducer defines model for TopicProducer.
 type TopicProducer struct {
 	// InTransaction Whether it has a transaction open on the topic
-	InTransaction bool      `json:"inTransaction"`
-	LastWrite     time.Time `json:"lastWrite"`
+	InTransaction bool `json:"inTransaction"`
+
+	// LastWrite The timestamp of its latest message: the producer's own clock unless the
+	// topic uses log append time, so a replay's or a stream processor's may be old
+	LastWrite time.Time `json:"lastWrite"`
 
 	// Partitions The topic's partitions it wrote to
 	Partitions      int     `json:"partitions"`
@@ -1637,13 +1640,21 @@ type TopicProducer struct {
 
 // TopicProducers defines model for TopicProducers.
 type TopicProducers struct {
-	// HeldBack The messages read_committed consumers cannot read yet, which open transactions hold back
-	HeldBack int64 `json:"heldBack"`
+	// HeldBack About how many messages read_committed consumers cannot read yet, which open
+	// transactions hold back (offsets, markers included); absent when not known
+	HeldBack *int64 `json:"heldBack,omitempty"`
 
-	// Producers The producers Kafka keeps state for on the topic's partitions: those that
-	// write idempotently or in transactions, by producer ID, with the transactional
-	// ID of transactional ones. Kafka keeps none for other producers, and knows none
-	// by client ID. The most recent first.
+	// HeldBackSince When the oldest transaction open on the topic started, by its coordinator's clock
+	HeldBackSince *time.Time `json:"heldBackSince,omitempty"`
+
+	// Idempotent How many idempotent producers, not transactional, Kafka keeps state for on the topic
+	Idempotent int `json:"idempotent"`
+
+	// Producers Producers Kafka keeps state for on the topic's partitions, which write
+	// idempotently or in transactions: every transactional one, by its
+	// transactional ID, and the idempotent ones with the latest timestamps, at
+	// most 10. Kafka keeps none for other producers, and knows none by client ID.
+	// The latest timestamps first.
 	Producers []TopicProducer `json:"producers"`
 }
 

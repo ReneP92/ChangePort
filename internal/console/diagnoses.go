@@ -190,34 +190,48 @@ func (s *Server) snapshot(ctx context.Context, customerID string) (diagnosis.Sna
 // unless its coordinator lost it.
 const transactionMaxTimeout = 15 * time.Minute
 
-// addTransactions adds to the snapshot the transactions open now and the
-// producers Kafka keeps state for. They are a help rather than a need:
-// without them, the rules that read them find nothing, and the others
-// still run.
+// kafkaTimeout bounds what a diagnosis waits for Kafka's Admin API, so that
+// a broker that does not answer costs the transactions, not the diagnoses.
+const kafkaTimeout = 10 * time.Second
+
+// addTransactions adds to the snapshot the producers Kafka keeps state for
+// and the transactions open now, read in that order, as kafka-transactions.sh
+// find-hanging does: a transaction found open on a partition is then looked
+// for at its coordinator, which has it open there if it is alive. They are a
+// help rather than a need: without them, the rules that read them find
+// nothing, and the others still run.
 func (s *Server) addTransactions(ctx context.Context, customerID string, snapshot *diagnosis.Snapshot, now time.Time) {
+	ctx, cancel := context.WithTimeout(ctx, kafkaTimeout)
+	defer cancel()
+	names := make([]string, 0, len(snapshot.Topics))
+	for _, t := range snapshot.Topics {
+		names = append(names, t.Name)
+	}
+	producers, producersErr := s.clusters.Producers(ctx, customerID, names...)
+	if producersErr != nil {
+		s.logger.WarnContext(ctx, "diagnoses without the producers", "customer", customerID, "error", producersErr)
+	}
 	transactions, err := s.clusters.Transactions(ctx, customerID)
 	if err != nil {
 		s.logger.WarnContext(ctx, "diagnoses without the transactions", "customer", customerID, "error", err)
 		return
 	}
-	names := make([]string, 0, len(snapshot.Topics))
-	for _, t := range snapshot.Topics {
-		names = append(names, t.Name)
+	if producersErr != nil {
+		joinTransactions(snapshot, transactions, nil, nil, now)
+		return
 	}
-	producers, err := s.clusters.Producers(ctx, customerID, names...)
-	if err != nil {
-		s.logger.WarnContext(ctx, "diagnoses without the producers", "customer", customerID, "error", err)
-		producers = nil
-	}
-	joinTransactions(snapshot, transactions, producers, err == nil, now)
+	saw := s.producerMemory.look(customerID, producers, now)
+	joinTransactions(snapshot, transactions, producers, &saw, now)
 }
 
-// joinTransactions puts the open transactions, the topics' idempotent
-// producers over the window, when known, and their hanging transactions
-// into the snapshot. A transaction hangs as kafka-transactions.sh
-// find-hanging says: open on a partition, idle for longer than any
-// transaction may last, and not open there for its coordinator.
-func joinTransactions(snapshot *diagnosis.Snapshot, transactions []Transaction, producers []PartitionProducer, producersKnown bool, now time.Time) {
+// joinTransactions puts the open transactions into the snapshot and, with
+// what the console saw of the producers, the topics' idempotent producers
+// that wrote since its last look, when it looked recently, and their
+// hanging transactions. A transaction hangs when it has been seen open on a
+// partition from the same offset for longer than any transaction may last,
+// and its coordinator does not have it open there: Kafka then never aborts
+// it. It takes no producer's timestamp, which is the producer's clock.
+func joinTransactions(snapshot *diagnosis.Snapshot, transactions []Transaction, producers []PartitionProducer, saw *seen, now time.Time) {
 	open := map[string]map[string]bool{}
 	for _, t := range transactions {
 		d := diagnosis.Transaction{ID: t.ID, State: t.State, Open: now.Sub(t.Started), Timeout: t.Timeout}
@@ -228,14 +242,16 @@ func joinTransactions(snapshot *diagnosis.Snapshot, transactions []Transaction, 
 		}
 		snapshot.Transactions = append(snapshot.Transactions, d)
 	}
-	if !producersKnown {
+	if saw == nil {
 		return
 	}
 	byTopic := map[string]*diagnosis.Topic{}
 	for i := range snapshot.Topics {
 		t := &snapshot.Topics[i]
 		byTopic[t.Name] = t
-		t.IdempotentProducers = ptr.To(0)
+		if saw.wrote != nil {
+			t.IdempotentProducers = ptr.To(0)
+		}
 	}
 	writers := map[string]map[int64]bool{}
 	for _, p := range producers {
@@ -243,18 +259,22 @@ func joinTransactions(snapshot *diagnosis.Snapshot, transactions []Transaction, 
 		if !ok {
 			continue
 		}
-		if now.Sub(p.LastWrite) <= snapshot.Window {
+		if saw.wrote[producerKey{p.Topic, p.Partition, p.ProducerID, p.Epoch}] {
 			if writers[p.Topic] == nil {
 				writers[p.Topic] = map[int64]bool{}
 			}
 			writers[p.Topic][p.ProducerID] = true
 			t.IdempotentProducers = ptr.To(len(writers[p.Topic]))
 		}
-		if p.OpenFrom >= 0 && now.Sub(p.LastWrite) > transactionMaxTimeout &&
+		if p.OpenFrom < 0 {
+			continue
+		}
+		since, ok := saw.openSince[openKey{p.Topic, p.Partition, p.ProducerID, p.OpenFrom}]
+		if ok && now.Sub(since) > transactionMaxTimeout &&
 			(p.TransactionalID == "" || !open[p.TransactionalID][fmt.Sprintf("%s/%d", p.Topic, p.Partition)]) {
 			t.Hanging = append(t.Hanging, diagnosis.HangingTransaction{
 				Partition: p.Partition, ProducerID: p.ProducerID, TransactionalID: p.TransactionalID,
-				From: p.OpenFrom, Idle: now.Sub(p.LastWrite),
+				From: p.OpenFrom, Open: now.Sub(since),
 			})
 		}
 	}

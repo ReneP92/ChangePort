@@ -154,15 +154,21 @@ the ones that write idempotently or in transactions, over the last day
 (`producer.id.expiration.ms`). Kafka knows them by an ID it gives each, not
 by client ID, so a transactional producer shows by its `transactional.id`
 and the others by that ID; each says whether it has a transaction open on
-the topic, how many partitions it wrote to, and when it last wrote.
-Producers that are not idempotent never show, as Kafka keeps no state for
-them: when a busy topic has no idempotent producer at all, the diagnoses
-note it. The card also says how many messages open transactions hold back
-from `read_committed` consumers: those after a partition's last stable
-offset.
+the topic, how many partitions it wrote to, and the timestamp of its latest
+message, which is the producer's own clock: a replay's or a stream
+processor's may be old. Every transactional producer shows, and the 10
+idempotent ones with the latest timestamps, with how many more there are:
+short-lived producers each get an ID of their own. Producers that are not
+idempotent never show, as Kafka keeps no state for them: when a busy topic
+has no idempotent producer writing at all, the diagnoses note it. Once a
+transaction has been open on the topic for a minute, the card warns how
+many messages it holds back from `read_committed` consumers: about those
+after a partition's last stable offset. Healthy transactional producers
+hold back a moment's messages all the time.
 
 The overview's health says how many transactions are open, and how long
-the oldest has been, in amber once that is a minute. The diagnoses find a
+the oldest has been, with a warning once that is a minute. It waits at
+most 3 seconds for Kafka, and leaves them out otherwise. The diagnoses find a
 transaction that holds consumers back for longer than a minute, a hanging
 one that its coordinator lost and Kafka never aborts, and producers that
 aborted transactions (see [diagnosis.md](diagnosis.md)). Kafka counts

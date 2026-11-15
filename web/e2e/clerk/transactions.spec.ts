@@ -78,9 +78,6 @@ test("a transaction left open shows, and is diagnosed as holding consumers back"
       );
     }).toPass({ timeout: 2 * 60_000, intervals: [10_000] });
     await expect(rows.filter({ hasText: "Idempotent" })).toHaveCount(1);
-    await expect(producers).toContainText(
-      /Open transactions hold back [\d,]+ messages? from read_committed consumers/,
-    );
     await page.setViewportSize({ width: 390, height: 844 });
     await expectNoSidewaysScroll(page);
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -98,11 +95,20 @@ test("a transaction left open shows, and is diagnosed as holding consumers back"
     }).toPass({ timeout: 4 * 60_000, intervals: [15_000] });
     await expect(finding).toContainText(
       new RegExp(
-        `Transaction ${transactional} has been open for \\d+ minutes?\\. Until it commits or aborts, read_committed consumers cannot read the [\\d,]+ messages after its start on ${topic}\\. Kafka aborts it once it has been open for 10 minutes\\.`,
+        `Transaction ${transactional} has been open for \\d+ minutes?\\. Until it finishes, read_committed consumers cannot read past its start on ${topic}: about [\\d,]+ messages wait behind it\\. Kafka aborts it once it has been open for 10 minutes\\.`,
       ),
     );
     await expect(finding).toContainText("transaction.timeout.ms");
+    await expect(card(page, "Health")).toContainText(
+      "long enough to hold back read_committed consumers",
+    );
     await expectNoSidewaysScroll(page);
+
+    // Its topic's page warns too, now that it has been open a minute.
+    await page.goto(`/topics/${topic}`);
+    await expect(producers).toContainText(
+      /An open transaction has held back read_committed consumers for \d+ minutes?: about [\d,]+ messages wait/,
+    );
   } finally {
     stopKafkaTools(topic);
     kafka(a.id, properties, "kafka-topics.sh", [...connect(a.id), "--delete", "--topic", topic]);

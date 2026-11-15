@@ -1739,21 +1739,31 @@ components:
           description: When the oldest open transaction started
     TopicProducers:
       type: object
-      required: [producers, heldBack]
+      required: [producers, idempotent]
       properties:
         producers:
           type: array
           description: |
-            The producers Kafka keeps state for on the topic's partitions: those that
-            write idempotently or in transactions, by producer ID, with the transactional
-            ID of transactional ones. Kafka keeps none for other producers, and knows none
-            by client ID. The most recent first.
+            Producers Kafka keeps state for on the topic's partitions, which write
+            idempotently or in transactions: every transactional one, by its
+            transactional ID, and the idempotent ones with the latest timestamps, at
+            most 10. Kafka keeps none for other producers, and knows none by client ID.
+            The latest timestamps first.
           items:
             $ref: "#/components/schemas/TopicProducer"
+        idempotent:
+          type: integer
+          description: How many idempotent producers, not transactional, Kafka keeps state for on the topic
         heldBack:
           type: integer
           format: int64
-          description: The messages read_committed consumers cannot read yet, which open transactions hold back
+          description: |
+            About how many messages read_committed consumers cannot read yet, which open
+            transactions hold back (offsets, markers included); absent when not known
+        heldBackSince:
+          type: string
+          format: date-time
+          description: When the oldest transaction open on the topic started, by its coordinator's clock
     TopicProducer:
       type: object
       required: [producerId, partitions, lastWrite, inTransaction]
@@ -1769,6 +1779,9 @@ components:
         lastWrite:
           type: string
           format: date-time
+          description: |
+            The timestamp of its latest message: the producer's own clock unless the
+            topic uses log append time, so a replay's or a stream processor's may be old
         inTransaction:
           type: boolean
           description: Whether it has a transaction open on the topic

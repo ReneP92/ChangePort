@@ -139,8 +139,9 @@ with the help of the consumers downstream:
 
 A transaction left open, by a producer that hangs or stops without
 aborting, holds back every `read_committed` consumer of its partitions
-until Kafka aborts it, after the producer's `transaction.timeout.ms` (one
-minute by default). The console shows open transactions and diagnoses one
+until Kafka aborts it, after the producer's `transaction.timeout.ms` (a
+minute by default in Java and librdkafka-based clients, 40 seconds in
+franz-go). The console shows open transactions and diagnoses one
 that hangs ([console.md](console.md)).
 
 ## Examples
@@ -438,7 +439,10 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
+import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.TimeoutException;
 
 public class ExactlyOnce {
     public static void main(String[] args) throws Exception {
@@ -491,8 +495,13 @@ public class ExactlyOnce {
                     // The input's offsets commit with the output, or neither does.
                     producer.sendOffsetsToTransaction(offsets, consumer.groupMetadata());
                     producer.commitTransaction();
-                } catch (ProducerFencedException e) {
-                    // A newer instance with the same transactional.id took over.
+                } catch (ProducerFencedException | OutOfOrderSequenceException | AuthorizationException e) {
+                    // Fatal for this producer, such as when a newer instance with
+                    // the same transactional.id took over: stop, without aborting.
+                    throw e;
+                } catch (TimeoutException e) {
+                    // Whether it committed is not known: call commitTransaction
+                    // again rather than abort, which Kafka refuses now.
                     throw e;
                 } catch (KafkaException e) {
                     // Neither the output nor the offsets count.
@@ -509,9 +518,10 @@ public class ExactlyOnce {
 ```
 
 Consumers of `OUTPUT_TOPIC` read it with `isolation.level=read_committed`.
-A real application loops for good rather than returning, and after an
-aborted transaction seeks its consumer back to the last committed offsets
-before polling again.
+A real application loops for good rather than returning: after an aborted
+transaction it seeks its consumer back to the last committed offsets before
+polling again, and after a commit that timed out it calls `commitTransaction`
+again.
 
 ## If you cannot connect
 

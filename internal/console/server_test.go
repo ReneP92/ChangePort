@@ -756,6 +756,8 @@ type fakeClusters struct {
 	// transactions and producers are what Kafka says of them, by customer.
 	transactions map[string][]Transaction
 	producers    map[string][]PartitionProducer
+	// transactionsFail makes Transactions fail as this.
+	transactionsFail error
 	// described are the consumer groups Kafka describes, by customer, when
 	// a test sets them.
 	described map[string][]ConsumerGroup
@@ -804,6 +806,9 @@ func (f *fakeClusters) AlterTopic(_ context.Context, id, name string, alteration
 }
 
 func (f *fakeClusters) Transactions(_ context.Context, id string) ([]Transaction, error) {
+	if f.transactionsFail != nil {
+		return nil, f.transactionsFail
+	}
 	return f.transactions[id], nil
 }
 

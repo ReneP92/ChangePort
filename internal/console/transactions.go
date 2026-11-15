@@ -25,8 +25,10 @@ type Transaction struct {
 	// ID is its transactional ID, and ProducerID the producer's.
 	ID         string
 	ProducerID int64
-	// State is the coordinator's: Ongoing, PrepareCommit or PrepareAbort.
-	State   string
+	// State is the coordinator's: Ongoing, PrepareCommit, PrepareAbort or
+	// PrepareEpochFence.
+	State string
+	// Started is by the coordinator's clock.
 	Started time.Time
 	// Timeout is how long it may stay open before the coordinator aborts it.
 	Timeout    time.Duration
@@ -34,8 +36,10 @@ type Transaction struct {
 }
 
 // TransactionPartition is a partition a transaction wrote to, and how many
-// messages read_committed consumers of it cannot read yet: those after its
-// last stable offset, which an open transaction holds back.
+// offsets read_committed consumers of it cannot read yet: those from its
+// last stable offset, which the oldest transaction open on it holds back, to
+// its high watermark. They count transaction markers too, so they are about
+// as many messages.
 type TransactionPartition struct {
 	Topic     string
 	Partition int32
@@ -49,10 +53,16 @@ type PartitionProducer struct {
 	Topic      string
 	Partition  int32
 	ProducerID int64
+	// Epoch and LastSequence move on as it writes, by Kafka's count.
+	Epoch        int16
+	LastSequence int32
 	// TransactionalID names a transactional producer, when its coordinator
 	// still knows it; "" for idempotent producers.
 	TransactionalID string
-	LastWrite       time.Time
+	// LastWrite is the timestamp of its latest batch: the producer's own
+	// clock unless the topic uses log append time, so it may be old for a
+	// producer writing now, as a replay or a stream processor's is.
+	LastWrite time.Time
 	// OpenFrom is the offset of the first message of the transaction it
 	// has open on the partition, or -1.
 	OpenFrom int64
@@ -60,7 +70,17 @@ type PartitionProducer struct {
 
 // openStates are the states of a transaction its coordinator has not
 // finished.
-var openStates = []string{"Ongoing", "PrepareCommit", "PrepareAbort"}
+var openStates = []string{"Ongoing", "PrepareCommit", "PrepareAbort", "PrepareEpochFence"}
+
+// partly passes on a kadm error unless some of the brokers answered: with
+// one broker down, what the others say still counts.
+func partly(err error) error {
+	var shards *kadm.ShardErrors
+	if errors.As(err, &shards) && !shards.AllFailed {
+		return nil
+	}
+	return err
+}
 
 // Transactions implements Clusters.
 func (k KubeClusters) Transactions(ctx context.Context, customerID string) ([]Transaction, error) {
@@ -69,14 +89,14 @@ func (k KubeClusters) Transactions(ctx context.Context, customerID string) ([]Tr
 		return nil, err
 	}
 	listed, err := admin.ListTransactions(ctx, nil, openStates)
-	if err != nil {
+	if err = partly(err); err != nil {
 		return nil, fmt.Errorf("list the transactions of customer %s: %w", customerID, err)
 	}
 	if len(listed) == 0 {
 		return nil, nil
 	}
 	described, err := admin.DescribeTransactions(ctx, listed.TransactionalIDs()...)
-	if err != nil {
+	if err = partly(err); err != nil {
 		return nil, fmt.Errorf("describe the transactions of customer %s: %w", customerID, err)
 	}
 	var transactions []Transaction
@@ -105,7 +125,7 @@ func (k KubeClusters) Transactions(ctx context.Context, customerID string) ([]Tr
 		transactions = append(transactions, t)
 	}
 	if len(topics) > 0 {
-		heldBack, err := k.heldBack(ctx, admin, slices.Sorted(maps.Keys(topics)))
+		heldBack, err := heldBack(ctx, admin, slices.Sorted(maps.Keys(topics)))
 		if err != nil {
 			return nil, err
 		}
@@ -118,30 +138,32 @@ func (k KubeClusters) Transactions(ctx context.Context, customerID string) ([]Tr
 	return transactions, nil
 }
 
-// heldBack returns the messages read_committed consumers cannot read yet on
+// heldBack returns the offsets read_committed consumers cannot read yet on
 // each partition of topics: from the last stable offset, which an open
 // transaction holds back, to the high watermark.
-func (k KubeClusters) heldBack(ctx context.Context, admin *kadm.Client, topics []string) (map[string]map[int32]int64, error) {
+func heldBack(ctx context.Context, admin *kadm.Client, topics []string) (map[string]map[int32]int64, error) {
 	ends, err := admin.ListEndOffsets(ctx, topics...)
-	if err != nil {
+	if err = partly(err); err != nil {
 		return nil, fmt.Errorf("list the end offsets of %v: %w", topics, err)
 	}
 	stable, err := admin.ListCommittedOffsets(ctx, topics...)
-	if err != nil {
+	if err = partly(err); err != nil {
 		return nil, fmt.Errorf("list the last stable offsets of %v: %w", topics, err)
 	}
-	heldBack := map[string]map[int32]int64{}
+	held := map[string]map[int32]int64{}
 	ends.Each(func(end kadm.ListedOffset) {
 		last, ok := stable.Lookup(end.Topic, end.Partition)
 		if end.Err != nil || !ok || last.Err != nil {
 			return
 		}
-		if heldBack[end.Topic] == nil {
-			heldBack[end.Topic] = map[int32]int64{}
+		if held[end.Topic] == nil {
+			held[end.Topic] = map[int32]int64{}
 		}
-		heldBack[end.Topic][end.Partition] = max(0, end.Offset-last.Offset)
+		// The two are read one after the other, so the last stable offset
+		// may have passed the high watermark read a moment before.
+		held[end.Topic][end.Partition] = max(0, end.Offset-last.Offset)
 	})
-	return heldBack, nil
+	return held, nil
 }
 
 // Producers implements Clusters. Kafka authorizes describing producers as
@@ -173,11 +195,10 @@ func (k KubeClusters) Producers(ctx context.Context, customerID string, topics .
 		return nil, err
 	}
 	described, err := reading.DescribeProducers(ctx, set)
-	if err != nil {
+	if err = partly(err); err != nil {
 		return nil, fmt.Errorf("describe the producers of customer %s: %w", customerID, err)
 	}
 	var producers []PartitionProducer
-	ids := map[int64]bool{}
 	described.EachPartition(func(p kadm.DescribedProducersPartition) {
 		if p.Err != nil {
 			return
@@ -185,16 +206,19 @@ func (k KubeClusters) Producers(ctx context.Context, customerID string, topics .
 		p.ActiveProducers.Each(func(d kadm.DescribedProducer) {
 			producers = append(producers, PartitionProducer{
 				Topic: d.Topic, Partition: d.Partition, ProducerID: d.ProducerID,
+				Epoch: d.ProducerEpoch, LastSequence: d.LastSequence,
 				LastWrite: time.UnixMilli(d.LastTimestamp).UTC(), OpenFrom: d.CurrentTxnStartOffset,
 			})
-			ids[d.ProducerID] = true
 		})
 	})
-	if len(ids) == 0 {
+	if len(producers) == 0 {
 		return producers, nil
 	}
-	listed, err := admin.ListTransactions(ctx, slices.Sorted(maps.Keys(ids)), nil)
-	if err != nil {
+	// Every transactional ID the coordinators know, with its producer's
+	// ID: as many as the customer's transactional applications, rather
+	// than every idempotent producer's ID asked about by name.
+	listed, err := admin.ListTransactions(ctx, nil, nil)
+	if err = partly(err); err != nil {
 		return nil, fmt.Errorf("name the transactional producers of customer %s: %w", customerID, err)
 	}
 	names := map[int64]string{}
@@ -209,6 +233,11 @@ func (k KubeClusters) Producers(ctx context.Context, customerID string, topics .
 	})
 	return producers, nil
 }
+
+// shownIdempotent is how many idempotent producers a topic's page lists:
+// short-lived producers, each with an ID Kafka keeps for a day, may number
+// thousands.
+const shownIdempotent = 10
 
 // ListTopicProducers implements api.StrictServerInterface: the producers
 // Kafka keeps state for on a topic, which members may see too, as they show
@@ -225,6 +254,8 @@ func (s *Server) ListTopicProducers(ctx context.Context, request api.ListTopicPr
 	case topics.Reserved(request.Topic):
 		return api.ListTopicProducers404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(noSuchTopic(request.Topic))}, nil
 	}
+	ctx, cancel := context.WithTimeout(ctx, kafkaTimeout)
+	defer cancel()
 	producers, err := s.clusters.Producers(ctx, customer.Name, request.Topic)
 	if errors.Is(err, clusters.ErrNotReady) {
 		return api.ListTopicProducers409JSONResponse{NotReadyJSONResponse: api.NotReadyJSONResponse(notReadyYet)}, nil
@@ -232,23 +263,34 @@ func (s *Server) ListTopicProducers(ctx context.Context, request api.ListTopicPr
 	if err != nil {
 		return nil, err
 	}
-	transactions, err := s.clusters.Transactions(ctx, customer.Name)
-	if err != nil {
-		return nil, err
-	}
 	out := api.ListTopicProducers200JSONResponse{Producers: []api.TopicProducer{}}
-	// Each partition's held-back messages count once, however many
-	// transactions are open on it.
-	heldBack := map[int32]int64{}
-	for _, t := range transactions {
-		for _, p := range t.Partitions {
-			if p.Topic == request.Topic {
+	// What open transactions hold back is a help: without it, the
+	// producers still show.
+	if transactions, err := s.clusters.Transactions(ctx, customer.Name); err != nil {
+		s.logger.WarnContext(ctx, "the transactions are unknown", "customer", customer.Name, "error", err)
+	} else {
+		// Each partition's held-back offsets count once, however many
+		// transactions are open on it.
+		heldBack := map[int32]int64{}
+		for _, t := range transactions {
+			for _, p := range t.Partitions {
+				if p.Topic != request.Topic {
+					continue
+				}
 				heldBack[p.Partition] = p.HeldBack
+				if out.HeldBackSince == nil || t.Started.Before(*out.HeldBackSince) {
+					out.HeldBackSince = ptr.To(t.Started.UTC())
+				}
 			}
 		}
-	}
-	for _, n := range heldBack {
-		out.HeldBack += n
+		total := int64(0)
+		for _, n := range heldBack {
+			total += n
+		}
+		out.HeldBack = &total
+		if total == 0 {
+			out.HeldBackSince = nil
+		}
 	}
 	byID := map[int64]*api.TopicProducer{}
 	for _, p := range producers {
@@ -269,18 +311,30 @@ func (s *Server) ListTopicProducers(ctx context.Context, request api.ListTopicPr
 		}
 		producer.InTransaction = producer.InTransaction || p.OpenFrom >= 0
 	}
+	all := make([]api.TopicProducer, 0, len(byID))
 	for _, producer := range byID {
-		out.Producers = append(out.Producers, *producer)
+		all = append(all, *producer)
 	}
-	slices.SortFunc(out.Producers, func(a, b api.TopicProducer) int {
+	slices.SortFunc(all, func(a, b api.TopicProducer) int {
 		return cmp.Or(b.LastWrite.Compare(a.LastWrite), cmp.Compare(a.ProducerId, b.ProducerId))
 	})
+	for _, producer := range all {
+		if producer.TransactionalId == nil {
+			out.Idempotent++
+			if out.Idempotent > shownIdempotent {
+				continue
+			}
+		}
+		out.Producers = append(out.Producers, producer)
+	}
 	return out, nil
 }
 
 // transactionsSummary says how many transactions are open, and since when
-// the oldest, or nil when Kafka does not describe them.
+// the oldest, or nil when Kafka does not say in time.
 func (s *Server) transactionsSummary(ctx context.Context, customerID string) *api.TransactionsSummary {
+	ctx, cancel := context.WithTimeout(ctx, healthKafkaTimeout)
+	defer cancel()
 	transactions, err := s.clusters.Transactions(ctx, customerID)
 	if err != nil {
 		s.logger.WarnContext(ctx, "the transactions are unknown", "customer", customerID, "error", err)
@@ -294,3 +348,8 @@ func (s *Server) transactionsSummary(ctx context.Context, customerID string) *ap
 	}
 	return summary
 }
+
+// healthKafkaTimeout bounds what the health waits for Kafka's transactions,
+// so that a broker that does not answer leaves them out rather than the
+// health late, when it matters most.
+const healthKafkaTimeout = 3 * time.Second

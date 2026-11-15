@@ -962,17 +962,26 @@ export interface components {
         };
         TopicProducers: {
             /**
-             * @description The producers Kafka keeps state for on the topic's partitions: those that
-             *     write idempotently or in transactions, by producer ID, with the transactional
-             *     ID of transactional ones. Kafka keeps none for other producers, and knows none
-             *     by client ID. The most recent first.
+             * @description Producers Kafka keeps state for on the topic's partitions, which write
+             *     idempotently or in transactions: every transactional one, by its
+             *     transactional ID, and the idempotent ones with the latest timestamps, at
+             *     most 10. Kafka keeps none for other producers, and knows none by client ID.
+             *     The latest timestamps first.
              */
             producers: components["schemas"]["TopicProducer"][];
+            /** @description How many idempotent producers, not transactional, Kafka keeps state for on the topic */
+            idempotent: number;
             /**
              * Format: int64
-             * @description The messages read_committed consumers cannot read yet, which open transactions hold back
+             * @description About how many messages read_committed consumers cannot read yet, which open
+             *     transactions hold back (offsets, markers included); absent when not known
              */
-            heldBack: number;
+            heldBack?: number;
+            /**
+             * Format: date-time
+             * @description When the oldest transaction open on the topic started, by its coordinator's clock
+             */
+            heldBackSince?: string;
         };
         TopicProducer: {
             /** Format: int64 */
@@ -980,7 +989,11 @@ export interface components {
             transactionalId?: string;
             /** @description The topic's partitions it wrote to */
             partitions: number;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description The timestamp of its latest message: the producer's own clock unless the
+             *     topic uses log append time, so a replay's or a stream processor's may be old
+             */
             lastWrite: string;
             /** @description Whether it has a transaction open on the topic */
             inTransaction: boolean;

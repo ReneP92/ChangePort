@@ -32,12 +32,18 @@ request:
   producer's sends, errors and retries, with its errors per topic.
 - **The timeline:** each group's rebalances in the last hour, and the
   topics that got partitions in the last day.
-- **Transactions and producers,** from Kafka's Admin API on each request:
-  the transactions open, with the messages each holds back from
-  `read_committed` consumers (a partition's high watermark less its last
-  stable offset), and the producers Kafka keeps state for on each
-  partition, the idempotent and transactional ones, with the time each last
-  wrote and any transaction it has open there.
+- **Transactions and producers,** from Kafka's Admin API on each request,
+  within 10 seconds: the producers Kafka keeps state for on each partition,
+  the idempotent and transactional ones, with their sequence numbers and
+  any transaction open there, then the transactions open, with the offsets
+  each holds back from `read_committed` consumers (a partition's high
+  watermark less its last stable offset). The console remembers what it saw
+  at its last look, so that it tells which producers wrote since (their
+  sequence moved on) and how long a transaction has been open from one
+  offset, without the producers' timestamps, which are their own clocks: a
+  replay's or a stream processor's are old while it writes now. After the
+  console starts, it takes a look to tell who writes, and 15 minutes to
+  tell a hanging transaction.
 
 The console keeps an environment's diagnoses for 30 seconds, as the overview
 asks every 15. `GET /api/customer/diagnoses` returns them, the most severe
@@ -102,10 +108,10 @@ and groups are left out.
 | `partitions-added` | A topic that got partitions in the last day, from the console or any other tool, while consumer groups read it: a key's new messages may go to another partition than its earlier ones. | info |
 | `oversized-messages` | A topic that refused batches larger than its `max.message.bytes` over the window (the brokers' rejected bytes, counted from 0 as the brokers report a topic's only from its first refusal), with the producers whose records failed on it, as far as they report them. A single message that large is lost unless its producer handles the error; Java producers split a batch of smaller ones and send them again. | warning |
 | `producer-errors` | A producer trying to send a record every 10 seconds or more, 1% or more of whose records fail; or, short of that, that sends 10% or more of its records again. It tells records that failed in the producer itself, before reaching Kafka (such as ones over `max.request.size`), from those that failed on their way to a topic or at it (refused, or expired after `delivery.timeout.ms`), by the producer's errors per topic. Errors on a topic that refused batches for their size are `oversized-messages`', and do not count here. Records that fail before they are sent count as tried. | warning, info |
-| `hanging-transaction` | A partition with a transaction open, last written to longer ago than any transaction may stay open (the brokers' `transaction.max.timeout.ms`, 15 minutes), that its coordinator does not have open on that partition: the test of `kafka-transactions.sh find-hanging`. Kafka never aborts it by itself. | critical |
-| `open-transaction` | A transaction open for a minute or more that holds back `read_committed` consumers: messages after its start on its partitions that they cannot read yet. | warning |
+| `hanging-transaction` | A partition with a transaction seen open from the same offset for longer than any transaction may stay open (the brokers' `transaction.max.timeout.ms`, 15 minutes), that its coordinator does not have open on that partition, as `kafka-transactions.sh find-hanging` asks. Kafka never aborts it by itself. One finding per topic. | critical |
+| `open-transaction` | A transaction open for a minute or more that holds back `read_committed` consumers, the offsets after its start that they cannot read yet, counted for the oldest transaction on each partition; or one stuck committing or aborting, whose markers a partition cannot take. | warning |
 | `transactions-aborted` | A Java producer that spent time aborting transactions over the window, as it reports it. | info |
-| `producers-not-idempotent` | A topic receiving a message a second or more over the window from no idempotent or transactional producer. A Postgres source's topics are left out. | info |
+| `producers-not-idempotent` | A topic receiving a message a second or more over the window while none of its idempotent or transactional producers wrote since the console's last look. A Postgres source's topics are left out. | info |
 | `producers-without-telemetry` | A topic that receives more than 100 B/s, and more than a tenth of its bytes, from producers that send no telemetry (KIP-714), which leaves them off the data flow map. A Postgres source's topics, written by Changeport's own Connect worker, are left out. | info |
 
 What each suggests:

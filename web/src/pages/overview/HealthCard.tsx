@@ -1,3 +1,4 @@
+import { TriangleAlert } from "lucide-react";
 import type { Health, TransactionsSummary } from "@/api/client";
 import { useHealth } from "@/api/queries";
 import { Badge } from "@/components/ui/badge";
@@ -107,6 +108,7 @@ export function Transactions({ summary, now }: { summary: TransactionsSummary; n
     summary.oldestStartedAt === undefined
       ? undefined
       : Math.max(0, (now - Date.parse(summary.oldestStartedAt)) / 1000);
+  const long = oldest !== undefined && oldest >= 60;
   return (
     <p className="text-muted-foreground">
       <span className="font-medium text-foreground">Transactions:</span>{" "}
@@ -115,12 +117,15 @@ export function Transactions({ summary, now }: { summary: TransactionsSummary; n
       ) : (
         <span
           className={cn(
-            oldest !== undefined && oldest >= 60 && "text-amber-700 dark:text-amber-500",
+            "inline-flex flex-wrap items-center gap-x-1.5",
+            long && "text-amber-700 dark:text-amber-500",
           )}
         >
+          {long && <TriangleAlert aria-hidden className="size-4 shrink-0" />}
           {summary.open} open
           {oldest !== undefined &&
             `, ${summary.open === 1 ? "" : "the oldest "}for ${formatDuration(oldest)}`}
+          {long && ", long enough to hold back read_committed consumers"}
         </span>
       )}
     </p>
