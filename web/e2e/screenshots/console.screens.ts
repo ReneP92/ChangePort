@@ -431,11 +431,15 @@ test("every screen of the console", async ({ browser }) => {
     ).toBeVisible({ timeout: 10_000 });
   }).toPass({ timeout: 3 * 60_000, intervals: [15_000] });
   await shot(admin, "03-overview");
-  // The same in dark mode, from the help menu, then light again.
+  // The same in dark mode, from the help menu, then light again. Closing the
+  // menu returns focus to the Help button, whose tooltip it would show.
   const darkMode = async () => {
-    await admin.getByRole("button", { name: "Help" }).click();
+    const help = admin.getByRole("button", { name: "Help" });
+    await help.click();
     await admin.getByRole("menuitemcheckbox", { name: "Dark mode" }).click();
     await admin.keyboard.press("Escape");
+    await help.blur();
+    await expect(admin.getByRole("tooltip")).toHaveCount(0);
   };
   await darkMode();
   await shot(admin, "56-dark-overview");

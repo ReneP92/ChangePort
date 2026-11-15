@@ -4,9 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="color-scheme" content="light dark" />
-    <!-- The viewer's theme, before anything draws. -->
-    <script src="/theme.js"></script>
+    <meta name="color-scheme" content="light" />
+    <!--
+      The viewer's theme (src/lib/theme.ts), before anything draws, so that a
+      dark page never flashes white; light is the default. Inline, so the page
+      waits for no request: the console's Content-Security-Policy allows
+      inline scripts written as a bare script tag here by their hash.
+    -->
+    <script>
+      (function () {
+        var dark = false;
+        try {
+          dark = localStorage.getItem("changeport-theme") === "dark";
+        } catch (e) {}
+        document.documentElement.classList.toggle("dark", dark);
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      })();
+    </script>
     <title>Changeport</title>
   </head>
   <body>

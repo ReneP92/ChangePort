@@ -5,7 +5,8 @@ export type Theme = "light" | "dark";
 
 const key = "changeport-theme";
 
-// The choice when the browser keeps none, as in a private window.
+// The choice when the browser can't keep it, as in a private window or with
+// storage full. It lasts the page.
 let unsaved: Theme | undefined;
 
 function stored(): Theme {
@@ -16,7 +17,7 @@ function stored(): Theme {
   }
 }
 
-/** Applies a theme to the page, as public/theme.js does before it draws. */
+/** Applies a theme to the page, as index.html's script does before it draws. */
 function apply(theme: Theme) {
   document.documentElement.classList.toggle("dark", theme === "dark");
   document.documentElement.style.colorScheme = theme;
@@ -31,31 +32,35 @@ function changed() {
   }
 }
 
-function subscribe(listener: () => void) {
-  if (listeners.size === 0) {
-    // Another tab's choice.
-    window.addEventListener("storage", changed);
+// The page follows another tab's choice whether or not anything shows the
+// switch, and the stored choice from the start, should index.html's script
+// not have run.
+window.addEventListener("storage", (event) => {
+  if (event.key === key || event.key === null) {
+    changed();
   }
+});
+apply(stored());
+
+function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
-    if (listeners.size === 0) {
-      window.removeEventListener("storage", changed);
-    }
   };
 }
 
 /** Sets the theme, for this browser. */
 export function setTheme(theme: Theme) {
+  unsaved = theme;
   try {
     if (theme === "light") {
       localStorage.removeItem(key);
     } else {
       localStorage.setItem(key, theme);
     }
+    unsaved = undefined;
   } catch {
-    // Storage may be off, as in a private window: the choice lasts the page.
-    unsaved = theme;
+    // Kept in unsaved instead.
   }
   changed();
 }

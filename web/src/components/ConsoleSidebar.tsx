@@ -396,7 +396,7 @@ function SubItem({
               </span>
               <span
                 aria-hidden
-                className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.625rem] font-medium text-white tabular-nums"
+                className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.625rem] font-medium text-white tabular-nums dark:bg-destructive/60"
               >
                 {count.value}
               </span>
@@ -485,7 +485,7 @@ function Count({ value }: { value: number }) {
   return (
     <SidebarMenuBadge
       aria-hidden
-      className="bg-destructive text-white peer-data-active/menu-button:text-white"
+      className="bg-destructive text-white peer-data-active/menu-button:text-white dark:bg-destructive/60"
     >
       {value}
     </SidebarMenuBadge>
@@ -571,7 +571,7 @@ function HelpMenu() {
             aria-hidden
             className={cn(
               "ml-auto inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors",
-              theme === "dark" ? "bg-primary" : "bg-input",
+              theme === "dark" ? "bg-primary" : "bg-muted-foreground/60",
             )}
           >
             <span

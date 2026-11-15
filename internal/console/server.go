@@ -6,6 +6,8 @@ import (
 	"cmp"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"net/http"
 	"net/mail"
 	"path"
+	"regexp"
 	"slices"
 	"strings"
 	"sync"
@@ -228,7 +231,7 @@ func New(config Config, options Options) (*Server, error) {
 	}
 	if missing := config.missing(); len(missing) > 0 {
 		s.logger.Warn("the console is not configured and refuses every API call", "missing", strings.Join(missing, ", "))
-		s.csp = contentSecurityPolicy("")
+		s.csp = contentSecurityPolicy("", inlineScripts(s.ui))
 		return s, nil
 	}
 	frontendAPI, err := FrontendAPI(config.PublishableKey)
@@ -253,7 +256,7 @@ func New(config Config, options Options) (*Server, error) {
 		origins: config.Origins,
 		clock:   options.Clock,
 	}
-	s.csp = contentSecurityPolicy(frontendAPI)
+	s.csp = contentSecurityPolicy(frontendAPI, inlineScripts(s.ui))
 	return s, nil
 }
 
@@ -280,17 +283,22 @@ func clerkKeys(secretKey string) KeySource {
 // contentSecurityPolicy allows the web app's own files and, with a Clerk
 // Frontend API, what Clerk's sign-in components load: its script and API,
 // its bot protection (a script, and probes of its servers on several ports),
-// user images and the Cloudflare bot check.
-func contentSecurityPolicy(frontendAPI string) string {
-	scripts, connections := "", ""
+// user images and the Cloudflare bot check. Of inline scripts, it allows
+// only index.html's own, by their hashes.
+func contentSecurityPolicy(frontendAPI string, inline []string) string {
+	scripts, connections := []string{"'self'"}, []string{"'self'"}
 	if frontendAPI != "" {
-		scripts = " https://" + frontendAPI + " https://cdn.protect.clerk.com"
-		connections = " https://" + frontendAPI + " https://*.protect.clerk.com:*"
+		scripts = append(scripts, "https://"+frontendAPI, "https://cdn.protect.clerk.com")
+		connections = append(connections, "https://"+frontendAPI, "https://*.protect.clerk.com:*")
+	}
+	scripts = append(scripts, "https://challenges.cloudflare.com")
+	for _, hash := range inline {
+		scripts = append(scripts, "'"+hash+"'")
 	}
 	return strings.Join([]string{
 		"default-src 'self'",
-		"script-src 'self'" + scripts + " https://challenges.cloudflare.com",
-		"connect-src 'self'" + connections,
+		"script-src " + strings.Join(scripts, " "),
+		"connect-src " + strings.Join(connections, " "),
 		"img-src 'self' data: https://img.clerk.com",
 		"style-src 'self' 'unsafe-inline'",
 		"frame-src https://challenges.cloudflare.com",
@@ -416,6 +424,27 @@ func (s *Server) serveUI() http.Handler {
 		w.Header().Set("Content-Security-Policy", s.csp)
 		_, _ = w.Write(index)
 	})
+}
+
+// inlineScript is an inline script in index.html: a bare script tag, as
+// the one that applies the viewer's theme before the page draws.
+var inlineScript = regexp.MustCompile(`(?s)<script>(.*?)</script>`)
+
+// inlineScripts returns the CSP hashes of index.html's inline scripts.
+func inlineScripts(ui fs.FS) []string {
+	if ui == nil {
+		return nil
+	}
+	index, err := fs.ReadFile(ui, "index.html")
+	if err != nil {
+		return nil
+	}
+	var hashes []string
+	for _, match := range inlineScript.FindAllSubmatch(index, -1) {
+		sum := sha256.Sum256(match[1])
+		hashes = append(hashes, "sha256-"+base64.StdEncoding.EncodeToString(sum[:]))
+	}
+	return hashes
 }
 
 func writeProblem(w http.ResponseWriter, status int, title, detail string) {

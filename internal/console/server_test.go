@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -315,7 +316,7 @@ type fixture struct {
 }
 
 var ui = fstest.MapFS{
-	"index.html":         {Data: []byte("<!doctype html><title>Changeport</title>")},
+	"index.html":         {Data: []byte(`<!doctype html><script>applyTheme()</script><title>Changeport</title><script type="module" src="/assets/app-1a2b.js"></script>`)},
 	"assets/app-1a2b.js": {Data: []byte("console.log(1)")},
 	"favicon.svg":        {Data: []byte("<svg/>")},
 }
@@ -706,6 +707,11 @@ func TestWebApp(t *testing.T) {
 		if !strings.Contains(csp, want) {
 			t.Errorf("Content-Security-Policy %q lacks %q", csp, want)
 		}
+	}
+	// index.html's inline script, which applies the theme, and no other.
+	sum := sha256.Sum256([]byte("applyTheme()"))
+	if hash := "'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "';"; !strings.Contains(csp, hash) || strings.Count(csp, "sha256-") != 1 {
+		t.Errorf("Content-Security-Policy %q allows other inline scripts than %s", csp, hash)
 	}
 	if header.Get("Cache-Control") != "no-cache" || header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("GET / headers = %v", header)
