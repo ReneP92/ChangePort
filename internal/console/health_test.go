@@ -85,7 +85,8 @@ func TestLevelsUnknown(t *testing.T) {
 // healthy, each with its own tenant.
 func TestHealthMonitorExportsLevels(t *testing.T) {
 	m := &healthMonitor{latest: map[string]levels{
-		"acme": {known: true,
+		"acme": {
+			known:  true,
 			topics: map[string]diagnosis.Health{"orders": {Level: diagnosis.NeedsAttention}},
 			groups: map[string]diagnosis.Health{"billing": {Level: diagnosis.AtRisk}},
 		},
