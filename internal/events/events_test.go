@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,24 @@ import (
 )
 
 var at = time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
+
+// VictoriaLogs answers every field as text: a rebalance must read back as
+// one, and an event without the field as none.
+func TestRebalancesReadBackFromText(t *testing.T) {
+	written, err := json.Marshal(Event{Kind: GroupRebalanced, Rebalance: true})
+	if err != nil || !strings.Contains(string(written), `"rebalance":"true"`) {
+		t.Fatalf("Marshal() = %s, %v, want the flag as text", written, err)
+	}
+	for line, want := range map[string]bool{
+		`{"kind":"group.rebalanced","rebalance":"true","tenant":"acme"}`: true,
+		`{"kind":"group.rebalanced","tenant":"acme"}`:                    false,
+	} {
+		var e Event
+		if err := json.Unmarshal([]byte(line), &e); err != nil || e.Rebalance != want {
+			t.Errorf("Unmarshal(%s) = %+v, %v, want rebalance %v", line, e, err, want)
+		}
+	}
+}
 
 func TestQueriesSelectTheTenant(t *testing.T) {
 	for _, c := range []struct {

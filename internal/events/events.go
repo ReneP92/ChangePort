@@ -81,8 +81,9 @@ type Event struct {
 	// Rebalance marks a group's change of members that made it share its
 	// partitions out again while it kept consuming, as opposed to the
 	// group starting or its last member leaving (internal/diagnosis counts
-	// them).
-	Rebalance bool `json:"rebalance,omitempty"`
+	// them). VictoriaLogs keeps every field as text, so it is written and
+	// read as "true".
+	Rebalance bool `json:"rebalance,omitempty,string"`
 }
 
 // NewID returns a random event ID.
