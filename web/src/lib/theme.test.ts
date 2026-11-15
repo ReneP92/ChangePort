@@ -92,9 +92,13 @@ describe("another tab's choice", () => {
   test("flips the switch", () => {
     const { result } = renderHook(() => useTheme());
     expect(result.current).toBe("light");
-    act(() => otherTab("dark"));
+    act(() => {
+      otherTab("dark");
+    });
     expect(result.current).toBe("dark");
-    act(() => setTheme("light"));
+    act(() => {
+      setTheme("light");
+    });
     expect(result.current).toBe("light");
     expect(dark()).toBe(false);
   });
