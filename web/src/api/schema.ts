@@ -1309,7 +1309,7 @@ export interface components {
             title: string;
             /** @description What shows it, with the numbers */
             explanation: string;
-            /** @description What to do about it */
+            /** @description What to do about it. Commands and settings are between backticks, as code */
             suggestion: string;
         };
         Topology: {

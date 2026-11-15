@@ -20,6 +20,27 @@ const severities: Record<
   info: { icon: Info, label: "Note", className: "text-muted-foreground" },
 };
 
+/**
+ * Text with commands and settings between backticks, shown as code. A code
+ * word never breaks at its hyphens or dots, which would read as two.
+ */
+export function WithCode({ text }: { text: string }) {
+  return text.split("`").map((part, index) =>
+    index % 2 === 0 ? (
+      part
+    ) : (
+      <code key={index} className="rounded bg-muted px-1 py-0.5 font-mono text-[0.85em]">
+        {part.split(" ").map((word, at) => (
+          <span key={at} className="whitespace-nowrap">
+            {at > 0 && " "}
+            {word}
+          </span>
+        ))}
+      </code>
+    ),
+  );
+}
+
 /** The ID of a diagnosis's title, which names its row. */
 const titleID = (id: string) => `diagnosis-${id.replace(/[^\w-]/g, "_")}`;
 
@@ -53,11 +74,11 @@ export function DiagnosisRows({
                 <span id={titleID(diagnosis.id)}>{diagnosis.title}</span>
               </p>
               <p className="text-muted-foreground [overflow-wrap:anywhere]">
-                {diagnosis.explanation}
+                <WithCode text={diagnosis.explanation} />
               </p>
               <p className="[overflow-wrap:anywhere]">
                 <span className="font-medium">What to do: </span>
-                {diagnosis.suggestion}
+                <WithCode text={diagnosis.suggestion} />
               </p>
               {links && (diagnosis.consumerGroup ?? diagnosis.topic) !== undefined && (
                 <p className="flex flex-wrap gap-x-3 text-muted-foreground">

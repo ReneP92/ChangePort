@@ -110,7 +110,7 @@ func nobodyConsuming(s Snapshot) []Finding {
 					"%s has no consumers running, while %s receives %s messages a second: it is %s behind, and falls further behind.",
 					g.Name, r.Topic, rate(t.MessagesInPerSecond), duration(r.LagSeconds)),
 				Suggestion: fmt.Sprintf(
-					"Start the consumers of %s again. If nothing uses %s any more, delete it, for example with kafka-consumer-groups --delete --group %s, so that it no longer counts as behind.",
+					"Start the consumers of %s again. If nothing uses %s any more, delete it, for example with `kafka-consumer-groups --delete --group %s`, so that it no longer counts as behind.",
 					g.Name, g.Name, g.Name),
 			})
 		}
@@ -144,7 +144,7 @@ func behindRetention(s Snapshot) []Finding {
 						"%s keeps messages for %s, and deleted messages %s had not read yet%s.",
 						r.Topic, duration(retention), g.Name, where),
 					Suggestion: fmt.Sprintf(
-						"The consumers of %s continue from where auto.offset.reset points them: the oldest message kept, or the newest. Check what the missed messages were for, then keep %s from falling that far behind, or keep the messages of %s longer.",
+						"The consumers of %s continue from where `auto.offset.reset` points them: the oldest message kept, or the newest. Check what the missed messages were for, then keep %s from falling that far behind, or keep the messages of %s longer.",
 						g.Name, g.Name, r.Topic),
 				})
 			case r.LagSeconds >= retentionShare*retention && r.LagMessages > 0:
@@ -182,7 +182,7 @@ func idleConsumers(s Snapshot) []Finding {
 		f := Finding{
 			Severity: Info,
 			Subject:  Subject{ConsumerGroup: g.Name},
-			Title:    fmt.Sprintf("%s has idle consumers", g.Name),
+			Title:    g.Name + " has idle consumers",
 		}
 		if g.Members > partitions {
 			f.Explanation = fmt.Sprintf(
@@ -197,7 +197,7 @@ func idleConsumers(s Snapshot) []Finding {
 			f.Explanation = fmt.Sprintf(
 				"%s runs %s, but %d of them read nothing, though %s %s %s to share: they are handed out topic by topic, to the same consumers each time.",
 				g.Name, plural(g.Members, "consumer"), g.IdleMembers, list(topics), have(len(topics)), plural(partitions, "partition"))
-			f.Suggestion = "Spread them over every consumer with the cooperative-sticky assignor (partition.assignment.strategy), or with Kafka's own consumer group protocol (group.protocol=consumer, from Kafka 4.0 clients)."
+			f.Suggestion = "Spread them over every consumer with the cooperative-sticky assignor (`partition.assignment.strategy`), or with Kafka's own consumer group protocol (`group.protocol=consumer`, from Kafka 4.0 clients)."
 		}
 		found = append(found, f)
 	}
@@ -215,11 +215,11 @@ func frequentRebalances(s Snapshot) []Finding {
 		found = append(found, Finding{
 			Severity: Warning,
 			Subject:  Subject{ConsumerGroup: g.Name},
-			Title:    fmt.Sprintf("%s keeps rebalancing", g.Name),
+			Title:    g.Name + " keeps rebalancing",
 			Explanation: fmt.Sprintf(
 				"The members of %s changed %s in the last hour. Each time, its consumers share the partitions out again, and read less meanwhile.",
 				g.Name, plural(g.Rebalances, "time")),
-			Suggestion: "Consumers that restart often, or take longer than max.poll.interval.ms between polls, cause this. Give each consumer a group.instance.id, so that a restart keeps its partitions, and keep the work between polls short, for example with smaller batches (max.poll.records).",
+			Suggestion: "Consumers that restart often, or take longer than `max.poll.interval.ms` between polls, cause this. Give each consumer a `group.instance.id`, so that a restart keeps its partitions, and keep the work between polls short, for example with smaller batches (`max.poll.records`).",
 		})
 	}
 	return found
@@ -280,18 +280,18 @@ func producerErrors(s Snapshot) []Finding {
 					"%s of the records %s tried to send in the last %s failed: %s a second of %s.",
 					percent(failed), p.ClientID, duration(s.Window.Seconds()), rate(p.ErrorsPerSecond), rate(tried)),
 				Suggestion: fmt.Sprintf(
-					"The log of %s says why. The usual causes are records larger than max.request.size or the topic's max.message.bytes, a topic that does not exist (topics are not created on first use), or %s lacking permission to write to it.",
+					"The log of %s says why. The usual causes are records larger than `max.request.size` or the topic's `max.message.bytes`, a topic that does not exist (topics are not created on first use), or %s lacking permission to write to it.",
 					p.ClientID, p.Principal),
 			})
 		case retried >= retryShare:
 			found = append(found, Finding{
 				Severity: Info,
 				Subject:  subject,
-				Title:    fmt.Sprintf("%s sends many records twice", p.ClientID),
+				Title:    p.ClientID + " sends many records twice",
 				Explanation: fmt.Sprintf(
 					"%s sent %s of its records again in the last %s. They arrive in the end, but late.",
 					p.ClientID, percent(min(1, retried)), duration(s.Window.Seconds())),
-				Suggestion: "Retries follow timeouts and brokers that move partitions, such as during a restart. If they go on, check the network between the producer and the cluster, and request.timeout.ms.",
+				Suggestion: "Retries follow timeouts and brokers that move partitions, such as during a restart. If they go on, check the network between the producer and the cluster, and `request.timeout.ms`.",
 			})
 		}
 	}

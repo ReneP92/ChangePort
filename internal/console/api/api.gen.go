@@ -905,7 +905,7 @@ type Diagnosis struct {
 	// Severity Info is worth knowing, a warning needs attention before it hurts, critical hurts now
 	Severity DiagnosisSeverity `json:"severity"`
 
-	// Suggestion What to do about it
+	// Suggestion What to do about it. Commands and settings are between backticks, as code
 	Suggestion string `json:"suggestion"`
 
 	// Title What is wrong, in a line

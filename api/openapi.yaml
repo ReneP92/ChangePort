@@ -2396,7 +2396,7 @@ components:
           description: What shows it, with the numbers
         suggestion:
           type: string
-          description: What to do about it
+          description: What to do about it. Commands and settings are between backticks, as code
     Topology:
       type: object
       required: [producers, topics, groups, writes, reads]
