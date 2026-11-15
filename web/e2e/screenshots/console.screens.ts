@@ -508,6 +508,22 @@ test("every screen of the console", async ({ browser }) => {
     admin.getByRole("region", { name: "Changes" }).getByText(/created topic orders/),
   ).toBeVisible({ timeout: 60_000 });
   await shot(admin, "17-topic");
+
+  // Changing a topic says what it does to its consumers before it is saved:
+  // payments with twice the partitions and a week rather than 30 days. Left
+  // unsaved, so that the other screens stay as they are.
+  await admin.goto("/topics/payments");
+  await main.getByRole("button", { name: "Edit" }).click();
+  const edit = admin.getByRole("dialog", { name: "Edit payments" });
+  await edit.getByLabel("Partitions").fill("6");
+  await edit.getByRole("combobox", { name: "Retention" }).click();
+  await admin.getByRole("option", { name: "7 days" }).click();
+  await expect(edit.getByRole("list", { name: "What this change does" })).toContainText(
+    "Partitions can be added, never removed.",
+  );
+  await shot(admin, "57-edit-topic");
+  await edit.getByRole("button", { name: "Cancel" }).click();
+
   await admin.goto("/consumer-groups/search-indexer");
   await expect(admin.getByRole("heading", { level: 1, name: "search-indexer" })).toBeVisible({
     timeout: 30_000,

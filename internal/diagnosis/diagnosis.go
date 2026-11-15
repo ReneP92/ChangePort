@@ -38,6 +38,11 @@ type Topic struct {
 	// PartitionsAdded is whether the topic got partitions in the last day,
 	// which start empty.
 	PartitionsAdded bool
+	// MaxMessageBytes is the largest message the topic accepts
+	// (max.message.bytes), or 0 when unknown.
+	MaxMessageBytes int64
+	// BytesRejectedPerSecond is what the topic refused as larger than that.
+	BytesRejectedPerSecond float64
 	// Source is whether a Postgres source writes the topic: Changeport's
 	// own Connect worker, which sends no telemetry.
 	Source bool
@@ -97,6 +102,10 @@ type Producer struct {
 	SendsPerSecond   float64
 	ErrorsPerSecond  float64
 	RetriesPerSecond float64
+	// TopicErrorsPerSecond are the records a second Kafka refused, by
+	// topic. The rest of its errors are records the producer refused
+	// itself, before sending them.
+	TopicErrorsPerSecond map[string]float64
 }
 
 // Severity is how much a finding matters.
@@ -154,6 +163,8 @@ var Rules = []Rule{
 	{"idle-consumers", idleConsumers},
 	{"frequent-rebalances", frequentRebalances},
 	{"hot-partition", hotPartition},
+	{"partitions-added", partitionsAdded},
+	{"oversized-messages", oversizedMessages},
 	{"producer-errors", producerErrors},
 	{"producers-without-telemetry", producersWithoutTelemetry},
 }

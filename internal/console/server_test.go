@@ -745,13 +745,15 @@ type fakeClusters struct {
 	groups map[string][]string
 	// deleted records the topics deleted by the tests, as customer/topic.
 	deleted []string
+	// altered records the changes made to topics, by customer/topic.
+	altered map[string]topics.Alteration
 	// described are the consumer groups Kafka describes, by customer, when
 	// a test sets them.
 	described map[string][]ConsumerGroup
 }
 
 func newFakeClusters() *fakeClusters {
-	return &fakeClusters{notReady: map[string]bool{}, topics: map[string][]topics.Topic{}, groups: map[string][]string{}}
+	return &fakeClusters{notReady: map[string]bool{}, topics: map[string][]topics.Topic{}, groups: map[string][]string{}, altered: map[string]topics.Alteration{}}
 }
 
 func (f *fakeClusters) Load(_ context.Context, id string) (topics.Cluster, error) {
@@ -776,6 +778,14 @@ func (f *fakeClusters) DeleteTopic(_ context.Context, id, name string) error {
 		return ErrNoSuchTopic
 	}
 	f.deleted = append(f.deleted, id+"/"+name)
+	return nil
+}
+
+func (f *fakeClusters) AlterTopic(_ context.Context, id, name string, alteration topics.Alteration) error {
+	if name != id+"-orders" {
+		return ErrNoSuchTopic
+	}
+	f.altered[id+"/"+name] = alteration
 	return nil
 }
 
@@ -862,6 +872,11 @@ func (fakeMetrics) Instant(_ context.Context, tenant string, q metrics.Query, fi
 			})
 		}
 		return series, nil
+	}
+	if q == metrics.BytesRejected || q == metrics.ProducerTopicErrors {
+		// Nothing refused: brokers report these only once a topic refuses
+		// something.
+		return nil, nil
 	}
 	labels := map[string]string{"topic": tenant + "-orders"}
 	value := 1024.0
@@ -996,9 +1011,12 @@ func TestOnlyAdminsChangeTopics(t *testing.T) {
 		if status, body := send(t, f.handler, http.MethodDelete, "/api/customer/topics/acme-orders", token, ""); status != 403 {
 			t.Errorf("%s deleting a topic = %d %s, want 403", name, status, body)
 		}
+		if status, body := send(t, f.handler, http.MethodPatch, "/api/customer/topics/acme-orders", token, `{"partitions":6}`); status != 403 {
+			t.Errorf("%s changing a topic = %d %s, want 403", name, status, body)
+		}
 	}
-	if len(f.clusters.topics) != 0 || len(f.clusters.deleted) != 0 {
-		t.Errorf("refused requests changed topics: created %v, deleted %v", f.clusters.topics, f.clusters.deleted)
+	if len(f.clusters.topics) != 0 || len(f.clusters.deleted) != 0 || len(f.clusters.altered) != 0 {
+		t.Errorf("refused requests changed topics: created %v, deleted %v, altered %v", f.clusters.topics, f.clusters.deleted, f.clusters.altered)
 	}
 }
 
@@ -1055,6 +1073,59 @@ func TestAdminsDeleteOnlyTheirOwnTopics(t *testing.T) {
 	}
 	if !strings.Contains(f.log.String(), `"msg":"topic deleted","audit":true,"tenant":"acme","user":"user_3","organization":"org_acme","topic":"acme-orders"`) {
 		t.Errorf("no audit line for the deletion in %s", f.log.String())
+	}
+}
+
+func TestAdminsChangeTopicsWithinTheGuardrails(t *testing.T) {
+	f := newFixture(t)
+	admin := f.signer.token(t, session{user: "user_3", org: "org_acme", role: "admin"})
+	status, body := send(t, f.handler, http.MethodPatch, "/api/customer/topics/acme-orders", admin, `{"partitions":6,"retentionMs":3600000}`)
+	if status != 200 || !strings.Contains(body, `"partitions":6`) || !strings.Contains(body, `"retentionMs":3600000`) {
+		t.Fatalf("changing a topic = %d %s", status, body)
+	}
+	altered := f.clusters.altered["acme/acme-orders"]
+	if altered.Partitions != 6 || altered.Set["retention.ms"] != "3600000" || altered.Set["local.retention.ms"] != "3600000" {
+		t.Errorf("altered %+v, want 6 partitions and an hour, kept an hour locally", altered)
+	}
+	if !strings.Contains(f.log.String(), `"msg":"topic changed","audit":true,"tenant":"acme","user":"user_3","organization":"org_acme","topic":"acme-orders","partitions_before":3,"partitions":6,"retention_ms_before":604800000,"retention_ms":3600000`) {
+		t.Errorf("no audit line for the change in %s", f.log.String())
+	}
+	var messages []string
+	for _, e := range f.recorded.events {
+		messages = append(messages, e.Message)
+	}
+	if want := []string{
+		"Ada Lovelace took topic acme-orders from 3 partitions to 6 partitions in the console; new messages spread over all of them, so messages with one key may now go to another partition.",
+		"Ada Lovelace changed the retention of topic acme-orders from 7 days to 1 hour in the console.",
+	}; !slices.Equal(messages, want) {
+		t.Errorf("recorded %q, want %q", messages, want)
+	}
+
+	// Asking for what it already is changes nothing.
+	delete(f.clusters.altered, "acme/acme-orders")
+	if status, body := send(t, f.handler, http.MethodPatch, "/api/customer/topics/acme-orders", admin, `{"partitions":3,"retentionMs":604800000}`); status != 200 || len(f.clusters.altered) != 0 {
+		t.Errorf("changing nothing = %d %s, altered %v", status, body, f.clusters.altered)
+	}
+
+	tests := []struct {
+		name, topic, body, field string
+		status                   int
+	}{
+		{"nothing to change", "acme-orders", `{}`, "", 400},
+		{"fewer partitions", "acme-orders", `{"partitions":2}`, "partitions", 400},
+		{"too many partitions", "acme-orders", `{"partitions":13}`, "partitions", 400},
+		{"a retention that is no preset", "acme-orders", `{"retentionMs":1234}`, "retention", 400},
+		{"a reserved topic", "__consumer_offsets", `{"partitions":6}`, "", 404},
+		{"an unknown topic", "unknown", `{"partitions":6}`, "", 404},
+	}
+	for _, tt := range tests {
+		status, body := send(t, f.handler, http.MethodPatch, "/api/customer/topics/"+tt.topic, admin, tt.body)
+		if status != tt.status || (tt.field != "" && !strings.Contains(body, `"field":"`+tt.field+`"`)) {
+			t.Errorf("changing a topic with %s = %d %s, want %d about %q", tt.name, status, body, tt.status, tt.field)
+		}
+	}
+	if len(f.clusters.altered) != 0 {
+		t.Errorf("refused changes were made: %v", f.clusters.altered)
 	}
 }
 

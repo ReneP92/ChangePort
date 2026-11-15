@@ -212,7 +212,8 @@ export function CreateTopicForm({
   );
 }
 
-function Field({
+/** A labelled form field, with the problem with its value below it. */
+export function Field({
   id,
   label,
   problem,

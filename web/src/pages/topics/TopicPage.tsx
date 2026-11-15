@@ -3,7 +3,14 @@ import { useAlerts, useConsumerGroups, useTopics } from "@/api/queries";
 import { Notice } from "@/components/Notice";
 import { Page } from "@/components/Page";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { alertsAbout } from "@/lib/alerts";
 import { formatBytes, formatLag, formatRate, formatRetention } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -12,12 +19,14 @@ import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
 import { SubjectHealth } from "@/pages/diagnoses/SubjectHealth";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { ThroughputCard } from "@/pages/overview/ThroughputCard";
+import { EditTopicDialog } from "@/pages/topics/EditTopicDialog";
 import { TailCard } from "@/pages/topics/TailCard";
 import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
- * One topic: its settings, its traffic with what changed meanwhile, the
- * consumer groups reading it, and for admins its messages.
+ * One topic: its settings, which admins change, its traffic with what
+ * changed meanwhile, the consumer groups reading it, and for admins its
+ * messages.
  */
 export function TopicPage() {
   const { name = "" } = useParams();
@@ -93,6 +102,16 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
           <CardTitle>
             <h2>Settings</h2>
           </CardTitle>
+          {/* A source's topics keep the settings their source gives them. */}
+          {topic.source ? (
+            <CardDescription>Postgres source {topic.source} keeps its settings.</CardDescription>
+          ) : (
+            admin && (
+              <CardAction>
+                <EditTopicDialog topic={topic} />
+              </CardAction>
+            )
+          )}
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">

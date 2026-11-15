@@ -295,7 +295,8 @@ spec:
         operations: [Describe, DescribeConfigs, AlterConfigs]
 ---
 # The console's user on the internal listener: it manages the customer's
-# topics within the platform's guardrails, reads cluster metadata and which
+# topics within the platform's guardrails (creates and deletes them, adds
+# partitions and changes their retention), reads cluster metadata and which
 # consumer groups read a topic, and cannot read or write messages.
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaUser
@@ -316,7 +317,7 @@ spec:
           type: topic
           name: "*"
           patternType: literal
-        operations: [Create, Delete, Describe, DescribeConfigs]
+        operations: [Create, Delete, Describe, DescribeConfigs, Alter, AlterConfigs]
       - resource:
           type: group
           name: "*"

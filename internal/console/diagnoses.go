@@ -144,7 +144,7 @@ var diagnosisQueries = []metrics.Query{
 	metrics.MessagesInRecent, metrics.BytesIn, metrics.ProducerBytes, metrics.PartitionSize,
 	metrics.LagSeconds, metrics.LagMessages, metrics.LagCapped, metrics.LagSecondsEarlier,
 	metrics.ConsumedMessages, metrics.LostPartitions, metrics.OffsetResets,
-	metrics.ProducerSends, metrics.ProducerErrors, metrics.ProducerRetries,
+	metrics.ProducerSends, metrics.ProducerErrors, metrics.ProducerRetries, metrics.ProducerTopicErrors, metrics.BytesRejected,
 }
 
 // snapshot puts together what the rules look at: what Kafka says of the
@@ -227,6 +227,7 @@ func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values m
 			Name: t.Name, Partitions: t.Partitions, RetentionMs: t.RetentionMs,
 			Compacted: t.CleanupPolicy == "compact", Tiered: t.Tiered,
 			PartitionsAdded: recent.partitionsAdded[t.Name],
+			MaxMessageBytes: t.MaxMessageBytes,
 		})
 	}
 	for i := range snapshot.Topics {
@@ -241,6 +242,7 @@ func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values m
 	}
 	each(metrics.MessagesInRecent, func(t *diagnosis.Topic, series metrics.Series) { t.MessagesInPerSecond = value(series) })
 	each(metrics.BytesIn, func(t *diagnosis.Topic, series metrics.Series) { t.BytesInPerSecond = value(series) })
+	each(metrics.BytesRejected, func(t *diagnosis.Topic, series metrics.Series) { t.BytesRejectedPerSecond = value(series) })
 	each(metrics.PartitionSize, func(t *diagnosis.Topic, series metrics.Series) {
 		t.PartitionBytes = append(t.PartitionBytes, value(series))
 	})
@@ -337,6 +339,13 @@ func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values m
 	}
 	for _, series := range values[metrics.ProducerRetries] {
 		producer(series).RetriesPerSecond = value(series)
+	}
+	for _, series := range values[metrics.ProducerTopicErrors] {
+		p := producer(series)
+		if p.TopicErrorsPerSecond == nil {
+			p.TopicErrorsPerSecond = map[string]float64{}
+		}
+		p.TopicErrorsPerSecond[series.Labels["topic"]] = value(series)
 	}
 	for _, p := range producers {
 		snapshot.Producers = append(snapshot.Producers, *p)

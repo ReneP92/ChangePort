@@ -1584,6 +1584,15 @@ type Topic struct {
 	Tiered bool `json:"tiered"`
 }
 
+// TopicChange What to change of a topic; absent fields stay as they are
+type TopicChange struct {
+	// Partitions The partitions the topic has after the change, at least as many as now
+	Partitions *int `json:"partitions,omitempty"`
+
+	// RetentionMs One of the retention presets; compacted topics have none
+	RetentionMs *int64 `json:"retentionMs,omitempty"`
+}
+
 // TopicLagHistory defines model for TopicLagHistory.
 type TopicLagHistory struct {
 	LagSeconds []Point `json:"lagSeconds"`
@@ -1882,6 +1891,9 @@ type ChangeTeammateRoleJSONRequestBody = RoleChange
 // CreateTopicJSONRequestBody defines body for CreateTopic for application/json ContentType.
 type CreateTopicJSONRequestBody = NewTopic
 
+// ChangeTopicJSONRequestBody defines body for ChangeTopic for application/json ContentType.
+type ChangeTopicJSONRequestBody = TopicChange
+
 // ProvisionCustomerJSONRequestBody defines body for ProvisionCustomer for application/json ContentType.
 type ProvisionCustomerJSONRequestBody = NewCustomer
 
@@ -2034,6 +2046,9 @@ type ServerInterface interface {
 	// DeleteTopic Deletes a topic and its messages, for organization admins
 	// (DELETE /api/customer/topics/{topic})
 	DeleteTopic(w http.ResponseWriter, r *http.Request, topic TopicName)
+	// ChangeTopic Adds partitions to a topic or changes its retention, within the guardrails, for organization admins
+	// (PATCH /api/customer/topics/{topic})
+	ChangeTopic(w http.ResponseWriter, r *http.Request, topic TopicName)
 	// ListTopicConsumerGroups The consumer groups with committed offsets on a topic
 	// (GET /api/customer/topics/{topic}/consumer-groups)
 	ListTopicConsumerGroups(w http.ResponseWriter, r *http.Request, topic TopicName)
@@ -3051,6 +3066,32 @@ func (siw *ServerInterfaceWrapper) DeleteTopic(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// ChangeTopic operation middleware
+func (siw *ServerInterfaceWrapper) ChangeTopic(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "topic" -------------
+	var topic TopicName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "topic", r.PathValue("topic"), &topic, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "topic", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeTopic(w, r, topic)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTopicConsumerGroups operation middleware
 func (siw *ServerInterfaceWrapper) ListTopicConsumerGroups(w http.ResponseWriter, r *http.Request) {
 
@@ -3514,6 +3555,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/health", wrapper.GetHealth)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topic-policy", wrapper.GetTopicPolicy)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/topics/{topic}", wrapper.DeleteTopic)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/api/customer/topics/{topic}", wrapper.ChangeTopic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topics/{topic}/consumer-groups", wrapper.ListTopicConsumerGroups)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topics/{topic}/tail", wrapper.TailTopic)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topics", wrapper.ListTopics)
@@ -7487,6 +7529,113 @@ func (response DeleteTopic503JSONResponse) VisitDeleteTopicResponse(w http.Respo
 	return err
 }
 
+type ChangeTopicRequestObject struct {
+	Topic TopicName `json:"topic"`
+	Body  *ChangeTopicJSONRequestBody
+}
+
+type ChangeTopicResponseObject interface {
+	VisitChangeTopicResponse(w http.ResponseWriter) error
+}
+
+type ChangeTopic200JSONResponse Topic
+
+func (response ChangeTopic200JSONResponse) VisitChangeTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTopic400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ChangeTopic400JSONResponse) VisitChangeTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTopic401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ChangeTopic401JSONResponse) VisitChangeTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTopic403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ChangeTopic403JSONResponse) VisitChangeTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTopic404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ChangeTopic404JSONResponse) VisitChangeTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTopic409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ChangeTopic409JSONResponse) VisitChangeTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeTopic503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ChangeTopic503JSONResponse) VisitChangeTopicResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTopicConsumerGroupsRequestObject struct {
 	Topic TopicName `json:"topic"`
 }
@@ -8954,6 +9103,9 @@ type StrictServerInterface interface {
 	// DeleteTopic Deletes a topic and its messages, for organization admins
 	// (DELETE /api/customer/topics/{topic})
 	DeleteTopic(ctx context.Context, request DeleteTopicRequestObject) (DeleteTopicResponseObject, error)
+	// ChangeTopic Adds partitions to a topic or changes its retention, within the guardrails, for organization admins
+	// (PATCH /api/customer/topics/{topic})
+	ChangeTopic(ctx context.Context, request ChangeTopicRequestObject) (ChangeTopicResponseObject, error)
 	// ListTopicConsumerGroups The consumer groups with committed offsets on a topic
 	// (GET /api/customer/topics/{topic}/consumer-groups)
 	ListTopicConsumerGroups(ctx context.Context, request ListTopicConsumerGroupsRequestObject) (ListTopicConsumerGroupsResponseObject, error)
@@ -10229,6 +10381,39 @@ func (sh *strictHandler) DeleteTopic(w http.ResponseWriter, r *http.Request, top
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteTopicResponseObject); ok {
 		if err := validResponse.VisitDeleteTopicResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeTopic operation middleware
+func (sh *strictHandler) ChangeTopic(w http.ResponseWriter, r *http.Request, topic TopicName) {
+	var request ChangeTopicRequestObject
+
+	request.Topic = topic
+
+	var body ChangeTopicJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeTopic(ctx, request.(ChangeTopicRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeTopic")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeTopicResponseObject); ok {
+		if err := validResponse.VisitChangeTopicResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

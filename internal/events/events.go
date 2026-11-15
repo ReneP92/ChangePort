@@ -248,8 +248,9 @@ func (c *Client) Read(ctx context.Context, q Query) ([]Event, bool, error) {
 const sameChange = 2 * time.Minute
 
 // Merge drops repeated events, the newest first: those recorded twice under
-// one ID, and the agent's record of a topic the console created or deleted,
-// whose record names who did it.
+// one ID, and the agent's record of a topic the console created, deleted,
+// gave partitions or changed the retention of, whose record names who did
+// it.
 func Merge(events []Event) []Event {
 	seen := map[string]bool{}
 	out := make([]Event, 0, len(events))
@@ -261,7 +262,7 @@ func Merge(events []Event) []Event {
 		out = append(out, e)
 	}
 	return slices.DeleteFunc(out, func(e Event) bool {
-		if e.Actor != "" || (e.Kind != TopicCreated && e.Kind != TopicDeleted) {
+		if e.Actor != "" || !slices.Contains([]Kind{TopicCreated, TopicDeleted, TopicPartitionsAdded, TopicConfigChanged}, e.Kind) {
 			return false
 		}
 		return slices.ContainsFunc(out, func(other Event) bool {

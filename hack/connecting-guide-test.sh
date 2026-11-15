@@ -60,6 +60,12 @@ run() {
     die "the guide's $language example failed:"$'\n'"$output"
   fi
   grep -q "consumed: hello from" <<<"$output" || die "the guide's $language example consumed nothing:"$'\n'"$output"
+  # It committed what it processed, by itself rather than on a timer: its
+  # group's offset is past the one message.
+  output=$(docker run "${KAFKA_CLIENT[@]}" --entrypoint /opt/kafka/bin/kafka-consumer-groups.sh "$KAFKA_IMAGE" \
+    --bootstrap-server "$bootstrap" --command-config /config/client.properties --describe --group "example-$language" 2>&1)
+  awk -v topic="$topic" '$2 == topic && $4 == 1 && $6 == 0 { found = 1 } END { exit !found }' <<<"$output" ||
+    die "the guide's $language example committed no offset after processing:"$'\n'"$output"
 }
 
 mkdir -p "$work/java" "$work/python" "$work/go" "$work/node"

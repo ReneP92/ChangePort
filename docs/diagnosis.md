@@ -18,7 +18,7 @@ of the cluster, which `internal/console/diagnoses.go` puts together on
 request:
 
 - **What Kafka says now:** the topics with their partitions, retention,
-  cleanup policy and tiering, and the consumer groups with their state and
+  cleanup policy, tiering and largest message, and the consumer groups with their state and
   every member with the partitions it reads. The console asks Kafka on each
   diagnosis rather than keep these as metrics, so they are never older
   than the request.
@@ -28,7 +28,8 @@ request:
   dip is no diagnosis: the messages each topic received, how many messages
   each group consumed (from its committed offsets, so every client counts,
   with or without telemetry), each group's lag now and a window ago, each
-  partition's size, and each producer's sends, errors and retries.
+  partition's size, the bytes each topic refused as too large, and each
+  producer's sends, errors and retries, with its errors per topic.
 - **The timeline:** each group's rebalances in the last hour, and the
   topics that got partitions in the last day.
 
@@ -92,7 +93,9 @@ and groups are left out.
 | `idle-consumers` | A stable group with members assigned no partition: more consumers than partitions, or partitions handed out topic by topic to the same consumers. | info |
 | `frequent-rebalances` | A group that shared its partitions out again 6 times or more in the last hour, as members joined or left while it consumed, from the timeline. A group starting, or its last member leaving, does not count. | warning |
 | `hot-partition` | A tiered topic of 3 partitions or more, with at least 64 MB on the brokers, where one partition holds twice its fair share or more: a few busy keys. Tiered topics keep only their last day on the brokers, so the sizes show how messages spread now; topics that got partitions within the day are left out, as new partitions start empty. | warning |
-| `producer-errors` | A producer trying to send a record every 10 seconds or more, 1% or more of whose records fail; or, short of that, that sends 10% or more of its records again. Records that fail before they are sent, such as one too large or for a topic that does not exist, count as tried. | warning, info |
+| `partitions-added` | A topic that got partitions in the last day, from the console or any other tool, while consumer groups read it: a key's new messages may go to another partition than its earlier ones. | info |
+| `oversized-messages` | A topic that refused messages larger than its `max.message.bytes` over the window (the brokers' rejected bytes), with the producers whose records it refused, as far as they report them. | warning |
+| `producer-errors` | A producer trying to send a record every 10 seconds or more, 1% or more of whose records fail; or, short of that, that sends 10% or more of its records again. It tells records that failed in the producer itself, before reaching Kafka (such as ones over `max.request.size`), from records Kafka refused, by the producer's errors per topic. Records a topic refused for their size are `oversized-messages`', and do not count here. Records that fail before they are sent count as tried. | warning, info |
 | `producers-without-telemetry` | A topic that receives more than 100 B/s, and more than a tenth of its bytes, from producers that send no telemetry (KIP-714), which leaves them off the data flow map. A Postgres source's topics, written by Changeport's own Connect worker, are left out. | info |
 
 What each suggests:
@@ -114,10 +117,20 @@ What each suggests:
   `max.poll.records`).
 - **Hot partition:** a key with more distinct values, or no key where order
   does not matter.
-- **Producer errors:** the producer's own log, and the usual causes: records
-  over `max.request.size` or the topic's `max.message.bytes`, topics that do
-  not exist (they are not created on first use), missing permissions.
-  Retries follow timeouts and moving partitions.
+- **Partitions added:** nothing where the order of a key's messages does
+  not matter; where it does, a check of what consumers made of the messages
+  around the change, and of groups with `auto.offset.reset=latest`, which
+  skip what reached a new partition before they found it.
+- **Oversized messages:** large payloads in object storage, with a message
+  that refers to them; or compression (`compression.type=zstd`), or a
+  larger `max.message.bytes`, which the producer's `max.request.size` and
+  the consumers' `max.partition.fetch.bytes` must then allow too.
+- **Producer errors:** the producer's own log, and the usual causes. Before
+  reaching Kafka: records over `max.request.size` (1 MB by default), topics
+  that do not exist (they are not created on first use), missing
+  permissions. Refused by Kafka: too few in-sync replicas for `acks=all`,
+  records without a key on a compacted topic, timeouts. Retries follow
+  timeouts and moving partitions.
 - **Without telemetry:** a Java client 3.7 or newer, or librdkafka 2.5 or
   newer.
 
@@ -130,10 +143,21 @@ What each suggests:
   messages wait.
 - **Hot partitions of compacted or untiered topics,** whose sizes on the
   brokers hold their whole history rather than how messages spread now.
-- **Unkeyed messages where order matters, and offsets committed before the
-  messages are processed,** happen inside clients and leave no trace on the
-  brokers; the connection guide's settings and snippets cover them instead
-  (#177).
+- **Unkeyed messages where order matters.** The brokers' metrics do not say
+  whether messages carry keys, and even the messages themselves cannot say
+  whether their consumers rely on their order, so a guess would flag every
+  unkeyed topic, most of them fine. The connection guide explains keys and
+  order instead ([connecting.md](connecting.md#use-keys-for-order)), and
+  the console warns before partitions are added; `partitions-added` notes
+  partitions added elsewhere.
+- **Offsets committed before the messages are processed** happen inside
+  consumers and leave no trace on the brokers: a commit looks the same
+  whenever it comes. The connection guide's examples, which the console's
+  snippets are, commit after processing
+  ([connecting.md](connecting.md#commit-offsets-after-processing)).
+- **Records a producer refused itself** carry no reason in its telemetry, so
+  `producer-errors` names the usual causes rather than the one; only the
+  brokers' rejected bytes pin a refusal on a message's size.
 - **Rebalances shorter than the agent's 30 seconds** between looks may be
   missed, so the count is a lower bound. The agent marks a change of
   members as a rebalance when the group had members before and after it.

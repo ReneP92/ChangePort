@@ -98,6 +98,14 @@ const (
 	ProducerSends   Query = "producer_sends"
 	ProducerErrors  Query = "producer_errors"
 	ProducerRetries Query = "producer_retries"
+	// ProducerTopicErrors is the records per second each producer failed to
+	// send to each topic: those Kafka refused. Records the producer refused
+	// itself, before sending, count only in ProducerErrors.
+	ProducerTopicErrors Query = "producer_topic_errors"
+	// BytesRejected is the bytes per second each topic refused as larger
+	// than its max.message.bytes. Brokers report it per topic only once a
+	// topic refused something.
+	BytesRejected Query = "bytes_rejected"
 
 	// TopicHealth and GroupHealth are the worst level of each topic and
 	// consumer group over the filter's window, as the console exports it
@@ -165,10 +173,12 @@ var definitions = map[Query]definition{
 	LostPartitions:    {`max by (consumer_group, topic) (changeport_consumergroup_partitions_behind_log_start{%s})`, perGroup},
 	OffsetResets:      {`max by (consumer_group, topic) (resets(changeport_consumergroup_committed_offsets{%s}[{window}]))`, perGroup},
 	// Each replica of a partition holds the same; the largest is the leader's.
-	PartitionSize:   {`max by (topic, partition) (kafka_log_log_size{%s})`, perTopic},
-	ProducerSends:   {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_send_total{%s}[{window}])))`, perProducer},
-	ProducerErrors:  {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_error_total{%s}[{window}])))`, perProducer},
-	ProducerRetries: {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_retry_total{%s}[{window}])))`, perProducer},
+	PartitionSize:       {`max by (topic, partition) (kafka_log_log_size{%s})`, perTopic},
+	ProducerSends:       {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_send_total{%s}[{window}])))`, perProducer},
+	ProducerErrors:      {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_error_total{%s}[{window}])))`, perProducer},
+	ProducerRetries:     {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_retry_total{%s}[{window}])))`, perProducer},
+	ProducerTopicErrors: {`sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (rate(clients_org_apache_kafka_producer_topic_record_error_total{%s}[{window}])))`, perClient},
+	BytesRejected:       {`sum by (topic) (rate(kafka_server_brokertopicmetrics_bytesrejectedpersec_total{%s}[{window}]))`, perTopic},
 
 	TopicHealth:   {`max by (topic) (max_over_time(changeport_health_level{%s}[{window}]))`, perTopic},
 	GroupHealth:   {`max by (consumer_group) (max_over_time(changeport_health_level{%s, consumer_group!=""}[{window}]))`, perGroup},
@@ -182,7 +192,7 @@ func Queries() []Query {
 		UnderReplicated, UnderMinISR, OfflinePartitions, ActiveControllers, ActiveBrokers, FencedBrokers,
 		ProducerBytes, ConsumerBytes,
 		MessagesInRecent, ConsumedMessages, LagSecondsEarlier, LostPartitions, OffsetResets, PartitionSize,
-		ProducerSends, ProducerErrors, ProducerRetries,
+		ProducerSends, ProducerErrors, ProducerRetries, ProducerTopicErrors, BytesRejected,
 		TopicHealth, GroupHealth, HealthChecked,
 	}
 }

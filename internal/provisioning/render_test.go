@@ -218,6 +218,12 @@ func TestRenderPlatformUsersCannotTouchMessages(t *testing.T) {
 						// which Kafka authorizes as a cluster setting.
 						continue
 					}
+					if (operation == "Alter" || operation == "AlterConfigs") && obj.GetName() == ConsoleUser && resource == "topic" {
+						// The console adds partitions to topics and changes
+						// their retention. Neither reads nor writes messages;
+						// Alter on the cluster would, as it grants ACLs.
+						continue
+					}
 					t.Errorf("KafkaUser %s may %s %ss", obj.GetName(), operation, resource)
 				}
 			}

@@ -268,8 +268,26 @@ func TestProducerErrors(t *testing.T) {
 	if len(found) != 1 || found[0].Severity != Warning || found[0].ID != "producer-errors:User:admin/checkout" {
 		t.Fatalf("found %+v, want one warning", found)
 	}
-	if want := "3% of the records checkout tried to send in the last 15 minutes failed: 3 a second of 103."; found[0].Explanation != want {
+	// Without topics to blame, the producer refused them itself.
+	if want := "3% of the records checkout tried to send in the last 15 minutes failed in the producer itself, before reaching Kafka: 3 a second of 103."; found[0].Explanation != want {
 		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
+	}
+	if !strings.Contains(found[0].Suggestion, "`max.request.size` (1 MB by default)") {
+		t.Errorf("suggestion = %q, want the producer's size limit", found[0].Suggestion)
+	}
+
+	// Kafka refused them, on a topic that refuses nothing for size.
+	refused := failing
+	refused.TopicErrorsPerSecond = map[string]float64{"orders": 3}
+	found = only(t, "producer-errors", Snapshot{Window: 15 * time.Minute, Producers: []Producer{refused}, Topics: []Topic{{Name: "orders"}}})
+	if want := "Kafka refused 3% of the records checkout tried to send in the last 15 minutes, on orders: 3 a second of 103."; len(found) != 1 || found[0].Explanation != want {
+		t.Errorf("found %+v\nwant %q", found, want)
+	}
+
+	// Records a topic refused as too large are the oversized messages'.
+	tooLarge := Snapshot{Window: 15 * time.Minute, Producers: []Producer{refused}, Topics: []Topic{{Name: "orders", BytesRejectedPerSecond: 3e6}}}
+	if found := only(t, "producer-errors", tooLarge); len(found) > 0 {
+		t.Errorf("found %+v, want the oversized messages to explain them", found)
 	}
 
 	// Records that fail before they are sent count as errors only: a
@@ -303,6 +321,57 @@ func TestProducerErrors(t *testing.T) {
 		if found := only(t, "producer-errors", Snapshot{Window: 15 * time.Minute, Producers: []Producer{p}}); len(found) > 0 {
 			t.Errorf("found %+v for %s, want nothing", found, p.ClientID)
 		}
+	}
+}
+
+func TestOversizedMessages(t *testing.T) {
+	s := Snapshot{
+		Window: 15 * time.Minute,
+		Topics: []Topic{
+			{Name: "uploads", MaxMessageBytes: 1048588, BytesRejectedPerSecond: 2.5e6},
+			{Name: "orders"},
+		},
+		Producers: []Producer{
+			{ClientID: "uploader", SendsPerSecond: 1, ErrorsPerSecond: 1, TopicErrorsPerSecond: map[string]float64{"uploads": 1}},
+			{ClientID: "checkout", SendsPerSecond: 10, TopicErrorsPerSecond: map[string]float64{"orders": 0}},
+		},
+	}
+	found := only(t, "oversized-messages", s)
+	if len(found) != 1 || found[0].Severity != Warning || found[0].ID != "oversized-messages:uploads" {
+		t.Fatalf("found %+v, want one warning about uploads", found)
+	}
+	if want := "Over the last 15 minutes, uploads refused 2.5 MB a second of messages larger than 1.0 MB, the most it accepts (`max.message.bytes`). They came from uploader. Refused messages are not kept: unless their producer handles the error, they are lost."; found[0].Explanation != want {
+		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
+	}
+	for _, want := range []string{"object storage", "`compression.type=zstd`", "`max.request.size`", "`max.partition.fetch.bytes`"} {
+		if !strings.Contains(found[0].Suggestion, want) {
+			t.Errorf("suggestion = %q, want it to mention %s", found[0].Suggestion, want)
+		}
+	}
+
+	// Producers without telemetry go unnamed, and an unknown limit unsaid.
+	s.Producers, s.Topics[0].MaxMessageBytes = nil, 0
+	found = only(t, "oversized-messages", s)
+	if len(found) != 1 || !strings.Contains(found[0].Explanation, "larger than the most it accepts (`max.message.bytes`). Refused") {
+		t.Errorf("found %+v, want no producers named", found)
+	}
+}
+
+func TestPartitionsAdded(t *testing.T) {
+	s := Snapshot{
+		Topics: []Topic{
+			{Name: "orders", Partitions: 6, PartitionsAdded: true},
+			{Name: "unread", Partitions: 6, PartitionsAdded: true},
+			{Name: "payments", Partitions: 3},
+		},
+		Groups: []Group{{Name: "billing", Reads: []Read{{Topic: "orders"}, {Topic: "payments"}}}},
+	}
+	found := only(t, "partitions-added", s)
+	if len(found) != 1 || found[0].Severity != Info || found[0].Subject.Topic != "orders" {
+		t.Fatalf("found %+v, want a note about orders only", found)
+	}
+	if !strings.Contains(found[0].Explanation, "has 6 partitions now") || !strings.Contains(found[0].Suggestion, "`auto.offset.reset=latest`") {
+		t.Errorf("found %+v", found[0])
 	}
 }
 

@@ -91,12 +91,18 @@ func TestMergeDropsRepeatedEvents(t *testing.T) {
 		{ID: "agent-2", Time: at.Add(-time.Hour), Kind: TopicCreated, Topic: "orders", Source: "agent"},
 		{ID: "agent-3", Time: at, Kind: TopicCreated, Topic: "payments", Source: "agent"},
 		{ID: "agent-4", Time: at, Kind: TopicConfigChanged, Topic: "orders", Source: "agent"},
+		// Partitions added and retention changed in the console, which the
+		// agent saw too.
+		{ID: "console-2", Time: at.Add(time.Minute), Kind: TopicPartitionsAdded, Topic: "payments", Actor: "ada@acme.example", Source: "console"},
+		{ID: "agent-5", Time: at.Add(90 * time.Second), Kind: TopicPartitionsAdded, Topic: "payments", Source: "agent"},
+		{ID: "console-3", Time: at.Add(time.Minute), Kind: TopicConfigChanged, Topic: "payments", Actor: "ada@acme.example", Source: "console"},
+		{ID: "agent-6", Time: at.Add(90 * time.Second), Kind: TopicConfigChanged, Topic: "payments", Source: "agent"},
 	}
 	var ids []string
 	for _, e := range Merge(events) {
 		ids = append(ids, e.ID)
 	}
-	if want := []string{"console-1", "agent-2", "agent-3", "agent-4"}; !slices.Equal(ids, want) {
+	if want := []string{"console-1", "agent-2", "agent-3", "agent-4", "console-2", "console-3"}; !slices.Equal(ids, want) {
 		t.Errorf("Merge() kept %v, want %v", ids, want)
 	}
 }

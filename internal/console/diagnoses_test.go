@@ -18,6 +18,7 @@ func TestDiagnosesFromKafkaAndMetrics(t *testing.T) {
 	settings := []TopicSettings{
 		{Name: "orders", Partitions: 6, RetentionMs: day, CleanupPolicy: "delete"},
 		{Name: "payments", Partitions: 3, RetentionMs: day, CleanupPolicy: "delete"},
+		{Name: "uploads", Partitions: 3, RetentionMs: day, CleanupPolicy: "delete", MaxMessageBytes: 1048588},
 		{Name: "__consumer_offsets", Partitions: 50, CleanupPolicy: "compact"},
 	}
 	groups := []ConsumerGroup{
@@ -44,20 +45,32 @@ func TestDiagnosesFromKafkaAndMetrics(t *testing.T) {
 		metrics.LagSecondsEarlier: {group(240, "billing", "orders"), group(60, "audit", "payments")},
 		metrics.ConsumedMessages:  {group(200, "billing", "orders"), group(10, "audit", "payments")},
 		metrics.LostPartitions:    {group(0, "billing", "orders"), group(1, "audit", "payments")},
+		// uploads refuses what the uploader sends it as too large.
+		metrics.BytesRejected:       {series(2e6, "topic", "uploads")},
+		metrics.ProducerSends:       {series(1, "principal", "User:admin", "client_id", "uploader")},
+		metrics.ProducerErrors:      {series(1, "principal", "User:admin", "client_id", "uploader")},
+		metrics.ProducerTopicErrors: {series(1, "topic", "uploads", "principal", "User:admin", "client_id", "uploader")},
 	}
 	snapshot := buildSnapshot(settings, groups, values, changes{rebalances: map[string]int{"billing": 2}})
 
-	if len(snapshot.Topics) != 2 {
-		t.Errorf("topics = %+v, want orders and payments only", snapshot.Topics)
+	if len(snapshot.Topics) != 3 {
+		t.Errorf("topics = %+v, want orders, payments and uploads only", snapshot.Topics)
 	}
 	var found []string
 	for _, f := range diagnosis.Diagnose(snapshot) {
 		found = append(found, f.ID)
 	}
 	// payments gets 10 KB/s from producers without telemetry, all of it.
-	want := "behind-retention:audit/payments consumer-too-slow:billing/orders idle-consumers:billing producers-without-telemetry:payments"
+	// The uploader's errors are uploads' refusals, not a diagnosis of their
+	// own.
+	want := "behind-retention:audit/payments consumer-too-slow:billing/orders oversized-messages:uploads idle-consumers:billing producers-without-telemetry:payments"
 	if got := strings.Join(found, " "); got != want {
 		t.Errorf("found %s\nwant %s", got, want)
+	}
+	for _, f := range diagnosis.Diagnose(snapshot) {
+		if f.Rule == "oversized-messages" && !strings.Contains(f.Explanation, "larger than 1.0 MB, the most it accepts (`max.message.bytes`). They came from uploader.") {
+			t.Errorf("oversized messages = %q, want the topic's limit and the producer", f.Explanation)
+		}
 	}
 	for _, g := range snapshot.Groups {
 		if g.Name == "billing" && (g.Members != 4 || g.IdleMembers != 1 || g.Rebalances != 2 || g.Reads[0].AssignedMembers != 3) {

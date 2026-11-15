@@ -141,3 +141,86 @@ func TestReplicaBudgetCountsReplication(t *testing.T) {
 		t.Error("Check() past the budget succeeded")
 	}
 }
+
+func TestCheckChange(t *testing.T) {
+	week := int64(7 * 24 * time.Hour / time.Millisecond)
+	tiered := Current{Partitions: 3, RetentionMs: &week, Tiered: true}
+	partitions := func(n int) *int { return &n }
+	retention := func(d time.Duration) *time.Duration { return &d }
+	tests := []struct {
+		name    string
+		current Current
+		change  Change
+		want    Alteration
+	}{
+		{"more partitions", tiered, Change{Partitions: partitions(6)}, Alteration{Partitions: 6}},
+		{"the same partitions", tiered, Change{Partitions: partitions(3)}, Alteration{}},
+		{"the same retention", tiered, Change{Retention: retention(7 * 24 * time.Hour)}, Alteration{}},
+		{
+			"a shorter retention than the brokers' day keeps tiering valid", tiered,
+			Change{Retention: retention(time.Hour)},
+			Alteration{Set: map[string]string{"retention.ms": "3600000", "local.retention.ms": "3600000"}},
+		},
+		{
+			"a day or more leaves the brokers' default",
+			Current{Partitions: 3, Tiered: true},
+			Change{Retention: retention(3 * 24 * time.Hour)},
+			Alteration{Set: map[string]string{"retention.ms": "259200000"}, Remove: []string{"local.retention.ms"}},
+		},
+		{
+			"a topic on the brokers only",
+			Current{Partitions: 3, RetentionMs: &week},
+			Change{Retention: retention(time.Hour)},
+			Alteration{Set: map[string]string{"retention.ms": "3600000"}},
+		},
+		{
+			"both", tiered,
+			Change{Partitions: partitions(4), Retention: retention(14 * 24 * time.Hour)},
+			Alteration{Partitions: 4, Set: map[string]string{"retention.ms": "1209600000"}, Remove: []string{"local.retention.ms"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := devPolicy(t).CheckChange(tt.current, tt.change, quiet)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Partitions != tt.want.Partitions || !maps.Equal(got.Set, tt.want.Set) || !slices.Equal(got.Remove, tt.want.Remove) {
+				t.Errorf("CheckChange() = %+v, want %+v", got, tt.want)
+			}
+			if got.Empty() != tt.want.Empty() {
+				t.Errorf("Empty() = %v, want %v", got.Empty(), tt.want.Empty())
+			}
+		})
+	}
+}
+
+func TestCheckChangeRefuses(t *testing.T) {
+	week := int64(7 * 24 * time.Hour / time.Millisecond)
+	tiered := Current{Partitions: 3, RetentionMs: &week, Tiered: true}
+	partitions := func(n int) *int { return &n }
+	retention := func(d time.Duration) *time.Duration { return &d }
+	tests := []struct {
+		name    string
+		current Current
+		change  Change
+		cluster Cluster
+		field   string
+		message string
+	}{
+		{"fewer partitions", tiered, Change{Partitions: partitions(2)}, quiet, "partitions", "not removed: keep at least 3"},
+		{"too many partitions", tiered, Change{Partitions: partitions(13)}, quiet, "partitions", "at most 12"},
+		{"beyond the replica budget", tiered, Change{Partitions: partitions(12)}, Cluster{Replicas: 995, Brokers: 1}, "partitions", "9 more partitions would exceed"},
+		{"a retention not offered", tiered, Change{Retention: retention(2 * time.Hour)}, quiet, "retention", "presets"},
+		{"the retention of a compacted topic", Current{Partitions: 3, Compacted: true}, Change{Retention: retention(time.Hour)}, quiet, "retention", "compacted"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := devPolicy(t).CheckChange(tt.current, tt.change, tt.cluster)
+			var fieldErr *FieldError
+			if !errors.As(err, &fieldErr) || !errors.Is(err, ErrInvalid) || fieldErr.Field != tt.field || !strings.Contains(fieldErr.Message, tt.message) {
+				t.Errorf("CheckChange() = %v, want a %s error saying %q", err, tt.field, tt.message)
+			}
+		})
+	}
+}

@@ -1443,6 +1443,107 @@ func (s *Server) DeleteTopic(ctx context.Context, request api.DeleteTopicRequest
 	return api.DeleteTopic204Response{}, nil
 }
 
+// ChangeTopic implements api.StrictServerInterface: organization admins add
+// partitions to their topics or change their retention, within the
+// guardrails, and every change is audited. The console warns of what a
+// change does to consumers before it is made (docs/console.md); the server
+// holds it to the guardrails.
+func (s *Server) ChangeTopic(ctx context.Context, request api.ChangeTopicRequestObject) (api.ChangeTopicResponseObject, error) {
+	customer, principal, refused, err := s.customerOf(ctx)
+	switch {
+	case err != nil:
+		return nil, err
+	case refused != nil && refused.Status == http.StatusNotFound:
+		return api.ChangeTopic404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(*refused)}, nil
+	case refused != nil:
+		return api.ChangeTopic403JSONResponse{ForbiddenJSONResponse: api.ForbiddenJSONResponse(*refused)}, nil
+	case !principal.Admin():
+		return api.ChangeTopic403JSONResponse{ForbiddenJSONResponse: api.ForbiddenJSONResponse(adminsOnly)}, nil
+	case topics.Reserved(request.Topic):
+		return api.ChangeTopic404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(noSuchTopic(request.Topic))}, nil
+	case request.Body == nil || (request.Body.Partitions == nil && request.Body.RetentionMs == nil):
+		return api.ChangeTopic400JSONResponse{BadRequestJSONResponse: api.BadRequestJSONResponse(
+			problem(http.StatusBadRequest, "Say what to change", "Change the partitions, the retention or both."))}, nil
+	}
+	owned, _, err := s.sourceTopics(ctx, customer.Name)
+	if err != nil {
+		return nil, err
+	}
+	if source, ok := owned[request.Topic]; ok {
+		return api.ChangeTopic409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(problem(http.StatusConflict,
+			"The topic belongs to a Postgres source", fmt.Sprintf("Postgres source %s writes topic %s, and keeps its settings.", source, request.Topic)))}, nil
+	}
+	policy, err := topicPolicy(customer)
+	if err != nil {
+		return nil, err
+	}
+	all, err := s.clusters.Topics(ctx, customer.Name)
+	if errors.Is(err, clusters.ErrNotReady) {
+		return api.ChangeTopic409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(notReadyYet)}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	i := slices.IndexFunc(all, func(t TopicSettings) bool { return t.Name == request.Topic })
+	if i < 0 {
+		return api.ChangeTopic404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(noSuchTopic(request.Topic))}, nil
+	}
+	topic := all[i]
+	load, err := s.clusters.Load(ctx, customer.Name)
+	if err != nil {
+		return nil, err
+	}
+	change := topics.Change{Partitions: request.Body.Partitions}
+	if ms := request.Body.RetentionMs; ms != nil {
+		change.Retention = ptr.To(time.Duration(*ms) * time.Millisecond)
+	}
+	alteration, err := policy.CheckChange(topics.Current{
+		Partitions:  topic.Partitions,
+		RetentionMs: topic.RetentionMs,
+		Compacted:   strings.Contains(topic.CleanupPolicy, topics.Compact),
+		Tiered:      topic.Tiered,
+	}, change, load)
+	var fieldErr *topics.FieldError
+	if errors.As(err, &fieldErr) {
+		p := problem(http.StatusBadRequest, "The change breaks a guardrail", fieldErr.Message)
+		p.Field = ptr.To(fieldErr.Field)
+		return api.ChangeTopic400JSONResponse{BadRequestJSONResponse: api.BadRequestJSONResponse(p)}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	changed := topic
+	if !alteration.Empty() {
+		err = s.clusters.AlterTopic(ctx, customer.Name, topic.Name, alteration)
+		switch {
+		case errors.Is(err, ErrNoSuchTopic):
+			return api.ChangeTopic404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(noSuchTopic(topic.Name))}, nil
+		case errors.Is(err, clusters.ErrNotReady):
+			return api.ChangeTopic409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(notReadyYet)}, nil
+		case err != nil:
+			return nil, err
+		}
+		if alteration.Partitions > 0 {
+			changed.Partitions = alteration.Partitions
+		}
+		if alteration.Set["retention.ms"] != "" {
+			changed.RetentionMs = request.Body.RetentionMs
+		}
+		s.audit(ctx, principal, customer.Name, "topic changed", "topic", topic.Name,
+			"partitions_before", topic.Partitions, "partitions", changed.Partitions,
+			"retention_ms_before", ptr.Deref(topic.RetentionMs, -1), "retention_ms", ptr.Deref(changed.RetentionMs, -1))
+		s.recordTopicAlteration(ctx, principal, customer.Name, topic, changed)
+	}
+	return api.ChangeTopic200JSONResponse{
+		Name:              changed.Name,
+		Partitions:        changed.Partitions,
+		ReplicationFactor: changed.ReplicationFactor,
+		Tiered:            changed.Tiered,
+		CleanupPolicy:     changed.CleanupPolicy,
+		RetentionMs:       changed.RetentionMs,
+	}, nil
+}
+
 func noSuchTopic(name string) api.Problem {
 	return problem(http.StatusNotFound, "No such topic", fmt.Sprintf("There is no topic %s.", name))
 }
