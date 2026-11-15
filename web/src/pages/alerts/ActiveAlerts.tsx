@@ -55,7 +55,7 @@ export function AlertsBanner() {
   return (
     <section
       aria-labelledby="active-alerts"
-      className="flex flex-col gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm"
+      className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm"
     >
       <div className="flex items-center justify-between gap-4">
         <h2 id="active-alerts" className="flex items-center gap-2 font-medium text-destructive">

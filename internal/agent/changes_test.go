@@ -89,6 +89,11 @@ func TestDiffTellsWhatChangedInPlainWords(t *testing.T) {
 		if e.Kind == events.GroupRebalanced && e.ConsumerGroup == "" {
 			t.Errorf("event %q names no group", e.Message)
 		}
+		// A group that starts or empties stops nothing; one whose members
+		// change while it consumes does.
+		if want := e.ConsumerGroup == "billing" || e.ConsumerGroup == "shipping"; e.Kind == events.GroupRebalanced && e.Rebalance != want {
+			t.Errorf("event %q marked as a rebalance: %v, want %v", e.Message, e.Rebalance, want)
+		}
 	}
 	if found := Diff(after, after, "acme", watched); len(found) != 0 {
 		t.Errorf("Diff() of a cluster with itself = %v, want nothing", messages(found))

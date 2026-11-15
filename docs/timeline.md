@@ -40,7 +40,10 @@ For operators:
   VictoriaMetrics in the `metrics` namespace, and kept as long: 30 days. Each
   event is a log entry in its customer's stream (`tenant`), with its `kind`,
   a plain-language `_msg`, and what it is about: `topic`,
-  `consumer_group`, `broker` or `client_id`. Its NetworkPolicy lets only the
+  `consumer_group`, `broker` or `client_id`. A group's change of members
+  carries `rebalance` when the group had members before and after it, as
+  opposed to starting or emptying, which the diagnoses count
+  ([diagnosis.md](diagnosis.md)). Its NetworkPolicy lets only the
   Kafka agents, the provisioner and the console reach it.
 - **The Kafka agent** of each customer compares the cluster's topics, their
   own settings, its ACLs and its consumer groups' members every 30 seconds

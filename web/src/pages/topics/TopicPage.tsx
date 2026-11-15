@@ -8,6 +8,7 @@ import { alertsAbout } from "@/lib/alerts";
 import { formatBytes, formatLag, formatRate, formatRetention } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
+import { DiagnosesAbout } from "@/pages/diagnoses/Diagnoses";
 import { CustomerArea } from "@/pages/CustomerArea";
 import { ThroughputCard } from "@/pages/overview/ThroughputCard";
 import { TailCard } from "@/pages/topics/TailCard";
@@ -79,11 +80,12 @@ function Topic({ name, admin }: { name: string; admin: boolean }) {
       {topicAlerts.length > 0 && (
         <section
           aria-label="Alerts"
-          className="rounded-xl border border-destructive/40 bg-destructive/5 p-4 text-sm"
+          className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm"
         >
           <AlertRows alerts={topicAlerts} />
         </section>
       )}
+      <DiagnosesAbout topic={name} />
       <Card>
         <CardHeader>
           <CardTitle>

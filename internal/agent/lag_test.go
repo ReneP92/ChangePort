@@ -103,6 +103,10 @@ type fakeLagAdmin struct {
 	groups    map[string]string                     // group name to type
 	committed map[string]map[string]map[int32]int64 // group, topic, partition
 	ends      map[string]map[int32]int64
+	// starts are where partitions' logs start, after retention; 0 unless
+	// set. startsErr fails their lookup.
+	starts    map[string]map[int32]int64
+	startsErr error
 	listed    [][]string // the topics of every ListOffsetsAfterMilli call
 	// anchorErr, when set, fails every partition of anchor lookups with it.
 	anchorErr error
@@ -143,6 +147,20 @@ func (f *fakeLagAdmin) offsets(topics []string, at func(end int64) int64) kadm.L
 		}
 	}
 	return listed
+}
+
+func (f *fakeLagAdmin) ListStartOffsets(_ context.Context, topics ...string) (kadm.ListedOffsets, error) {
+	if f.startsErr != nil {
+		return nil, f.startsErr
+	}
+	listed := f.offsets(topics, func(int64) int64 { return 0 })
+	for topic, partitions := range listed {
+		for partition, o := range partitions {
+			o.Offset = f.starts[topic][partition]
+			partitions[partition] = o
+		}
+	}
+	return listed, nil
 }
 
 func (f *fakeLagAdmin) ListEndOffsets(_ context.Context, topics ...string) (kadm.ListedOffsets, error) {
@@ -216,6 +234,49 @@ changeport_consumergroup_lag_seconds{consumer_group="shipping",topic="payments"}
 	}
 	if len(admin.listed) != len(Anchors) {
 		t.Errorf("looked up %d anchors, want %d", len(admin.listed), len(Anchors))
+	}
+}
+
+// The committed offsets, whose rate is how fast a group consumes, and the
+// partitions where retention deleted messages a group never read.
+func TestLagCollectorCountsCommittedOffsetsAndLostPartitions(t *testing.T) {
+	admin := newFakeLagAdmin()
+	// Retention deleted orders' partition 0 up to past billing's offset.
+	admin.starts = map[string]map[int32]int64{"orders": {0: 9_900, 1: 100}}
+	c := newTestLagCollector(admin)
+	if err := c.Measure(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	want := `
+# HELP changeport_consumergroup_committed_offsets The consumer group's committed offsets on the topic, summed over its partitions: their rate is how many messages a second the group consumes.
+# TYPE changeport_consumergroup_committed_offsets gauge
+changeport_consumergroup_committed_offsets{consumer_group="billing",topic="orders"} 19790
+changeport_consumergroup_committed_offsets{consumer_group="shipping",topic="payments"} 500
+# HELP changeport_consumergroup_partitions_behind_log_start Partitions of the topic whose committed offset is below the log's start, as retention deleted messages the consumer group never read.
+# TYPE changeport_consumergroup_partitions_behind_log_start gauge
+changeport_consumergroup_partitions_behind_log_start{consumer_group="billing",topic="orders"} 1
+changeport_consumergroup_partitions_behind_log_start{consumer_group="shipping",topic="payments"} 0
+`
+	if err := testutil.CollectAndCompare(c, strings.NewReader(want), "changeport_consumergroup_committed_offsets",
+		"changeport_consumergroup_partitions_behind_log_start"); err != nil {
+		t.Error(err)
+	}
+}
+
+// Without the logs' starts, the lag is measured all the same, and the lost
+// partitions are not reported rather than reported as none.
+func TestLagCollectorMeasuresWithoutLogStarts(t *testing.T) {
+	admin := newFakeLagAdmin()
+	admin.startsErr = errors.New("not the leader")
+	c := newTestLagCollector(admin)
+	if err := c.Measure(t.Context()); err == nil {
+		t.Error("Measure() hid the failed lookup")
+	}
+	if n := testutil.CollectAndCount(c, "changeport_consumergroup_lag_seconds"); n != 2 {
+		t.Errorf("%d lag series, want 2", n)
+	}
+	if n := testutil.CollectAndCount(c, "changeport_consumergroup_partitions_behind_log_start"); n != 0 {
+		t.Errorf("%d lost partition series without the starts, want none", n)
 	}
 }
 

@@ -16,13 +16,23 @@ func series(value float64, labels ...string) metrics.Series {
 	return s
 }
 
+// described is a consumer group with a member for each client ID.
+func described(name string, clientIDs ...string) ConsumerGroup {
+	g := ConsumerGroup{Name: name, State: "Stable"}
+	for _, id := range clientIDs {
+		g.Members = append(g.Members, GroupMember{ClientID: id, Assigned: map[string]int{}})
+	}
+	return g
+}
+
 func TestTopologyShowsHowDataFlows(t *testing.T) {
 	settings := []TopicSettings{{Name: "orders"}, {Name: "payments"}, {Name: "idle"}, {Name: "shop.public.orders"}, {Name: "__consumer_offsets"}}
-	members := map[string][]string{
-		"billing":               {"billing-1", "billing-2"},
-		"fresh":                 {"fresh-1"},
-		"empty":                 {},
-		"changeport-registry-x": {"apicurio"},
+	members := []ConsumerGroup{
+		described("billing", "billing-1", "billing-2"),
+		// Two members that share a client ID are two members.
+		described("fresh", "fresh-1", "fresh-1"),
+		described("empty"),
+		described("changeport-registry-x", "apicurio"),
 	}
 	values := map[metrics.Query][]metrics.Series{
 		metrics.BytesIn: {
@@ -69,7 +79,7 @@ func TestTopologyShowsHowDataFlows(t *testing.T) {
       "name": "billing"
     },
     {
-      "members": 1,
+      "members": 2,
       "name": "fresh"
     }
   ],

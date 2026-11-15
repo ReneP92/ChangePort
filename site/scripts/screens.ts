@@ -22,7 +22,7 @@ const out = path.join(root, "public", "screens");
 // The phone crops come from the console's own phone layout, since the
 // desktop's would be too small to read on a phone.
 const crops = [
-  // The overview: an alert, how to connect, and the brokers' health.
+  // The overview: an alert, what needs attention, and how to connect.
   {
     name: "overview",
     from: "03-overview-desktop.png",
@@ -45,7 +45,7 @@ const crops = [
     name: "timeline",
     from: "03-overview-desktop.png",
     left: 264,
-    top: 742,
+    top: 962,
     width: 1000,
     height: 680,
   },
@@ -53,7 +53,7 @@ const crops = [
     name: "timeline-phone",
     from: "03-overview-phone.png",
     left: 0,
-    top: 1214,
+    top: 1614,
     width: 390,
     height: 742,
   },
@@ -62,7 +62,7 @@ const crops = [
     name: "topology",
     from: "03-overview-desktop.png",
     left: 264,
-    top: 1416,
+    top: 1636,
     width: 1000,
     height: 315,
   },
@@ -70,26 +70,27 @@ const crops = [
     name: "topology-phone",
     from: "03-overview-phone.png",
     left: 0,
-    top: 1949,
+    top: 2351,
     width: 390,
-    height: 356,
+    height: 352,
   },
-  // A consumer group's lag in time, and what changed meanwhile.
+  // A consumer group's lag in time, and what changed meanwhile: on the
+  // desktop with what needs attention about it.
   {
     name: "lag",
     from: "18-consumer-group-desktop.png",
     left: 264,
-    top: 10,
+    top: 163,
     width: 1000,
-    height: 720,
+    height: 726,
   },
   {
     name: "lag-phone",
     from: "18-consumer-group-phone.png",
     left: 0,
-    top: 44,
+    top: 576,
     width: 390,
-    height: 873,
+    height: 652,
   },
 ];
 

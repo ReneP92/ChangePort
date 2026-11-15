@@ -421,6 +421,15 @@ test("every screen of the console", async ({ browser }) => {
   await expect(
     main.getByRole("region", { name: /^\d+ alerts?$/ }).getByText(/search-indexer is .* behind/),
   ).toBeVisible({ timeout: 4 * 60_000 });
+  // And nothing consumes it, while orders keeps receiving: a diagnosis.
+  await expect(async () => {
+    await admin.reload();
+    await expect(
+      card(admin, "What needs attention").getByRole("listitem", {
+        name: "Nothing in search-indexer is consuming orders",
+      }),
+    ).toBeVisible({ timeout: 10_000 });
+  }).toPass({ timeout: 3 * 60_000, intervals: [15_000] });
   await shot(admin, "03-overview");
 
   // Ada's team: herself, and a colleague she invites.
@@ -497,7 +506,7 @@ test("every screen of the console", async ({ browser }) => {
   await shot(admin, "18-consumer-group");
   await nav.getByRole("link", { name: "Overview" }).click();
   await nav.getByRole("link", { name: /^Alerts/ }).click();
-  await expect(main.getByText(/search-indexer is .* behind/)).toBeVisible();
+  await expect(card(admin, "Active").getByText(/search-indexer is .* behind/)).toBeVisible();
   // The settings load on their own, after the active alerts.
   await expect(main.getByRole("heading", { name: "Where alerts go" })).toBeVisible();
   await shot(admin, "30-alerts");

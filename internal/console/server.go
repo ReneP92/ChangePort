@@ -54,6 +54,9 @@ type Config struct {
 	// SupportEmail is where customers contact Changeport's support, which
 	// the console's help menu offers; without it, it offers no address.
 	SupportEmail string
+	// DiagnosisWindow is how far back the diagnoses look; 15 minutes
+	// unless set.
+	DiagnosisWindow time.Duration
 	// MaxEnvironments is the most environments an organization's admins
 	// may have, each a cluster; DefaultMaxEnvironments unless set.
 	// Operators add beyond it.
@@ -63,6 +66,14 @@ type Config struct {
 // DefaultMaxEnvironments is the most environments an organization's admins
 // may have unless the configuration says otherwise.
 const DefaultMaxEnvironments = 5
+
+// diagnosisWindow is the configured window, or metrics.DefaultWindow.
+func (c Config) diagnosisWindow() time.Duration {
+	if c.DiagnosisWindow > 0 {
+		return c.DiagnosisWindow
+	}
+	return metrics.DefaultWindow
+}
 
 // maxEnvironments is the configured limit, or DefaultMaxEnvironments.
 func (c Config) maxEnvironments() int {
@@ -129,6 +140,8 @@ type Server struct {
 	logger *slog.Logger
 	// csp is the Content-Security-Policy of the web app's pages.
 	csp string
+	// diagnoses keeps each environment's last diagnoses for a moment.
+	diagnoses diagnosisCache
 }
 
 // Options holds what New needs besides the configuration.
@@ -203,6 +216,7 @@ func New(config Config, options Options) (*Server, error) {
 		userNames:     &userNames{users: options.Users, names: map[string]cachedName{}},
 		messages:      options.Messages,
 		tails:         &tails{running: map[string]int{}},
+		diagnoses:     diagnosisCache{entries: map[string]diagnosisEntry{}},
 		registries:    map[string]*tail.Registry{},
 		registryURL:   options.RegistryURL,
 		egress:        options.EgressAddresses,

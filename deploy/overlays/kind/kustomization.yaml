@@ -53,6 +53,11 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/args/-
         value: -allow-private-receivers
+      # Diagnoses that look back 5 minutes rather than 15, so that the
+      # end-to-end test sees a consumer fall behind within minutes.
+      - op: add
+        path: /spec/template/spec/containers/0/args/-
+        value: -diagnosis-window=5m
   - target:
       kind: Service
       name: changeport-console

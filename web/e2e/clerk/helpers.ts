@@ -82,6 +82,24 @@ export function kafka(
   );
 }
 
+/**
+ * Stops the Kafka tools running in the background (kafkaInBackground) whose
+ * command line contains text, such as a consumer group's name.
+ */
+export function stopKafkaTools(text: string): void {
+  const running = execFileSync("docker", ["ps", "--no-trunc", "--format", "{{.ID}} {{.Command}}"], {
+    encoding: "utf8",
+  });
+  const ids = running
+    .split("\n")
+    .filter((line) => line.includes(text))
+    .map((line) => line.split(" ")[0] ?? "")
+    .filter((id) => id !== "");
+  if (ids.length > 0) {
+    execFileSync("docker", ["kill", ...ids], { stdio: "ignore" });
+  }
+}
+
 /** The command-line arguments that connect a Kafka tool to a customer's cluster. */
 export function connect(customerID: string): string[] {
   return [

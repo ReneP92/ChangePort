@@ -1,7 +1,10 @@
+import { CircleAlert, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
+import type { Diagnosis } from "@/api/client";
 import { useAlerts, useTopology } from "@/api/queries";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useDiagnosesBySubject } from "@/lib/diagnoses";
 import { formatDuration, formatRate } from "@/lib/format";
 import {
   groupID,
@@ -53,6 +56,17 @@ export function TopologyCard() {
       alert.consumerGroup === undefined ? [] : [groupID(alert.consumerGroup)],
     ),
   );
+  // What needs attention about each topic and group, but notes.
+  const subjects = useDiagnosesBySubject();
+  const diagnosed = (node: MapNode): Diagnosis[] =>
+    (
+      (node.kind === "topic"
+        ? subjects.topics
+        : node.kind === "group"
+          ? subjects.groups
+          : undefined
+      )?.get(node.label) ?? []
+    ).filter((diagnosis) => diagnosis.severity !== "info");
   return (
     // The getting started guide links here.
     <Card id="data-flow" className="scroll-mt-6">
@@ -76,7 +90,13 @@ export function TopologyCard() {
             </p>
           )}
           {layout && layout.nodes.length > 0 && (
-            <TopologyMap layout={layout} focused={focused} alerted={alerted} onFocus={setFocused} />
+            <TopologyMap
+              layout={layout}
+              focused={focused}
+              alerted={alerted}
+              diagnosed={diagnosed}
+              onFocus={setFocused}
+            />
           )}
         </div>
         {layout && (layout.idleTopics > 0 || layout.moreTopics > 0) && (
@@ -101,11 +121,13 @@ function TopologyMap({
   layout,
   focused,
   alerted,
+  diagnosed,
   onFocus,
 }: {
   layout: MapLayout;
   focused: string | null;
   alerted: Set<string>;
+  diagnosed: (node: MapNode) => Diagnosis[];
   onFocus: (id: string | null) => void;
 }) {
   const maxRate = Math.max(...layout.edges.map((edge) => edge.bytesPerSecond ?? 0), 1);
@@ -159,6 +181,7 @@ function TopologyMap({
           node={node}
           dim={focused !== null && node.id !== focused && !linked.has(node.id)}
           alerted={alerted.has(node.id)}
+          diagnoses={diagnosed(node)}
           onFocus={onFocus}
         />
       ))}
@@ -170,13 +193,18 @@ function MapNodeBox({
   node,
   dim,
   alerted,
+  diagnoses,
   onFocus,
 }: {
   node: MapNode;
   dim: boolean;
   alerted: boolean;
+  /** What needs attention about the node: a mark, and the reasons on hover. */
+  diagnoses: Diagnosis[];
   onFocus: (id: string | null) => void;
 }) {
+  const critical = diagnoses.some((diagnosis) => diagnosis.severity === "critical");
+  const Mark = critical ? CircleAlert : TriangleAlert;
   const envPath = useEnvironmentPath();
   const behind = (node.lagSeconds ?? 0) >= 60;
   const className = cn(
@@ -203,13 +231,25 @@ function MapNodeBox({
   };
   const content = (
     <>
-      <span
-        className={cn(
-          "truncate text-xs font-medium",
-          node.kind === "unreported" && "text-muted-foreground",
+      <span className="flex min-w-0 items-center gap-1">
+        <span
+          className={cn(
+            "truncate text-xs font-medium",
+            node.kind === "unreported" && "text-muted-foreground",
+          )}
+        >
+          {node.label}
+        </span>
+        {diagnoses.length > 0 && (
+          <Mark
+            role="img"
+            aria-label={critical ? "Critical: needs attention" : "Needs attention"}
+            className={cn(
+              "size-3 shrink-0",
+              critical ? "text-destructive" : "text-amber-600 dark:text-amber-500",
+            )}
+          />
         )}
-      >
-        {node.label}
       </span>
       <span
         className={cn(
@@ -222,7 +262,10 @@ function MapNodeBox({
       </span>
     </>
   );
-  const title = `${node.label}: ${node.detail}`;
+  const title = [
+    `${node.label}: ${node.detail}`,
+    ...diagnoses.map((diagnosis) => diagnosis.title),
+  ].join("\n");
   if (node.kind === "topic" || node.kind === "group") {
     const path =
       node.kind === "topic"

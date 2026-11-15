@@ -79,7 +79,8 @@ brings it back.
 
    ![The first message arriving](screenshots/49-welcome-first-message-desktop.png)
 
-The overview of a ready cluster: its active alerts; how to connect, with
+The overview of a ready cluster: its active alerts; what needs attention;
+how to connect, with
 `client.properties` for admins; the brokers' health; throughput, with what
 changed meanwhile; how data flows from producers through topics to consumer
 groups; the topics with their retention, tiering, size and traffic; and how
@@ -88,13 +89,24 @@ last hour.
 
 ![The overview](screenshots/03-overview-desktop.png)
 
+**What needs attention** lists the common Kafka problems the console found
+in the cluster's topics, consumer groups and producers over the last 15
+minutes, the most pressing first, each with the numbers that show it and
+what to do: a group that can't keep up with its topic, one nobody consumes,
+one about to lose messages to retention, a partition that takes more than
+its share, producers whose records fail. Here `search-indexer` has no
+consumers running while `orders` keeps receiving. A topic's and a group's
+pages show what is about them, and the data flow map marks them.
+[diagnosis.md](diagnosis.md) describes every rule.
+
 The overview's data flow map shows how data moves through the cluster now:
 the producers on the left, by client ID and Kafka user, the topics they
 write in the middle, and the consumer groups that read them on the right,
 over the last 5 minutes. Edges grow with the bytes per second along them,
 and their dashes flow while data moves. Each group says how many members it
 has and how far behind it is: amber once it is a minute behind, red while
-an alert is about it, as `search-indexer` is here. Pointing at a node picks
+an alert is about it, as `search-indexer` is here. Topics and groups that
+need attention carry a mark, whose reasons show on pointing at them. Pointing at a node picks
 out its edges, and topics and groups lead to their pages.
 
 Producers show once they report their own metrics (KIP-714), as clients of
@@ -103,8 +115,9 @@ receive that no producer reports shows as clients without telemetry, so no
 traffic goes missing. Producers that share a client ID and Kafka user show
 as one. The platform's own clients, topics and groups are left out, as are
 topics without traffic, and past the 40 busiest. Consumers are matched to
-their groups by the groups' members, as Kafka lists them. On a phone the
-map scrolls sideways within its card.
+their groups by the groups' members, as Kafka lists them, and each member
+counts, even when several share a client ID. On a phone the map scrolls
+sideways within its card.
 
 A topic's page and a consumer group's, from the overview's names: the
 topic's settings, its traffic and the groups that read it; the group's lag

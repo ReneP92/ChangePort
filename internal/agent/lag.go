@@ -20,6 +20,7 @@ import (
 type LagAdmin interface {
 	ListGroupsByType(ctx context.Context, types []string, filterStates ...string) (kadm.ListedGroups, error)
 	FetchManyOffsets(ctx context.Context, groups ...string) kadm.FetchOffsetsResponses
+	ListStartOffsets(ctx context.Context, topics ...string) (kadm.ListedOffsets, error)
 	ListEndOffsets(ctx context.Context, topics ...string) (kadm.ListedOffsets, error)
 	ListOffsetsAfterMilli(ctx context.Context, millisecond int64, topics ...string) (kadm.ListedOffsets, error)
 }
@@ -80,6 +81,10 @@ type lagValue struct {
 	seconds  float64
 	messages int64
 	capped   bool
+	// lost counts the partitions whose committed offset is below the log's
+	// start: retention deleted messages the group never read; -1 when the
+	// starts could not be looked up.
+	lost int
 	// committed is the sum of the group's committed offsets on the topic,
 	// and movedAt when the agent first saw it, or saw it change.
 	committed int64
@@ -120,6 +125,12 @@ var (
 	committedDesc = prometheus.NewDesc("changeport_consumergroup_committed_timestamp_seconds",
 		"When the consumer group's committed offsets on the topic last moved, as far as the agent saw since it started.",
 		[]string{"consumer_group", "topic"}, nil)
+	committedOffsetsDesc = prometheus.NewDesc("changeport_consumergroup_committed_offsets",
+		"The consumer group's committed offsets on the topic, summed over its partitions: their rate is how many messages a second the group consumes.",
+		[]string{"consumer_group", "topic"}, nil)
+	lostDesc = prometheus.NewDesc("changeport_consumergroup_partitions_behind_log_start",
+		"Partitions of the topic whose committed offset is below the log's start, as retention deleted messages the consumer group never read.",
+		[]string{"consumer_group", "topic"}, nil)
 )
 
 // NewLagCollector returns a collector registered with registry.
@@ -150,6 +161,8 @@ func (c *LagCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- lagMessagesDesc
 	ch <- lagCappedDesc
 	ch <- committedDesc
+	ch <- committedOffsetsDesc
+	ch <- lostDesc
 }
 
 // Collect implements prometheus.Collector with the last measurement.
@@ -165,6 +178,10 @@ func (c *LagCollector) Collect(ch chan<- prometheus.Metric) {
 		ch <- prometheus.MustNewConstMetric(lagMessagesDesc, prometheus.GaugeValue, float64(value.messages), key.group, key.topic)
 		ch <- prometheus.MustNewConstMetric(lagCappedDesc, prometheus.GaugeValue, capped, key.group, key.topic)
 		ch <- prometheus.MustNewConstMetric(committedDesc, prometheus.GaugeValue, float64(value.movedAt.Unix()), key.group, key.topic)
+		ch <- prometheus.MustNewConstMetric(committedOffsetsDesc, prometheus.GaugeValue, float64(value.committed), key.group, key.topic)
+		if value.lost >= 0 {
+			ch <- prometheus.MustNewConstMetric(lostDesc, prometheus.GaugeValue, float64(value.lost), key.group, key.topic)
+		}
 	}
 }
 
@@ -229,6 +246,14 @@ func (c *LagCollector) measure(ctx context.Context, previous map[lagKey]lagValue
 	if err != nil {
 		return nil, errors.Join(append(errs, fmt.Errorf("list end offsets: %w", err))...)
 	}
+	// Where each partition's log starts, after retention: with tiered
+	// storage, the oldest message kept anywhere. Only the lost partitions
+	// need it, so without it the lag is still measured.
+	starts, err := c.Admin.ListStartOffsets(ctx, topics...)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("list start offsets: %w", err))
+		starts = nil
+	}
 
 	// Look up the anchors only for topics with a lagging partition.
 	lagging := map[string]bool{}
@@ -279,6 +304,7 @@ func (c *LagCollector) measure(ctx context.Context, previous map[lagKey]lagValue
 				value.movedAt = last.movedAt
 			}
 			value.offsets, value.measuredAt = maps.Clone(committed[key]), now
+			value.lost = behindStart(key.topic, committed[key], starts)
 			snapshot[key] = value
 		}
 	}
@@ -347,6 +373,22 @@ func carried(last lagValue, topic string, committed map[int32]int64, ends kadm.L
 	}
 	value.measuredAt = now
 	return value
+}
+
+// behindStart counts the partitions whose committed offset is below the
+// start of the log: the group's next fetch there finds the messages gone.
+// It is -1 without the starts.
+func behindStart(topic string, committed map[int32]int64, starts kadm.ListedOffsets) int {
+	if starts == nil {
+		return -1
+	}
+	lost := 0
+	for partition, offset := range committed {
+		if start, ok := starts.Lookup(topic, partition); ok && start.Err == nil && offset < start.Offset {
+			lost++
+		}
+	}
+	return lost
 }
 
 func sum(offsets map[int32]int64) int64 {

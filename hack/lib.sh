@@ -534,6 +534,13 @@ kind_load() {
     die "could not load images into the kind workers:"$'\n'"$output"
   fi
   rm -f "$archive"
+  # Importing an archive also names each image import-<date>@<digest>,
+  # beside its tag. Those names would keep every earlier build's layers
+  # after prune_node_images untags them, and fill Docker's disk within a
+  # day of rebuilds; the tags keep what is in use.
+  for node in ${workers//,/ }; do
+    docker exec "$node" sh -c "ctr -n k8s.io images ls -q | grep '^import-' | xargs -r ctr -n k8s.io images rm --sync" >/dev/null 2>&1 || true
+  done
 }
 
 # Removes the content tags of image's earlier builds from the kind workers,

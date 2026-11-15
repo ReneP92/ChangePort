@@ -1045,6 +1045,29 @@ paths:
           $ref: "#/components/responses/NotReady"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/customer/diagnoses:
+    get:
+      operationId: listDiagnoses
+      summary: >-
+        The common Kafka problems the environment's cluster has, in plain language, the most severe first
+        (docs/diagnosis.md): what is wrong, the numbers that show it and what to do
+      responses:
+        "200":
+          description: The diagnoses, none when all is well
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiagnosisList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/NotReady"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/customer/events:
     get:
       operationId: listEvents
@@ -2334,6 +2357,46 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Point"
+    DiagnosisList:
+      type: object
+      required: [diagnoses, windowSeconds]
+      properties:
+        windowSeconds:
+          type: integer
+          description: How far back the diagnoses look, 15 minutes unless the console is set otherwise
+        diagnoses:
+          type: array
+          items:
+            $ref: "#/components/schemas/Diagnosis"
+    Diagnosis:
+      type: object
+      required: [id, rule, severity, title, explanation, suggestion]
+      properties:
+        id:
+          type: string
+          description: The rule and its subject, which stay the same while the problem holds
+        rule:
+          type: string
+          description: The rule that found it, such as consumer-too-slow
+        severity:
+          type: string
+          enum: [info, warning, critical]
+          description: Info is worth knowing, a warning needs attention before it hurts, critical hurts now
+        topic:
+          type: string
+        consumerGroup:
+          type: string
+        clientId:
+          type: string
+        title:
+          type: string
+          description: What is wrong, in a line
+        explanation:
+          type: string
+          description: What shows it, with the numbers
+        suggestion:
+          type: string
+          description: What to do about it. Commands and settings are between backticks, as code
     Topology:
       type: object
       required: [producers, topics, groups, writes, reads]

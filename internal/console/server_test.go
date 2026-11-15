@@ -491,6 +491,7 @@ func TestAuthorizationMatrix(t *testing.T) {
 	routes["/api/customer/alerts"] = customerRoute(`"summary":"acme-billing is behind"`, `"consumerGroup":"acme-billing"`, `{"alerts":[]}`)
 	routes["/api/customer/alert-settings"] = customerRoute(`"consumerLag":{"enabled":true,"seconds":600}`, `"receivers":{}`, `"percent":5`)
 	routes["/api/customer/team"] = customerRoute(`"members":[]`, `"invitations":[]`, `"members":[]`)
+	routes["/api/customer/diagnoses"] = customerRoute(`"diagnoses":[`, `"diagnoses":[`, `"diagnoses":[`)
 	routes["/api/customer/topology"] = customerRoute(`"name":"acme-orders"`, `"group":"billing"`, `"name":"globex-orders"`)
 	routes["/api/customer/events"] = customerRoute(`"message":"Topic acme-orders was created`, `"kind":"broker.restarted"`, `"events":[]`)
 	routes["/api/customer/consumer-groups/billing/lag"] = customerRoute(`"topic":"acme-orders"`, `"lagSeconds":[{`, `"topic":"globex-orders"`)
@@ -736,6 +737,9 @@ type fakeClusters struct {
 	groups map[string][]string
 	// deleted records the topics deleted by the tests, as customer/topic.
 	deleted []string
+	// described are the consumer groups Kafka describes, by customer, when
+	// a test sets them.
+	described map[string][]ConsumerGroup
 }
 
 func newFakeClusters() *fakeClusters {
@@ -767,8 +771,13 @@ func (f *fakeClusters) DeleteTopic(_ context.Context, id, name string) error {
 	return nil
 }
 
-func (f *fakeClusters) GroupMembers(_ context.Context, id string) (map[string][]string, error) {
-	return map[string][]string{"billing": {id + "-billing-1"}}, nil
+func (f *fakeClusters) ConsumerGroups(_ context.Context, id string) ([]ConsumerGroup, error) {
+	if described, ok := f.described[id]; ok {
+		return described, nil
+	}
+	return []ConsumerGroup{{Name: "billing", State: "Stable", Members: []GroupMember{
+		{ClientID: id + "-billing-1", Assigned: map[string]int{id + "-orders": 3}},
+	}}}, nil
 }
 
 func (f *fakeClusters) TopicConsumerGroups(_ context.Context, _, topic string) ([]string, error) {

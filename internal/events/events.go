@@ -78,6 +78,12 @@ type Event struct {
 	Actor string `json:"actor,omitempty"`
 	// Source is what recorded the event: agent, console or provisioner.
 	Source string `json:"source"`
+	// Rebalance marks a group's change of members that made it share its
+	// partitions out again while it kept consuming, as opposed to the
+	// group starting or its last member leaving (internal/diagnosis counts
+	// them). VictoriaLogs keeps every field as text, so it is written and
+	// read as "true".
+	Rebalance bool `json:"rebalance,omitempty,string"`
 }
 
 // NewID returns a random event ID.
@@ -143,6 +149,9 @@ type Query struct {
 	// or the group; broker restarts, which affect everything, stay.
 	Topics        []string
 	ConsumerGroup string
+	// Kinds, when set, keeps to events of these kinds, broker restarts
+	// included only when named.
+	Kinds []Kind
 	// Limit caps the events, the newest first; at most MaxEvents.
 	Limit int
 }
@@ -171,6 +180,13 @@ func (q Query) LogsQL() (string, error) {
 	if len(about) > 0 {
 		about = append(about, "kind:="+strconv.Quote(string(BrokerRestarted)))
 		logsQL += " (" + strings.Join(about, " or ") + ")"
+	}
+	if len(q.Kinds) > 0 {
+		kinds := make([]string, len(q.Kinds))
+		for i, kind := range q.Kinds {
+			kinds[i] = "kind:=" + strconv.Quote(string(kind))
+		}
+		logsQL += " (" + strings.Join(kinds, " or ") + ")"
 	}
 	return logsQL + " | sort by (_time) desc", nil
 }
