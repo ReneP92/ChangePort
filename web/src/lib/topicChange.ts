@@ -20,13 +20,13 @@ export function compacted(topic: Topic): boolean {
  * (docs/console.md): groups further behind than the new retention lose what
  * they have not read, a shorter retention deletes older messages, and more
  * partitions send a key's new messages elsewhere. readers are the consumer
- * groups' lag on the topic.
+ * groups' lag, or undefined while it is not known, which counts as a loss.
  */
 export function changeWarnings(
   topic: Topic,
   partitions: number,
   retentionMs: number | undefined,
-  readers: ConsumerGroupLag[],
+  readers: ConsumerGroupLag[] | undefined,
 ): ChangeWarning[] {
   const warnings: ChangeWarning[] = [];
   if (
@@ -35,7 +35,13 @@ export function changeWarnings(
     retentionMs < (topic.retentionMs ?? Infinity)
   ) {
     const retention = formatRetention(retentionMs).toLowerCase();
-    const behind = readers
+    if (readers === undefined) {
+      warnings.push({
+        loss: true,
+        text: `How far behind the consumer groups are is not known, so a group further behind than ${retention} may lose messages it has not read.`,
+      });
+    }
+    const behind = (readers ?? [])
       .filter((reader) => reader.topic === topic.name && reader.lagMessages > 0)
       .sort((a, b) => b.lagSeconds - a.lagSeconds);
     for (const reader of behind) {
@@ -54,7 +60,7 @@ export function changeWarnings(
     }
     warnings.push({
       loss: false,
-      text: `Messages older than ${retention} are deleted for good within minutes of saving.`,
+      text: `Kafka then deletes messages older than ${retention} for good, a log segment at a time: within minutes on a busy topic, and on a quiet one once its current segment closes, after up to 7 days.`,
     });
   }
   if (partitions > topic.partitions) {

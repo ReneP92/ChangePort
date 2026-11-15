@@ -18,6 +18,7 @@ import (
 	"path"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1364,10 +1365,12 @@ func (s *Server) CreateTopic(ctx context.Context, request api.CreateTopicRequest
 			return api.CreateTopic400JSONResponse{BadRequestJSONResponse: api.BadRequestJSONResponse(p)}, nil
 		}
 	}
+	// A retention that is no duration fails the presets check as zero.
+	retention, _ := topics.Retention(body.RetentionMs)
 	topic, err := policy.Check(topics.Request{
 		Name:          body.Name,
 		Partitions:    body.Partitions,
-		Retention:     time.Duration(body.RetentionMs) * time.Millisecond,
+		Retention:     retention,
 		CleanupPolicy: string(body.CleanupPolicy),
 	}, load)
 	var fieldErr *topics.FieldError
@@ -1489,19 +1492,27 @@ func (s *Server) ChangeTopic(ctx context.Context, request api.ChangeTopicRequest
 		return api.ChangeTopic404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(noSuchTopic(request.Topic))}, nil
 	}
 	topic := all[i]
+	if !topic.Described {
+		// Without its configs, the guardrails cannot tell whether it is
+		// compacted, nor its retention.
+		return api.ChangeTopic409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(problem(http.StatusConflict,
+			"The topic's settings could not be read", "Kafka did not describe the topic's settings. Try again in a moment."))}, nil
+	}
 	load, err := s.clusters.Load(ctx, customer.Name)
 	if err != nil {
 		return nil, err
 	}
 	change := topics.Change{Partitions: request.Body.Partitions}
 	if ms := request.Body.RetentionMs; ms != nil {
-		change.Retention = ptr.To(time.Duration(*ms) * time.Millisecond)
+		// A retention that is no duration fails the presets check as zero.
+		retention, _ := topics.Retention(*ms)
+		change.Retention = &retention
 	}
 	alteration, err := policy.CheckChange(topics.Current{
-		Partitions:  topic.Partitions,
-		RetentionMs: topic.RetentionMs,
-		Compacted:   strings.Contains(topic.CleanupPolicy, topics.Compact),
-		Tiered:      topic.Tiered,
+		Partitions:        topic.Partitions,
+		ReplicationFactor: topic.ReplicationFactor,
+		RetentionMs:       topic.RetentionMs,
+		Compacted:         strings.Contains(topic.CleanupPolicy, topics.Compact),
 	}, change, load)
 	var fieldErr *topics.FieldError
 	if errors.As(err, &fieldErr) {
@@ -1512,36 +1523,53 @@ func (s *Server) ChangeTopic(ctx context.Context, request api.ChangeTopicRequest
 	if err != nil {
 		return nil, err
 	}
+	if alteration.Empty() {
+		return api.ChangeTopic200JSONResponse(apiTopic(topic)), nil
+	}
+	// Once Kafka starts on it, what it applies is audited and recorded,
+	// however the request ends.
+	ctx = context.WithoutCancel(ctx)
+	applied, err := s.clusters.AlterTopic(ctx, customer.Name, topic.Name, alteration)
 	changed := topic
-	if !alteration.Empty() {
-		err = s.clusters.AlterTopic(ctx, customer.Name, topic.Name, alteration)
-		switch {
-		case errors.Is(err, ErrNoSuchTopic):
-			return api.ChangeTopic404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(noSuchTopic(topic.Name))}, nil
-		case errors.Is(err, clusters.ErrNotReady):
-			return api.ChangeTopic409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(notReadyYet)}, nil
-		case err != nil:
-			return nil, err
-		}
-		if alteration.Partitions > 0 {
-			changed.Partitions = alteration.Partitions
-		}
-		if alteration.Set["retention.ms"] != "" {
-			changed.RetentionMs = request.Body.RetentionMs
-		}
+	if applied.Partitions > 0 {
+		changed.Partitions = applied.Partitions
+	}
+	if ms, err := strconv.ParseInt(applied.Set["retention.ms"], 10, 64); err == nil {
+		changed.RetentionMs = &ms
+	}
+	if !applied.Empty() {
 		s.audit(ctx, principal, customer.Name, "topic changed", "topic", topic.Name,
 			"partitions_before", topic.Partitions, "partitions", changed.Partitions,
 			"retention_ms_before", ptr.Deref(topic.RetentionMs, -1), "retention_ms", ptr.Deref(changed.RetentionMs, -1))
 		s.recordTopicAlteration(ctx, principal, customer.Name, topic, changed)
 	}
-	return api.ChangeTopic200JSONResponse{
-		Name:              changed.Name,
-		Partitions:        changed.Partitions,
-		ReplicationFactor: changed.ReplicationFactor,
-		Tiered:            changed.Tiered,
-		CleanupPolicy:     changed.CleanupPolicy,
-		RetentionMs:       changed.RetentionMs,
-	}, nil
+	switch {
+	case errors.Is(err, ErrNoSuchTopic):
+		return api.ChangeTopic404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(noSuchTopic(topic.Name))}, nil
+	case errors.Is(err, clusters.ErrNotReady):
+		return api.ChangeTopic409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(notReadyYet)}, nil
+	case errors.Is(err, ErrTopicChanged):
+		detail := "Its partitions changed meanwhile, so none were added. Look at it again, and try again."
+		if !applied.Empty() {
+			detail = "Its partitions changed meanwhile, so none were added; its retention did change. Look at it again, and try again."
+		}
+		return api.ChangeTopic409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(problem(http.StatusConflict, "The topic changed meanwhile", detail))}, nil
+	case err != nil:
+		return nil, err
+	}
+	return api.ChangeTopic200JSONResponse(apiTopic(changed)), nil
+}
+
+// apiTopic is a topic's settings as the API gives them.
+func apiTopic(topic TopicSettings) api.Topic {
+	return api.Topic{
+		Name:              topic.Name,
+		Partitions:        topic.Partitions,
+		ReplicationFactor: topic.ReplicationFactor,
+		Tiered:            topic.Tiered,
+		CleanupPolicy:     topic.CleanupPolicy,
+		RetentionMs:       topic.RetentionMs,
+	}
 }
 
 func noSuchTopic(name string) api.Problem {

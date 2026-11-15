@@ -32,6 +32,9 @@ import { changeWarnings, compacted } from "@/lib/topicChange";
 import { cn } from "@/lib/utils";
 import { Field } from "@/pages/overview/CreateTopicDialog";
 
+/** The retention select's value for a topic kept forever, as it is. */
+const forever = "forever";
+
 /**
  * A button that opens the dialog to add partitions to a topic or change how
  * long it keeps messages, which says what the change does to the consumers
@@ -62,9 +65,13 @@ export function EditTopicDialog({ topic }: { topic: Topic }) {
           <EditTopicForm
             topic={topic}
             policy={policy.data}
-            readers={groups.data ?? []}
+            // Unknown while loading or failed, which the warnings count as a loss.
+            readers={groups.data}
             saving={change.isPending}
             error={change.error}
+            onEdit={() => {
+              change.reset();
+            }}
             onSave={(changed) => {
               change.mutate(
                 { topic: topic.name, change: changed },
@@ -85,7 +92,9 @@ export function EditTopicDialog({ topic }: { topic: Topic }) {
 /**
  * The form that changes a topic within the guardrails: more partitions, and
  * a retention preset unless it is compacted. readers are the consumer
- * groups' lag, for the warnings; onSave gets only what changed.
+ * groups' lag, for the warnings, or undefined while unknown; onSave gets
+ * only what changed, and onEdit hears of every edit, which makes the
+ * server's last problem stale.
  */
 export function EditTopicForm({
   topic,
@@ -94,13 +103,15 @@ export function EditTopicForm({
   saving,
   error,
   onSave,
+  onEdit,
 }: {
   topic: Topic;
   policy: TopicPolicy;
-  readers: ConsumerGroupLag[];
+  readers: ConsumerGroupLag[] | undefined;
   saving: boolean;
   error: Error | null;
   onSave: (change: TopicChange) => void;
+  onEdit?: () => void;
 }) {
   const [partitions, setPartitions] = useState(topic.partitions);
   const [retentionMs, setRetentionMs] = useState(topic.retentionMs);
@@ -114,15 +125,18 @@ export function EditTopicForm({
       : partitions < topic.partitions
         ? `Partitions can be added, never removed: keep at least ${String(topic.partitions)}.`
         : `Choose ${String(topic.partitions)} to ${String(policy.partitions.max)} partitions.`;
-  // A retention set outside the console is offered as it is, among the presets.
-  const presets = policy.retentionPresets.some((preset) => preset.ms === topic.retentionMs)
-    ? policy.retentionPresets
-    : topic.retentionMs === undefined
-      ? policy.retentionPresets
-      : [
-          ...policy.retentionPresets,
-          { label: formatRetention(topic.retentionMs), ms: topic.retentionMs },
-        ].sort((a, b) => a.ms - b.ms);
+  // A retention set outside the console is offered as it is, among the
+  // presets, so that it can be kept.
+  const presets: { label: string; value: string }[] = policy.retentionPresets.map((preset) => ({
+    label: preset.label,
+    value: String(preset.ms),
+  }));
+  if (topic.retentionMs === undefined) {
+    presets.push({ label: "Forever", value: forever });
+  } else if (!policy.retentionPresets.some((preset) => preset.ms === topic.retentionMs)) {
+    presets.push({ label: formatRetention(topic.retentionMs), value: String(topic.retentionMs) });
+    presets.sort((a, b) => Number(a.value) - Number(b.value));
+  }
 
   const change: TopicChange = {};
   if (!partitionsProblem && partitions !== topic.partitions) {
@@ -175,6 +189,7 @@ export function EditTopicForm({
           value={Number.isNaN(partitions) ? "" : partitions}
           onChange={(event) => {
             setPartitions(event.target.valueAsNumber);
+            onEdit?.();
           }}
           className="w-28"
         />
@@ -195,17 +210,18 @@ export function EditTopicForm({
       ) : (
         <Field id="edit-retention" label="Retention" problem={fieldProblem("retention")}>
           <Select
-            value={retentionMs === undefined ? "" : String(retentionMs)}
+            value={retentionMs === undefined ? forever : String(retentionMs)}
             onValueChange={(value) => {
-              setRetentionMs(Number(value));
+              setRetentionMs(value === forever ? undefined : Number(value));
+              onEdit?.();
             }}
           >
             <SelectTrigger id="edit-retention" className="w-40">
-              <SelectValue placeholder="Forever" />
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {presets.map((preset) => (
-                <SelectItem key={preset.ms} value={String(preset.ms)}>
+                <SelectItem key={preset.value} value={preset.value}>
                   {preset.label}
                 </SelectItem>
               ))}
@@ -230,6 +246,14 @@ export function EditTopicForm({
           ))}
         </ul>
       )}
+      {/* Always there, so that screen readers hear what a choice adds; out of
+          the layout, so that it adds no gap. */}
+      <p aria-live="polite" className="sr-only">
+        {warnings
+          .filter((warning) => warning.loss)
+          .map((warning) => warning.text)
+          .join(" ")}
+      </p>
 
       {serverProblem && !serverProblem.field && (
         <p role="alert" className="text-sm text-destructive">

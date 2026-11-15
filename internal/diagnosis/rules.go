@@ -295,7 +295,7 @@ func partitionsAdded(s Snapshot) []Finding {
 func oversizedMessages(s Snapshot) []Finding {
 	var found []Finding
 	for _, t := range s.Topics {
-		if t.BytesRejectedPerSecond <= 0 {
+		if t.BytesRejected <= 0 {
 			continue
 		}
 		var from []string
@@ -317,10 +317,10 @@ func oversizedMessages(s Snapshot) []Finding {
 			Subject:  Subject{Topic: t.Name},
 			Title:    t.Name + " refuses messages too large for it",
 			Explanation: fmt.Sprintf(
-				"Over the last %s, %s refused %s a second of messages larger than %s (`max.message.bytes`).%s Refused messages are not kept: unless their producer handles the error, they are lost.",
-				duration(s.Window.Seconds()), t.Name, bytes(t.BytesRejectedPerSecond), limit, by),
+				"Over the last %s, %s refused %s sent in batches larger than %s (`max.message.bytes`).%s A message that large on its own is not kept: unless its producer handles the error, it is lost. Java producers split batches of smaller messages and send them again.",
+				duration(s.Window.Seconds()), t.Name, bytes(t.BytesRejected), limit, by),
 			Suggestion: fmt.Sprintf(
-				"Keep large payloads, such as files or images, in object storage such as S3, and send a message that refers to them. If messages are this large by nature, compress them in the producer (`compression.type=zstd`), or raise the `max.message.bytes` of %s; the producer's `max.request.size` and the consumers' `max.partition.fetch.bytes` must then allow them too.",
+				"Keep large payloads, such as files or images, in object storage such as S3, and send a message that refers to them. If messages are this large by nature, compress them in the producer (`compression.type=zstd`), or raise the `max.message.bytes` of %s; the producer's `max.request.size` must then allow them too.",
 				t.Name),
 		})
 	}
@@ -331,11 +331,12 @@ func oversizedMessages(s Snapshot) []Finding {
 // A record that fails before it is sent, such as one larger than the
 // producer's max.request.size or for a topic that does not exist, counts as
 // an error but not as a send, so the share is of what the producer tried to
-// send. Records a topic refused as too large are oversizedMessages'.
+// send. Records that failed on a topic that refused messages as too large
+// are oversizedMessages'.
 func producerErrors(s Snapshot) []Finding {
 	oversized := map[string]bool{}
 	for _, t := range s.Topics {
-		oversized[t.Name] = t.BytesRejectedPerSecond > 0
+		oversized[t.Name] = t.BytesRejected > 0
 	}
 	var found []Finding
 	for _, p := range s.Producers {
@@ -374,19 +375,19 @@ func producerErrors(s Snapshot) []Finding {
 					p.ClientID, p.Principal),
 			})
 		case failed >= errorShare:
-			on := ""
+			to := "Kafka"
 			if len(refusedOn) > 0 {
-				on = ", on " + list(refusedOn)
+				to = list(refusedOn)
 			}
 			found = append(found, Finding{
 				Severity: Warning,
 				Subject:  subject,
-				Title:    "Kafka refuses records from " + p.ClientID,
+				Title:    "Records from " + p.ClientID + " fail to be delivered",
 				Explanation: fmt.Sprintf(
-					"Kafka refused %s of the records %s tried to send in the last %s%s: %s a second of %s.",
-					percent(failed), p.ClientID, duration(s.Window.Seconds()), on, rate(errors), rate(tried)),
+					"%s of the records %s tried to send in the last %s failed on their way to %s, or were refused there: %s a second of %s.",
+					percent(failed), p.ClientID, duration(s.Window.Seconds()), to, rate(errors), rate(tried)),
 				Suggestion: fmt.Sprintf(
-					"The log of %s says why. The usual causes are too few in-sync replicas for `acks=all` while a broker is down, records without a key sent to a compacted topic, and requests that time out (`delivery.timeout.ms`).",
+					"The log of %s says why. The usual causes are brokers it cannot reach within `delivery.timeout.ms`, too few in-sync replicas for `acks=all` while a broker is down, records without a key sent to a compacted topic, and messages larger than the topic's `max.message.bytes`.",
 					p.ClientID),
 			})
 		case retried >= retryShare:

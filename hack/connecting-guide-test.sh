@@ -100,6 +100,13 @@ run go "$GO_IMAGE" "go mod init example 2>/dev/null && go get github.com/twmb/fr
 example "### Node.js" js | sed 's|^  "sasl.password": process.env.KAFKA_PASSWORD,|&\n  "ssl.ca.location": "/config/ca.crt",|' >"$work/node/example.js"
 run node "$NODE_IMAGE" "npm install --loglevel=error --no-audit --no-fund @confluentinc/kafka-javascript@$CONFLUENT_KAFKA_JAVASCRIPT >/dev/null && node example.js"
 
+# They committed by themselves rather than on a timer: consumers that commit
+# on a timer also commit when they close, so the offsets alone cannot tell.
+for language in java python go node; do
+  grep -Eq 'enable\.auto\.commit"[,:] *("false"|false|False)|kgo\.DisableAutoCommit\(\)' "$work/$language"/* ||
+    die "the guide's $language example leaves automatic commits on"
+done
+
 # The examples leave a topic and a consumer group each behind.
 for language in java python go node; do
   docker run "${KAFKA_CLIENT[@]}" --entrypoint /opt/kafka/bin/kafka-topics.sh "$KAFKA_IMAGE" \

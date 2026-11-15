@@ -99,12 +99,14 @@ const (
 	ProducerErrors  Query = "producer_errors"
 	ProducerRetries Query = "producer_retries"
 	// ProducerTopicErrors is the records per second each producer failed to
-	// send to each topic: those Kafka refused. Records the producer refused
-	// itself, before sending, count only in ProducerErrors.
+	// deliver to each topic: refused by Kafka, or expired on the way.
+	// Records the producer refused itself, before sending, count only in
+	// ProducerErrors.
 	ProducerTopicErrors Query = "producer_topic_errors"
-	// BytesRejected is the bytes per second each topic refused as larger
-	// than its max.message.bytes. Brokers report it per topic only once a
-	// topic refused something.
+	// BytesRejected is the bytes each topic refused over the window as
+	// larger than its max.message.bytes. Brokers create a topic's meter at
+	// its first refusal, so the counter is taken to start from 0 there
+	// (increase_pure) rather than its first sample counting as the start.
 	BytesRejected Query = "bytes_rejected"
 
 	// TopicHealth and GroupHealth are the worst level of each topic and
@@ -178,7 +180,7 @@ var definitions = map[Query]definition{
 	ProducerErrors:      {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_error_total{%s}[{window}])))`, perProducer},
 	ProducerRetries:     {`sum by (principal, client_id) (max by (principal, client_id, client_instance_id) (rate(clients_org_apache_kafka_producer_record_retry_total{%s}[{window}])))`, perProducer},
 	ProducerTopicErrors: {`sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (rate(clients_org_apache_kafka_producer_topic_record_error_total{%s}[{window}])))`, perClient},
-	BytesRejected:       {`sum by (topic) (rate(kafka_server_brokertopicmetrics_bytesrejectedpersec_total{%s}[{window}]))`, perTopic},
+	BytesRejected:       {`sum by (topic) (increase_pure(kafka_server_brokertopicmetrics_bytesrejectedpersec_total{%s}[{window}]))`, perTopic},
 
 	TopicHealth:   {`max by (topic) (max_over_time(changeport_health_level{%s}[{window}]))`, perTopic},
 	GroupHealth:   {`max by (consumer_group) (max_over_time(changeport_health_level{%s, consumer_group!=""}[{window}]))`, perGroup},

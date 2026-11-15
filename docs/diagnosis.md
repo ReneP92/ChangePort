@@ -94,8 +94,8 @@ and groups are left out.
 | `frequent-rebalances` | A group that shared its partitions out again 6 times or more in the last hour, as members joined or left while it consumed, from the timeline. A group starting, or its last member leaving, does not count. | warning |
 | `hot-partition` | A tiered topic of 3 partitions or more, with at least 64 MB on the brokers, where one partition holds twice its fair share or more: a few busy keys. Tiered topics keep only their last day on the brokers, so the sizes show how messages spread now; topics that got partitions within the day are left out, as new partitions start empty. | warning |
 | `partitions-added` | A topic that got partitions in the last day, from the console or any other tool, while consumer groups read it: a key's new messages may go to another partition than its earlier ones. | info |
-| `oversized-messages` | A topic that refused messages larger than its `max.message.bytes` over the window (the brokers' rejected bytes), with the producers whose records it refused, as far as they report them. | warning |
-| `producer-errors` | A producer trying to send a record every 10 seconds or more, 1% or more of whose records fail; or, short of that, that sends 10% or more of its records again. It tells records that failed in the producer itself, before reaching Kafka (such as ones over `max.request.size`), from records Kafka refused, by the producer's errors per topic. Records a topic refused for their size are `oversized-messages`', and do not count here. Records that fail before they are sent count as tried. | warning, info |
+| `oversized-messages` | A topic that refused batches larger than its `max.message.bytes` over the window (the brokers' rejected bytes, counted from 0 as the brokers report a topic's only from its first refusal), with the producers whose records failed on it, as far as they report them. A single message that large is lost unless its producer handles the error; Java producers split a batch of smaller ones and send them again. | warning |
+| `producer-errors` | A producer trying to send a record every 10 seconds or more, 1% or more of whose records fail; or, short of that, that sends 10% or more of its records again. It tells records that failed in the producer itself, before reaching Kafka (such as ones over `max.request.size`), from those that failed on their way to a topic or at it (refused, or expired after `delivery.timeout.ms`), by the producer's errors per topic. Errors on a topic that refused batches for their size are `oversized-messages`', and do not count here. Records that fail before they are sent count as tried. | warning, info |
 | `producers-without-telemetry` | A topic that receives more than 100 B/s, and more than a tenth of its bytes, from producers that send no telemetry (KIP-714), which leaves them off the data flow map. A Postgres source's topics, written by Changeport's own Connect worker, are left out. | info |
 
 What each suggests:
@@ -123,14 +123,15 @@ What each suggests:
   skip what reached a new partition before they found it.
 - **Oversized messages:** large payloads in object storage, with a message
   that refers to them; or compression (`compression.type=zstd`), or a
-  larger `max.message.bytes`, which the producer's `max.request.size` and
-  the consumers' `max.partition.fetch.bytes` must then allow too.
+  larger `max.message.bytes`, which the producer's `max.request.size` must
+  then allow too.
 - **Producer errors:** the producer's own log, and the usual causes. Before
   reaching Kafka: records over `max.request.size` (1 MB by default), topics
   that do not exist (they are not created on first use), missing
-  permissions. Refused by Kafka: too few in-sync replicas for `acks=all`,
-  records without a key on a compacted topic, timeouts. Retries follow
-  timeouts and moving partitions.
+  permissions. On the way or at Kafka: brokers out of reach within
+  `delivery.timeout.ms`, too few in-sync replicas for `acks=all`, records
+  without a key on a compacted topic, messages over the topic's
+  `max.message.bytes`. Retries follow timeouts and moving partitions.
 - **Without telemetry:** a Java client 3.7 or newer, or librdkafka 2.5 or
   newer.
 
@@ -155,9 +156,11 @@ What each suggests:
   whenever it comes. The connection guide's examples, which the console's
   snippets are, commit after processing
   ([connecting.md](connecting.md#commit-offsets-after-processing)).
-- **Records a producer refused itself** carry no reason in its telemetry, so
+- **Why a record failed** is not in a producer's telemetry, so
   `producer-errors` names the usual causes rather than the one; only the
-  brokers' rejected bytes pin a refusal on a message's size.
+  brokers' rejected bytes pin a refusal on a message's size, and while a
+  topic refuses batches for their size, all of a producer's errors on it
+  count as that.
 - **Rebalances shorter than the agent's 30 seconds** between looks may be
   missed, so the count is a lower bound. The agent marks a change of
   members as a rebalance when the group had members before and after it.

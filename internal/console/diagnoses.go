@@ -242,7 +242,7 @@ func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values m
 	}
 	each(metrics.MessagesInRecent, func(t *diagnosis.Topic, series metrics.Series) { t.MessagesInPerSecond = value(series) })
 	each(metrics.BytesIn, func(t *diagnosis.Topic, series metrics.Series) { t.BytesInPerSecond = value(series) })
-	each(metrics.BytesRejected, func(t *diagnosis.Topic, series metrics.Series) { t.BytesRejectedPerSecond = value(series) })
+	each(metrics.BytesRejected, func(t *diagnosis.Topic, series metrics.Series) { t.BytesRejected = value(series) })
 	each(metrics.PartitionSize, func(t *diagnosis.Topic, series metrics.Series) {
 		t.PartitionBytes = append(t.PartitionBytes, value(series))
 	})

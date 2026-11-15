@@ -150,6 +150,45 @@ func TestReconcileTiersTopicsOnce(t *testing.T) {
 	}
 }
 
+// A topic kept for less than the brokers' day on disk gets its retention as
+// its local retention, which Kafka requires to tier it; one that sets its
+// own, or keeps messages for ever, does not.
+func TestReconcileTiersShortRetentionTopics(t *testing.T) {
+	brokersDay := cfg(localRetentionMs, "86400000", kmsg.ConfigSourceStaticBrokerConfig)
+	admin := &fakeAdmin{topics: map[string][]kadm.Config{
+		"hourly":  {remoteDefault, deletePolicy, cfg(retentionMs, "3600000", kmsg.ConfigSourceDynamicTopicConfig), brokersDay},
+		"sixhour": {remoteDefault, deletePolicy, cfg(retentionMs, "21600000", kmsg.ConfigSourceDynamicTopicConfig), brokersDay},
+		"weekly":  {remoteDefault, deletePolicy, cfg(retentionMs, "604800000", kmsg.ConfigSourceDynamicTopicConfig), brokersDay},
+		"forever": {remoteDefault, deletePolicy, cfg(retentionMs, "-1", kmsg.ConfigSourceDynamicTopicConfig), brokersDay},
+		"own":     {remoteDefault, deletePolicy, cfg(retentionMs, "3600000", kmsg.ConfigSourceDynamicTopicConfig), cfg(localRetentionMs, "600000", kmsg.ConfigSourceDynamicTopicConfig)},
+	}}
+	if err := newReconciler(admin).Reconcile(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	local := func(topic string) string {
+		for _, c := range admin.topics[topic] {
+			if c.Key == localRetentionMs {
+				return value(&c) + " " + c.Source.String()
+			}
+		}
+		return ""
+	}
+	for topic, want := range map[string]string{
+		"hourly":  "3600000 DYNAMIC_TOPIC_CONFIG",
+		"sixhour": "21600000 DYNAMIC_TOPIC_CONFIG",
+		"weekly":  "86400000 STATIC_BROKER_CONFIG",
+		"forever": "86400000 STATIC_BROKER_CONFIG",
+		"own":     "600000 DYNAMIC_TOPIC_CONFIG",
+	} {
+		if got := local(topic); got != want {
+			t.Errorf("local.retention.ms of %s = %s, want %s", topic, got, want)
+		}
+		if Decide(admin.topics[topic]) != Tiered {
+			t.Errorf("%s is not tiered", topic)
+		}
+	}
+}
+
 func TestReconcileReportsFailedTopicsAndCarriesOn(t *testing.T) {
 	admin := newFakeAdmin()
 	admin.alterErr = map[string]error{"orders": kerr.PolicyViolation, "payments": kerr.UnknownTopicOrPartition}

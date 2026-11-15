@@ -4,8 +4,10 @@
 package topics
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"strconv"
@@ -33,6 +35,15 @@ const (
 // ReservedPrefixes are the starts of names that belong to Kafka, the
 // platform, Strimzi or Kafka Connect.
 var ReservedPrefixes = []string{"_", "changeport", "strimzi", "connect-"}
+
+// Retention is a retention in milliseconds as a duration, or false when it
+// is no duration at all: not positive, or too long to hold in one.
+func Retention(ms int64) (time.Duration, bool) {
+	if ms <= 0 || ms > math.MaxInt64/int64(time.Millisecond) {
+		return 0, false
+	}
+	return time.Duration(ms) * time.Millisecond, true
+}
 
 // RetentionPreset is a retention customers may choose.
 type RetentionPreset struct {
@@ -226,14 +237,14 @@ func checkName(name string, existing []string) error {
 // Current is what a change to a topic needs to know of it.
 type Current struct {
 	Partitions int
+	// ReplicationFactor is the topic's own, which a topic created outside
+	// the console may set differently from the profile's.
+	ReplicationFactor int
 	// RetentionMs is retention.ms, or nil for no limit.
 	RetentionMs *int64
 	// Compacted topics keep the latest message per key however old, so
 	// they have no retention to change.
 	Compacted bool
-	// Tiered topics keep a day on the brokers' disks, at most their
-	// retention.
-	Tiered bool
 }
 
 // Change is what a customer asks to change of a topic; nil fields stay as
@@ -270,7 +281,8 @@ func (p Policy) CheckChange(current Current, change Change, cluster Cluster) (Al
 			return Alteration{}, invalid("partitions", "choose at most %d partitions", p.MaxPartitions)
 		}
 		added := partitions - current.Partitions
-		if budget := cluster.Brokers * ReplicaBudgetPerBroker; cluster.Replicas+added*p.ReplicationFactor > budget {
+		replication := cmp.Or(current.ReplicationFactor, p.ReplicationFactor)
+		if budget := cluster.Brokers * ReplicaBudgetPerBroker; cluster.Replicas+added*replication > budget {
 			return Alteration{}, invalid("partitions", "the cluster holds %d of its %d partition replicas; %d more partitions would exceed them",
 				cluster.Replicas, budget, added)
 		}
@@ -285,14 +297,14 @@ func (p Policy) CheckChange(current Current, change Change, cluster Cluster) (Al
 		}
 		retention := strconv.FormatInt(change.Retention.Milliseconds(), 10)
 		alteration.Set = map[string]string{"retention.ms": retention}
-		if current.Tiered {
-			// The brokers' day on disk may not exceed the retention; with a
-			// longer retention, the brokers' default holds again.
-			if *change.Retention < localRetention {
-				alteration.Set["local.retention.ms"] = retention
-			} else {
-				alteration.Remove = []string{"local.retention.ms"}
-			}
+		// The brokers' day on disk may not exceed the retention of a tiered
+		// topic; with a longer retention, the brokers' default holds again.
+		// Topics not tiered yet get it too, as the agent tiers them within
+		// 30 seconds, and it means nothing until then.
+		if *change.Retention < localRetention {
+			alteration.Set["local.retention.ms"] = retention
+		} else {
+			alteration.Remove = []string{"local.retention.ms"}
 		}
 	}
 	return alteration, nil

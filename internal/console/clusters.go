@@ -47,9 +47,10 @@ type Clusters interface {
 	CreateTopic(ctx context.Context, customerID string, topic topics.Topic) error
 	// DeleteTopic deletes a topic, or returns ErrNoSuchTopic.
 	DeleteTopic(ctx context.Context, customerID, name string) error
-	// AlterTopic changes a topic's configs, then its partitions, or returns
-	// ErrNoSuchTopic.
-	AlterTopic(ctx context.Context, customerID, name string, alteration topics.Alteration) error
+	// AlterTopic changes a topic's configs, then its partitions, and
+	// returns what of the alteration it applied, also when a later step
+	// fails: ErrNoSuchTopic, ErrTopicChanged, or another error.
+	AlterTopic(ctx context.Context, customerID, name string, alteration topics.Alteration) (topics.Alteration, error)
 	// TopicConsumerGroups returns the consumer groups with committed offsets
 	// on a topic, by name.
 	TopicConsumerGroups(ctx context.Context, customerID, topic string) ([]string, error)
@@ -91,6 +92,10 @@ var ErrTopicExists = errors.New("the topic exists")
 // ErrNoSuchTopic means there is no topic of that name.
 var ErrNoSuchTopic = errors.New("no such topic")
 
+// ErrTopicChanged means a topic changed since it was read, as when another
+// admin added partitions meanwhile.
+var ErrTopicChanged = errors.New("the topic changed meanwhile")
+
 // Metrics reads the console's named queries.
 type Metrics interface {
 	Instant(ctx context.Context, tenant string, q metrics.Query, filter metrics.Filter, at time.Time) ([]metrics.Series, error)
@@ -117,6 +122,9 @@ type TopicSettings struct {
 	RetentionMs *int64
 	// MaxMessageBytes is max.message.bytes, the largest message it accepts.
 	MaxMessageBytes int64
+	// Described is whether Kafka described its configs; without them, the
+	// fields above are unknown rather than defaults.
+	Described bool
 }
 
 // KubeClusters implements Clusters with the Kubernetes API, as the console's
@@ -193,9 +201,13 @@ func (k KubeClusters) Topics(ctx context.Context, customerID string) ([]TopicSet
 	}
 	for i := range topics {
 		described, err := configs.On(topics[i].Name, nil)
+		if err == nil {
+			err = described.Err
+		}
 		if err != nil {
 			continue
 		}
+		topics[i].Described = true
 		for _, config := range described.Configs {
 			value := ""
 			if config.Value != nil {
@@ -337,16 +349,21 @@ func (k KubeClusters) DeleteTopic(ctx context.Context, customerID, name string) 
 }
 
 // AlterTopic implements Clusters.
-func (k KubeClusters) AlterTopic(ctx context.Context, customerID, name string, alteration topics.Alteration) error {
+func (k KubeClusters) AlterTopic(ctx context.Context, customerID, name string, alteration topics.Alteration) (topics.Alteration, error) {
+	var applied topics.Alteration
 	admin, err := k.Kafka.Admin(ctx, customerID)
 	if err != nil {
-		return err
+		return applied, err
 	}
-	fail := func(what string, err error, message string) error {
-		if errors.Is(err, kerr.UnknownTopicOrPartition) {
-			return fmt.Errorf("topic %s: %w", name, ErrNoSuchTopic)
+	fail := func(what string, err error, message string) (topics.Alteration, error) {
+		switch {
+		case errors.Is(err, kerr.UnknownTopicOrPartition):
+			return applied, fmt.Errorf("topic %s: %w", name, ErrNoSuchTopic)
+		case errors.Is(err, kerr.InvalidPartitions):
+			// It got partitions meanwhile, such as from another admin.
+			return applied, fmt.Errorf("topic %s: %w (%s)", name, ErrTopicChanged, message)
 		}
-		return fmt.Errorf("%s of topic %s of customer %s: %w (%s)", what, name, customerID, err, message)
+		return applied, fmt.Errorf("%s of topic %s of customer %s: %w (%s)", what, name, customerID, err, message)
 	}
 	if len(alteration.Set) > 0 || len(alteration.Remove) > 0 {
 		configs := make([]kadm.AlterConfig, 0, len(alteration.Set)+len(alteration.Remove))
@@ -361,6 +378,7 @@ func (k KubeClusters) AlterTopic(ctx context.Context, customerID, name string, a
 		if err = cmp.Or(err, onErr, response.Err); err != nil {
 			return fail("change the configs", err, response.ErrMessage)
 		}
+		applied.Set, applied.Remove = alteration.Set, alteration.Remove
 	}
 	if alteration.Partitions > 0 {
 		updated, err := admin.UpdatePartitions(ctx, alteration.Partitions, name)
@@ -368,8 +386,9 @@ func (k KubeClusters) AlterTopic(ctx context.Context, customerID, name string, a
 		if err = cmp.Or(err, onErr, response.Err); err != nil {
 			return fail("add partitions", err, response.ErrMessage)
 		}
+		applied.Partitions = alteration.Partitions
 	}
-	return nil
+	return applied, nil
 }
 
 // consumerGroupTypes are the groups that commit offsets: classic consumer

@@ -59,7 +59,7 @@ describe("changeWarnings", () => {
       },
       {
         loss: false,
-        text: "Messages older than 1 hour are deleted for good within minutes of saving.",
+        text: "Kafka then deletes messages older than 1 hour for good, a log segment at a time: within minutes on a busy topic, and on a quiet one once its current segment closes, after up to 7 days.",
       },
     ]);
   });
@@ -73,8 +73,18 @@ describe("changeWarnings", () => {
       cleanupPolicy: "delete",
     };
     expect(texts(changeWarnings(forever, 3, week, []))).toEqual([
-      "Messages older than 7 days are deleted for good within minutes of saving.",
+      "Kafka then deletes messages older than 7 days for good, a log segment at a time: within minutes on a busy topic, and on a quiet one once its current segment closes, after up to 7 days.",
     ]);
+  });
+
+  test("a lag not known yet may hide a loss", () => {
+    const warnings = changeWarnings(orders, 3, hour, undefined);
+    expect(warnings[0]).toEqual({
+      loss: true,
+      text: "How far behind the consumer groups are is not known, so a group further behind than 1 hour may lose messages it has not read.",
+    });
+    // Nothing shortened, nothing to fear.
+    expect(changeWarnings(orders, 3, week, undefined)).toEqual([]);
   });
 
   test("a compacted topic has no retention to warn about", () => {

@@ -68,7 +68,7 @@ func TestDiagnosesFromKafkaAndMetrics(t *testing.T) {
 		t.Errorf("found %s\nwant %s", got, want)
 	}
 	for _, f := range diagnosis.Diagnose(snapshot) {
-		if f.Rule == "oversized-messages" && !strings.Contains(f.Explanation, "larger than 1.0 MB, the most it accepts (`max.message.bytes`). They came from uploader.") {
+		if f.Rule == "oversized-messages" && !strings.Contains(f.Explanation, "in batches larger than 1.0 MB, the most it accepts (`max.message.bytes`). They came from uploader.") {
 			t.Errorf("oversized messages = %q, want the topic's limit and the producer", f.Explanation)
 		}
 	}

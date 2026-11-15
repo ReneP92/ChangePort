@@ -171,10 +171,10 @@ func equalRetention(a, b *int64) bool {
 }
 
 // retentionWords says a retention as the console offers it: 1 hour, 7 days,
-// or for ever.
+// or forever.
 func retentionWords(ms *int64) string {
 	if ms == nil {
-		return "for ever"
+		return "forever"
 	}
 	d := time.Duration(*ms) * time.Millisecond
 	for _, preset := range topics.RetentionPresets {

@@ -53,30 +53,39 @@ const billing: ConsumerGroupLag = {
   history: [],
 };
 
-function form(topic: Topic, more: { error?: Error; readers?: ConsumerGroupLag[] } = {}) {
+function form(
+  topic: Topic,
+  more: { error?: Error; readers?: ConsumerGroupLag[] | undefined; onEdit?: () => void } = {},
+) {
   const onSave = mock((change: unknown) => change);
   render(
     inDialog(
       <EditTopicForm
         topic={topic}
         policy={policy}
-        readers={more.readers ?? [billing]}
+        readers={"readers" in more ? more.readers : [billing]}
         saving={false}
         error={more.error ?? null}
         onSave={onSave}
+        {...(more.onEdit ? { onEdit: more.onEdit } : {})}
       />,
     ),
   );
   return onSave;
 }
 
-/** Chooses a retention through the select's native counterpart, as autofill does. */
+const warnings = () => screen.getByRole("list", { name: "What this change does" });
+
+/**
+ * Chooses a retention through the select's native counterpart, as autofill
+ * does; NaN chooses forever.
+ */
 function chooseRetention(ms: number) {
   const native = document.querySelector<HTMLSelectElement>("select[aria-hidden]");
   if (!native) {
     throw new Error("the retention select has no native counterpart");
   }
-  fireEvent.change(native, { target: { value: String(ms) } });
+  fireEvent.change(native, { target: { value: Number.isNaN(ms) ? "forever" : String(ms) } });
 }
 
 describe("EditTopicForm", () => {
@@ -114,13 +123,42 @@ describe("EditTopicForm", () => {
   test("a retention shorter than a group is behind says it loses messages", () => {
     const onSave = form(orders);
     chooseRetention(hour);
-    expect(
-      screen.getByText(
-        "billing is 3 hours behind. Keeping messages for 1 hour, orders deletes messages billing has not read yet.",
-      ),
-    ).toBeDefined();
+    const loss =
+      "billing is 3 hours behind. Keeping messages for 1 hour, orders deletes messages billing has not read yet.";
+    expect(within(warnings()).getByText(loss)).toBeDefined();
+    // Screen readers hear it as it appears.
+    expect(document.querySelector("[aria-live=polite]")?.textContent).toBe(loss);
     fireEvent.click(screen.getByRole("button", { name: "Save, losing unread messages" }));
     expect(onSave).toHaveBeenCalledWith({ retentionMs: hour });
+  });
+
+  test("while the groups' lag is unknown, a shorter retention may lose messages", () => {
+    form(orders, { readers: undefined });
+    chooseRetention(hour);
+    expect(
+      within(warnings()).getByText(/How far behind the consumer groups are is not known/),
+    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Save, losing unread messages" })).toBeDefined();
+  });
+
+  test("a topic kept forever can stay so", () => {
+    const { retentionMs, ...rest } = orders;
+    expect(retentionMs).toBe(week);
+    const onSave = form(rest);
+    expect(screen.getByLabelText("Retention").textContent).toBe("Forever");
+    chooseRetention(hour);
+    chooseRetention(Number.NaN);
+    expect(screen.queryByRole("list", { name: "What this change does" })).toBeNull();
+    fireEvent.submit(screen.getByRole("button", { name: "Save changes" }));
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  test("an edit makes the server's last problem stale", () => {
+    const onEdit = mock(() => undefined);
+    form(orders, { onEdit });
+    fireEvent.change(screen.getByLabelText("Partitions"), { target: { value: "4" } });
+    chooseRetention(hour);
+    expect(onEdit).toHaveBeenCalledTimes(2);
   });
 
   test("a compacted topic has no retention to change", () => {

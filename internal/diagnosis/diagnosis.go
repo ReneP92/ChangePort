@@ -41,8 +41,9 @@ type Topic struct {
 	// MaxMessageBytes is the largest message the topic accepts
 	// (max.message.bytes), or 0 when unknown.
 	MaxMessageBytes int64
-	// BytesRejectedPerSecond is what the topic refused as larger than that.
-	BytesRejectedPerSecond float64
+	// BytesRejected is what the topic refused as larger than that over the
+	// window.
+	BytesRejected float64
 	// Source is whether a Postgres source writes the topic: Changeport's
 	// own Connect worker, which sends no telemetry.
 	Source bool
@@ -102,9 +103,10 @@ type Producer struct {
 	SendsPerSecond   float64
 	ErrorsPerSecond  float64
 	RetriesPerSecond float64
-	// TopicErrorsPerSecond are the records a second Kafka refused, by
-	// topic. The rest of its errors are records the producer refused
-	// itself, before sending them.
+	// TopicErrorsPerSecond are the records a second that failed on their
+	// way to a topic or at it, by topic: refused by Kafka, or expired. The
+	// rest of its errors are records the producer refused itself, before
+	// sending them.
 	TopicErrorsPerSecond map[string]float64
 }
 

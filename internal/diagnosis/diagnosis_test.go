@@ -276,16 +276,20 @@ func TestProducerErrors(t *testing.T) {
 		t.Errorf("suggestion = %q, want the producer's size limit", found[0].Suggestion)
 	}
 
-	// Kafka refused them, on a topic that refuses nothing for size.
+	// They failed on their way to a topic that refused nothing for size,
+	// such as one that refused a single message, before the window.
 	refused := failing
 	refused.TopicErrorsPerSecond = map[string]float64{"orders": 3}
 	found = only(t, "producer-errors", Snapshot{Window: 15 * time.Minute, Producers: []Producer{refused}, Topics: []Topic{{Name: "orders"}}})
-	if want := "Kafka refused 3% of the records checkout tried to send in the last 15 minutes, on orders: 3 a second of 103."; len(found) != 1 || found[0].Explanation != want {
-		t.Errorf("found %+v\nwant %q", found, want)
+	if want := "3% of the records checkout tried to send in the last 15 minutes failed on their way to orders, or were refused there: 3 a second of 103."; len(found) != 1 || found[0].Explanation != want || found[0].Title != "Records from checkout fail to be delivered" {
+		t.Fatalf("found %+v\nwant %q", found, want)
+	}
+	if !strings.Contains(found[0].Suggestion, "the topic's `max.message.bytes`") || !strings.Contains(found[0].Suggestion, "`delivery.timeout.ms`") {
+		t.Errorf("suggestion = %q, want sizes and timeouts among the causes", found[0].Suggestion)
 	}
 
 	// Records a topic refused as too large are the oversized messages'.
-	tooLarge := Snapshot{Window: 15 * time.Minute, Producers: []Producer{refused}, Topics: []Topic{{Name: "orders", BytesRejectedPerSecond: 3e6}}}
+	tooLarge := Snapshot{Window: 15 * time.Minute, Producers: []Producer{refused}, Topics: []Topic{{Name: "orders", BytesRejected: 3e6}}}
 	if found := only(t, "producer-errors", tooLarge); len(found) > 0 {
 		t.Errorf("found %+v, want the oversized messages to explain them", found)
 	}
@@ -328,7 +332,7 @@ func TestOversizedMessages(t *testing.T) {
 	s := Snapshot{
 		Window: 15 * time.Minute,
 		Topics: []Topic{
-			{Name: "uploads", MaxMessageBytes: 1048588, BytesRejectedPerSecond: 2.5e6},
+			{Name: "uploads", MaxMessageBytes: 1048588, BytesRejected: 43.5e6},
 			{Name: "orders"},
 		},
 		Producers: []Producer{
@@ -340,10 +344,10 @@ func TestOversizedMessages(t *testing.T) {
 	if len(found) != 1 || found[0].Severity != Warning || found[0].ID != "oversized-messages:uploads" {
 		t.Fatalf("found %+v, want one warning about uploads", found)
 	}
-	if want := "Over the last 15 minutes, uploads refused 2.5 MB a second of messages larger than 1.0 MB, the most it accepts (`max.message.bytes`). They came from uploader. Refused messages are not kept: unless their producer handles the error, they are lost."; found[0].Explanation != want {
+	if want := "Over the last 15 minutes, uploads refused 43.5 MB sent in batches larger than 1.0 MB, the most it accepts (`max.message.bytes`). They came from uploader. A message that large on its own is not kept: unless its producer handles the error, it is lost. Java producers split batches of smaller messages and send them again."; found[0].Explanation != want {
 		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
 	}
-	for _, want := range []string{"object storage", "`compression.type=zstd`", "`max.request.size`", "`max.partition.fetch.bytes`"} {
+	for _, want := range []string{"object storage", "`compression.type=zstd`", "`max.request.size`"} {
 		if !strings.Contains(found[0].Suggestion, want) {
 			t.Errorf("suggestion = %q, want it to mention %s", found[0].Suggestion, want)
 		}
@@ -352,7 +356,7 @@ func TestOversizedMessages(t *testing.T) {
 	// Producers without telemetry go unnamed, and an unknown limit unsaid.
 	s.Producers, s.Topics[0].MaxMessageBytes = nil, 0
 	found = only(t, "oversized-messages", s)
-	if len(found) != 1 || !strings.Contains(found[0].Explanation, "larger than the most it accepts (`max.message.bytes`). Refused") {
+	if len(found) != 1 || !strings.Contains(found[0].Explanation, "larger than the most it accepts (`max.message.bytes`). A message") {
 		t.Errorf("found %+v, want no producers named", found)
 	}
 }

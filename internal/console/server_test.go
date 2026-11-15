@@ -2,6 +2,7 @@ package console
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -747,6 +748,10 @@ type fakeClusters struct {
 	deleted []string
 	// altered records the changes made to topics, by customer/topic.
 	altered map[string]topics.Alteration
+	// alterFails makes AlterTopic apply the configs, then fail as this.
+	alterFails error
+	// undescribed lists topics whose configs Kafka does not describe.
+	undescribed map[string]bool
 	// described are the consumer groups Kafka describes, by customer, when
 	// a test sets them.
 	described map[string][]ConsumerGroup
@@ -781,12 +786,17 @@ func (f *fakeClusters) DeleteTopic(_ context.Context, id, name string) error {
 	return nil
 }
 
-func (f *fakeClusters) AlterTopic(_ context.Context, id, name string, alteration topics.Alteration) error {
-	if name != id+"-orders" {
-		return ErrNoSuchTopic
+func (f *fakeClusters) AlterTopic(_ context.Context, id, name string, alteration topics.Alteration) (topics.Alteration, error) {
+	if name != id+"-orders" && !slices.ContainsFunc(f.topics[id], func(t topics.Topic) bool { return t.Name == name }) {
+		return topics.Alteration{}, ErrNoSuchTopic
+	}
+	if f.alterFails != nil {
+		applied := topics.Alteration{Set: alteration.Set, Remove: alteration.Remove}
+		f.altered[id+"/"+name] = applied
+		return applied, f.alterFails
 	}
 	f.altered[id+"/"+name] = alteration
-	return nil
+	return alteration, nil
 }
 
 func (f *fakeClusters) ConsumerGroups(_ context.Context, id string) ([]ConsumerGroup, error) {
@@ -811,9 +821,12 @@ func (f *fakeClusters) Topics(_ context.Context, id string) ([]TopicSettings, er
 		return nil, fmt.Errorf("no certificate yet: %w", clusters.ErrNotReady)
 	}
 	week := int64(7 * 24 * time.Hour / time.Millisecond)
-	settings := []TopicSettings{{Name: id + "-orders", Partitions: 3, ReplicationFactor: 1, Tiered: true, CleanupPolicy: "delete", RetentionMs: &week}}
+	settings := []TopicSettings{{Name: id + "-orders", Partitions: 3, ReplicationFactor: 1, Tiered: true, CleanupPolicy: "delete", RetentionMs: &week, Described: !f.undescribed[id+"-orders"]}}
 	for _, t := range f.topics[id] {
-		settings = append(settings, TopicSettings{Name: t.Name, Partitions: int(t.Partitions), ReplicationFactor: int(t.ReplicationFactor), CleanupPolicy: "delete", RetentionMs: &week})
+		settings = append(settings, TopicSettings{
+			Name: t.Name, Partitions: int(t.Partitions), ReplicationFactor: int(t.ReplicationFactor),
+			CleanupPolicy: cmp.Or(t.Configs["cleanup.policy"], "delete"), RetentionMs: &week, Described: !f.undescribed[t.Name],
+		})
 	}
 	return settings, nil
 }
@@ -1126,6 +1139,48 @@ func TestAdminsChangeTopicsWithinTheGuardrails(t *testing.T) {
 	}
 	if len(f.clusters.altered) != 0 {
 		t.Errorf("refused changes were made: %v", f.clusters.altered)
+	}
+}
+
+func TestChangeTopicRefusals(t *testing.T) {
+	f := newFixture(t)
+	admin := f.signer.token(t, session{user: "user_3", org: "org_acme", role: "admin"})
+	f.clusters.topics["acme"] = []topics.Topic{{Name: "addresses", Partitions: 3, ReplicationFactor: 1, Configs: map[string]string{"cleanup.policy": "compact"}}}
+	f.clusters.undescribed = map[string]bool{"acme-orders": true}
+	tests := []struct {
+		name, topic, body, want string
+		status                  int
+	}{
+		{"the retention of a compacted topic", "addresses", `{"retentionMs":3600000}`, `"field":"retention"`, 400},
+		{"a retention too long for a duration", "addresses", `{"retentionMs":288230376155311744}`, `"field":"retention"`, 400},
+		{"a topic whose settings are unknown", "acme-orders", `{"retentionMs":3600000}`, "could not be read", 409},
+	}
+	for _, tt := range tests {
+		if status, body := send(t, f.handler, http.MethodPatch, "/api/customer/topics/"+tt.topic, admin, tt.body); status != tt.status || !strings.Contains(body, tt.want) {
+			t.Errorf("changing %s = %d %s, want %d with %s", tt.name, status, body, tt.status, tt.want)
+		}
+	}
+	// Adding partitions to a compacted topic is fine.
+	if status, body := send(t, f.handler, http.MethodPatch, "/api/customer/topics/addresses", admin, `{"partitions":4}`); status != 200 || !strings.Contains(body, `"partitions":4`) {
+		t.Errorf("adding partitions to a compacted topic = %d %s", status, body)
+	}
+}
+
+// When the partitions fail after the retention changed, what changed is
+// audited and recorded, and the admin is told what happened.
+func TestChangeTopicPartlyMade(t *testing.T) {
+	f := newFixture(t)
+	admin := f.signer.token(t, session{user: "user_3", org: "org_acme", role: "admin"})
+	f.clusters.alterFails = fmt.Errorf("topic acme-orders: %w", ErrTopicChanged)
+	status, body := send(t, f.handler, http.MethodPatch, "/api/customer/topics/acme-orders", admin, `{"partitions":6,"retentionMs":3600000}`)
+	if status != 409 || !strings.Contains(body, "none were added; its retention did change") {
+		t.Fatalf("changing a topic changed meanwhile = %d %s, want 409 saying what changed", status, body)
+	}
+	if !strings.Contains(f.log.String(), `"partitions_before":3,"partitions":3,"retention_ms_before":604800000,"retention_ms":3600000`) {
+		t.Errorf("no audit line for the retention changed in %s", f.log.String())
+	}
+	if len(f.recorded.events) != 1 || !strings.Contains(f.recorded.events[0].Message, "changed the retention of topic acme-orders from 7 days to 1 hour") {
+		t.Errorf("recorded %+v, want the retention change only", f.recorded.events)
 	}
 }
 

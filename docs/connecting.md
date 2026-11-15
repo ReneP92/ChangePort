@@ -76,12 +76,13 @@ read from each partition's leader, which works everywhere.
 A consumer group remembers how far it got by committing offsets. Commit a
 message's offset only once you have processed it: commit first and crash
 before processing, and the group moves on without it. Kafka clients commit
-by themselves by default (`enable.auto.commit`), every 5 seconds, the
-offsets of what earlier polls returned. That is safe only while you finish
-each message before polling again, on the same thread; handing messages to
-other threads, or keeping them for a batch, needs commits of your own. The
-examples below turn automatic commits off and commit after processing,
-which is safe either way.
+by themselves by default (`enable.auto.commit`), every few seconds. The Java
+client commits the offsets of what earlier polls returned, which is safe
+only while you finish each message before polling again, on the same
+thread. librdkafka-based clients (Python, Node.js) and franz-go commit in
+the background what a poll returned, even while you are still processing
+it. The examples below turn automatic commits off and commit after
+processing, which is safe in every client.
 
 Committing after processing means a consumer that crashes in between
 processes those messages again when it restarts, so make processing safe to

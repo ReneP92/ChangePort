@@ -159,10 +159,13 @@ Postgres source's topics keep the settings their source gives them.
 Before anything is saved, the dialog says what the change does to the
 consumers reading the topic:
 
-- **A shorter retention** deletes older messages for good within minutes.
-  A consumer group further behind than the new retention loses the messages
-  it has not read yet, and the save button says so; one at least half as
-  far behind is warned it would be close.
+- **A shorter retention** deletes older messages for good, a log segment at
+  a time: within minutes on a busy topic, and on a quiet one once its
+  current segment closes, after up to 7 days. A consumer group further
+  behind than the new retention loses the messages it has not read yet, and
+  the save button says so; one at least half as far behind is warned it
+  would be close. While the groups' lag is not known, the dialog counts that
+  as a possible loss.
 - **More partitions** send a key's new messages to another partition than
   its earlier ones, so for a while consumers may read them out of order.
   Consumers find new partitions within 5 minutes, and those with

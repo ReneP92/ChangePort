@@ -103,7 +103,7 @@ test("an admin adds partitions and shortens retention, told what it does first",
     await page.getByRole("option", { name: "1 hour" }).click();
     const warnings = edit.getByRole("list", { name: "What this change does" });
     await expect(warnings).toContainText(
-      "Messages older than 1 hour are deleted for good within minutes of saving.",
+      "Kafka then deletes messages older than 1 hour for good, a log segment at a time",
     );
     await expect(warnings).toContainText("a key's new messages may go to another partition");
     await expect(warnings).toContainText("Partitions can be added, never removed.");
@@ -136,6 +136,25 @@ test("an admin adds partitions and shortens retention, told what it does first",
     ]);
     expect(configs).toContain("retention.ms=3600000");
     expect(configs).toContain("local.retention.ms=3600000");
+
+    // A day again: the brokers keep their default day on disk.
+    await settings.getByRole("button", { name: "Edit" }).click();
+    await edit.getByRole("combobox", { name: "Retention" }).click();
+    await page.getByRole("option", { name: "1 day" }).click();
+    await expect(edit.getByRole("list", { name: "What this change does" })).toHaveCount(0);
+    await edit.getByRole("button", { name: "Save changes" }).click();
+    await expect(edit).toBeHidden();
+    await expect(settings).toContainText("Retention1 day");
+    const lengthened = kafka(a.id, properties, "kafka-configs.sh", [
+      ...connect(a.id),
+      "--describe",
+      "--entity-type",
+      "topics",
+      "--entity-name",
+      topic,
+    ]);
+    expect(lengthened).toContain("retention.ms=86400000");
+    expect(lengthened).not.toContain("local.retention.ms=");
 
     // The timeline says who changed it.
     const changes = page.getByRole("region", { name: "Changes" });
@@ -186,12 +205,12 @@ test("messages too large for their topic are diagnosed, with who sent them", asy
   kafka(a.id, properties, "kafka-topics.sh", [...connect(a.id), "--create", "--topic", topic]);
   const bootstrap = `bootstrap.${a.id}.kafka.changeport.test:9094`;
   // Records of 1.5 MB, a second apart: the topic accepts up to 1 MB.
-  const send = (clientID: string, ...props: string[]) =>
+  const send = (records: number, clientID: string, ...props: string[]) =>
     kafkaInBackground(a.id, properties, "kafka-producer-perf-test.sh", [
       "--topic",
       topic,
       "--num-records",
-      "120",
+      String(records),
       "--throughput",
       "1",
       "--record-size",
@@ -205,9 +224,11 @@ test("messages too large for their topic are diagnosed, with who sent them", asy
     ]).catch(() => "");
   const running: Promise<unknown>[] = [];
   try {
-    // One producer allows itself larger records, so the brokers refuse them;
-    // the other refuses them itself, before they reach Kafka.
-    running.push(send(refused, "max.request.size=2000000"), send(tooLarge));
+    // One producer allows itself larger records, so the brokers refuse
+    // them: only a few, as a one-off upload would, which the brokers report
+    // from their first refusal. The other refuses them itself, before they
+    // reach Kafka, for a while.
+    running.push(send(5, refused, "max.request.size=2000000"), send(120, tooLarge));
 
     const oversized = await expectDiagnosis(
       page,
@@ -216,7 +237,7 @@ test("messages too large for their topic are diagnosed, with who sent them", asy
     );
     await expect(oversized).toContainText(
       new RegExp(
-        `${topic} refused [\\d.]+ (KB|MB) a second of messages larger than 1\\.0 MB, the most it accepts`,
+        `${topic} refused [\\d.]+ MB sent in batches larger than 1\\.0 MB, the most it accepts`,
       ),
     );
     await expect(oversized).toContainText(`They came from ${refused}.`);
@@ -227,7 +248,7 @@ test("messages too large for their topic are diagnosed, with who sent them", asy
       `Records from ${tooLarge} fail before reaching Kafka`,
       3 * 60_000,
     );
-    await expect(before).toContainText("`max.request.size` (1 MB by default)");
+    await expect(before).toContainText("max.request.size (1 MB by default)");
     // The refused producer's errors are the topic's diagnosis, not its own.
     await expect(
       card(page, "What needs attention").getByRole("listitem", {
