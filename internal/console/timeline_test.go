@@ -43,7 +43,8 @@ func (f *fakeEvents) Read(_ context.Context, q events.Query) ([]events.Event, bo
 	for _, e := range f.events {
 		about := (len(q.Topics) == 0 && q.ConsumerGroup == "") || slices.Contains(q.Topics, e.Topic) ||
 			(q.ConsumerGroup != "" && e.ConsumerGroup == q.ConsumerGroup) || e.Kind == events.BrokerRestarted
-		if e.Tenant == q.Tenant && !e.Time.Before(q.Start) && e.Time.Before(q.End) && about {
+		kind := len(q.Kinds) == 0 || slices.Contains(q.Kinds, e.Kind)
+		if e.Tenant == q.Tenant && !e.Time.Before(q.Start) && e.Time.Before(q.End) && about && kind {
 			out = append(out, e)
 		}
 	}

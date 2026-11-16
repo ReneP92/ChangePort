@@ -8,6 +8,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/ReneP92/changeport/internal/diagnosis"
+	"github.com/ReneP92/changeport/internal/events"
 	"github.com/ReneP92/changeport/internal/metrics"
 )
 
@@ -172,5 +173,28 @@ func TestProducerMemory(t *testing.T) {
 	}
 	if saw := memory.look("globex", open(20), now); saw.wrote != nil || len(saw.openSince) != 1 {
 		t.Errorf("another customer's first look = %+v", saw)
+	}
+}
+
+// Moves and replays admins made in the console in the last hour reach the
+// snapshot, the latest per group.
+func TestRecentChangesFindMoves(t *testing.T) {
+	f := newFixture(t)
+	now := time.Now()
+	f.events.events = append(f.events.events,
+		events.Event{Time: now.Add(-50 * time.Minute), Tenant: "acme", Kind: events.GroupMoved, ConsumerGroup: "billing", Actor: "Grace Hopper"},
+		events.Event{Time: now.Add(-5 * time.Minute), Tenant: "acme", Kind: events.GroupMoved, ConsumerGroup: "billing", Actor: "Ada Lovelace"},
+		events.Event{Time: now.Add(-2 * time.Minute), Tenant: "acme", Kind: events.GroupReplayed, ConsumerGroup: "billing-replay", Actor: "Ada Lovelace"},
+		events.Event{Time: now.Add(-2 * time.Hour), Tenant: "acme", Kind: events.GroupMoved, ConsumerGroup: "search"},
+	)
+	found := f.server.recentChanges(t.Context(), "acme", now).moved
+	if m := found["billing"]; m == nil || m.By != "Ada Lovelace" || m.Ago != 5*time.Minute || m.Replay {
+		t.Errorf("billing moved %+v, want Ada's move 5 minutes ago", m)
+	}
+	if m := found["billing-replay"]; m == nil || !m.Replay {
+		t.Errorf("billing-replay moved %+v, want a replay", m)
+	}
+	if m, ok := found["search"]; ok {
+		t.Errorf("search moved %+v, want nothing more than an hour ago", m)
 	}
 }

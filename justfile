@@ -288,6 +288,9 @@ console-access-test customer="demo":
 tiered-storage-test customer="demo":
     hack/tiered-storage-test.sh {{ customer }}
 
+replay-test customer="demo":
+    hack/replay-test.sh {{ customer }}
+
 # Point this machine's DNS for the customers' Kafka names at the host gateway (asks for sudo)
 [group('Local development (kind + Strimzi)')]
 host-dns:

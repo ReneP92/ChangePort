@@ -1,5 +1,5 @@
 import { useAuth } from "@clerk/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createContext, use, useEffect } from "react";
 import { useLocation } from "react-router";
 import {
@@ -17,6 +17,7 @@ import {
   type NewSource,
   type NewTopic,
   type NewTrialRequest,
+  type PositionChange,
   type ReceiverKind,
   type SetupSQLRequest,
   type SourceChange,
@@ -414,6 +415,71 @@ export function useConsumerGroups(refetchInterval = 30_000) {
     queryKey: ["customer", "consumer-groups", organization],
     queryFn: async () => unwrap(await api.GET("/api/customer/consumer-groups")).groups,
     refetchInterval,
+  });
+}
+
+/**
+ * What moving a consumer group, or replaying into a new one, would do, for
+ * admins; nothing while change is null. It is asked again every 10 seconds,
+ * as consumers join and leave the group.
+ */
+export function useGroupPositionPreview(group: string, change: PositionChange | null) {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["customer", "consumer-groups", organization, group, "preview", change],
+    queryFn: async () =>
+      unwrap(
+        await api.POST("/api/customer/consumer-groups/{group}/position/preview", {
+          params: { path: { group } },
+          body: change ?? { to: "latest" },
+        }),
+      ),
+    enabled: change !== null,
+    // The last preview stays while the next loads, so the dialog does not jump.
+    placeholderData: keepPreviousData,
+    retry: false,
+    refetchInterval: 10_000,
+  });
+}
+
+/** Moves a consumer group without members, then refreshes its lag and changes. */
+export function useMoveGroup() {
+  const api = useApi();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ group, change }: { group: string; change: PositionChange }) =>
+      unwrap(
+        await api.PUT("/api/customer/consumer-groups/{group}/position", {
+          params: { path: { group } },
+          body: change,
+        }),
+      ),
+    onSuccess: () =>
+      Promise.all([
+        queries.invalidateQueries({ queryKey: ["customer", "consumer-groups"] }),
+        queries.invalidateQueries({ queryKey: ["customer", "events"] }),
+      ]),
+  });
+}
+
+/** Creates a consumer group to replay another's topics, then refreshes the groups. */
+export function useReplayGroup() {
+  const api = useApi();
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ group, change }: { group: string; change: PositionChange }) =>
+      unwrap(
+        await api.POST("/api/customer/consumer-groups/{group}/replays", {
+          params: { path: { group } },
+          body: change,
+        }),
+      ),
+    onSuccess: () =>
+      Promise.all([
+        queries.invalidateQueries({ queryKey: ["customer", "consumer-groups"] }),
+        queries.invalidateQueries({ queryKey: ["customer", "events"] }),
+      ]),
   });
 }
 

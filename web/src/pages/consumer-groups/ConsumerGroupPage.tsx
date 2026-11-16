@@ -24,6 +24,7 @@ import { HealthBadge } from "@/components/HealthBadge";
 import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
 import { SubjectHealth } from "@/pages/diagnoses/SubjectHealth";
 import { CustomerArea } from "@/pages/CustomerArea";
+import { ChangePositionDialog } from "@/pages/consumer-groups/ChangePositionDialog";
 import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
 
 /**
@@ -32,10 +33,10 @@ import { useEnvironmentCrumb, useEnvironmentPath } from "@/lib/useEnvironment";
  */
 export function ConsumerGroupPage() {
   const { group = "" } = useParams();
-  return <CustomerArea>{() => <ConsumerGroup group={group} />}</CustomerArea>;
+  return <CustomerArea>{(_, admin) => <ConsumerGroup group={group} admin={admin} />}</CustomerArea>;
 }
 
-function ConsumerGroup({ group }: { group: string }) {
+function ConsumerGroup({ group, admin }: { group: string; admin: boolean }) {
   const envPath = useEnvironmentPath();
   const crumbs = useEnvironmentCrumb();
   const groups = useConsumerGroups();
@@ -54,6 +55,11 @@ function ConsumerGroup({ group }: { group: string }) {
     <Page
       crumbs={[...crumbs, { label: "Consumer groups", to: envPath("/#consumer-groups") }]}
       title={<span className="[overflow-wrap:anywhere]">{group}</span>}
+      actions={
+        admin && rows.length > 0 ? (
+          <ChangePositionDialog group={group} topics={rows.map((row) => row.topic)} />
+        ) : null
+      }
       badge={
         <>
           <AlertBadge alerts={groupAlerts} />

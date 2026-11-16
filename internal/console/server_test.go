@@ -761,10 +761,21 @@ type fakeClusters struct {
 	// described are the consumer groups Kafka describes, by customer, when
 	// a test sets them.
 	described map[string][]ConsumerGroup
+	// positions are where groups are on each partition, by customer/group;
+	// a time puts a group halfway between a partition's start and end.
+	positions map[string][]PartitionPosition
+	// committed records the offsets committed by the tests, by
+	// customer/group; commitFails makes CommitGroupOffsets commit the first
+	// partition only, then fail as this.
+	committed   map[string][]PartitionPosition
+	commitFails error
 }
 
 func newFakeClusters() *fakeClusters {
-	return &fakeClusters{notReady: map[string]bool{}, topics: map[string][]topics.Topic{}, groups: map[string][]string{}, altered: map[string]topics.Alteration{}}
+	return &fakeClusters{
+		notReady: map[string]bool{}, topics: map[string][]topics.Topic{}, groups: map[string][]string{}, altered: map[string]topics.Alteration{},
+		positions: map[string][]PartitionPosition{}, committed: map[string][]PartitionPosition{},
+	}
 }
 
 func (f *fakeClusters) Load(_ context.Context, id string) (topics.Cluster, error) {
@@ -823,6 +834,39 @@ func (f *fakeClusters) ConsumerGroups(_ context.Context, id string) ([]ConsumerG
 	return []ConsumerGroup{{Name: "billing", State: "Stable", Members: []GroupMember{
 		{ClientID: id + "-billing-1", Assigned: map[string]int{id + "-orders": 3}},
 	}}}, nil
+}
+
+func (f *fakeClusters) GroupPositions(_ context.Context, id, group string, names []string, to Position) ([]PartitionPosition, error) {
+	var positions []PartitionPosition
+	for _, p := range f.positions[id+"/"+group] {
+		if len(names) > 0 && !slices.Contains(names, p.Topic) {
+			continue
+		}
+		switch to.To {
+		case api.PositionChangeToEarliest:
+			p.Target, p.TargetTime = p.Start, time.UnixMilli(1).UTC()
+		case api.PositionChangeToLatest:
+			p.Target = p.End
+		default:
+			p.Target, p.TargetTime = (p.Start+p.End)/2, to.Time.UTC()
+		}
+		positions = append(positions, p)
+	}
+	for _, name := range names {
+		if !slices.ContainsFunc(positions, func(p PartitionPosition) bool { return p.Topic == name }) {
+			return nil, fmt.Errorf("topic %s: %w", name, ErrNoSuchTopic)
+		}
+	}
+	return positions, nil
+}
+
+func (f *fakeClusters) CommitGroupOffsets(_ context.Context, id, group string, positions []PartitionPosition) ([]PartitionPosition, error) {
+	if f.commitFails != nil {
+		f.committed[id+"/"+group] = positions[:1]
+		return positions[:1], f.commitFails
+	}
+	f.committed[id+"/"+group] = positions
+	return positions, nil
 }
 
 func (f *fakeClusters) TopicConsumerGroups(_ context.Context, _, topic string) ([]string, error) {

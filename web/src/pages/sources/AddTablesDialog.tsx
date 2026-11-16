@@ -16,7 +16,7 @@ import { SqlBlock } from "@/pages/sources/SqlBlock";
 import { TablePicker } from "@/pages/sources/TablePicker";
 
 /** Wide dialogs, for tables and SQL, that scroll within a short screen. */
-export const wideDialog = "max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-xl";
+export const wideDialog = "sm:max-w-xl";
 
 /**
  * A button that opens the dialog to add tables to a source: the source

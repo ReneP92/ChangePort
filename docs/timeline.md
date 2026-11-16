@@ -16,6 +16,7 @@ restarts, which affect everything, show everywhere.
 | A topic given more partitions | The Kafka agent, and the console for partitions added there, which names who did it | Within 30 seconds |
 | An ACL added or removed | The Kafka agent | Within 30 seconds |
 | A consumer group rebalanced: members joined, left or rejoined | The Kafka agent | Within 30 seconds |
+| A consumer group moved by an admin, or created to replay another's topics ([console.md](console.md#moving-a-consumer-group)) | The console, which names who did it | At once |
 | A broker restarted: a rolling update, a certificate renewal, a crash, or its pod replaced | The provisioner | At once |
 | The brokers started or stopped throttling a client | vmalert, Alertmanager and the provisioner | Within a minute or two, stamped with when it started and stopped |
 

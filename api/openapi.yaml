@@ -1234,6 +1234,106 @@ paths:
           $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/customer/consumer-groups/{group}/position/preview:
+    post:
+      operationId: previewGroupPosition
+      summary: >-
+        What moving a consumer group, or replaying into a new one, would do, for organization
+        admins; nothing changes
+      parameters:
+        - $ref: "#/components/parameters/ConsumerGroupName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PositionChange"
+      responses:
+        "200":
+          description: What the change would do
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/consumer-groups/{group}/position:
+    put:
+      operationId: moveGroup
+      summary: >-
+        Moves a consumer group without members to the earliest message, the latest or a time, for
+        organization admins; every move is audited and recorded on the timeline
+      parameters:
+        - $ref: "#/components/parameters/ConsumerGroupName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PositionChange"
+      responses:
+        "200":
+          description: What the move did
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/consumer-groups/{group}/replays:
+    post:
+      operationId: replayGroup
+      summary: >-
+        Creates a new consumer group at a point in the history of the topics a group reads, so a
+        service can read them again without moving the group, for organization admins; every replay
+        is audited and recorded on the timeline
+      parameters:
+        - $ref: "#/components/parameters/ConsumerGroupName"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PositionChange"
+      responses:
+        "201":
+          description: The new group, and what it reads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/trial-requests:
     post:
       operationId: requestTrial
@@ -1544,6 +1644,13 @@ components:
       description: How far back to look, up to now
       schema:
         $ref: "#/components/schemas/TimeRange"
+    ConsumerGroupName:
+      name: group
+      in: path
+      required: true
+      description: The consumer group's name
+      schema:
+        type: string
     TopicName:
       name: topic
       in: path
@@ -2500,6 +2607,85 @@ components:
           description: The lag in seconds over the last hour, a point a minute.
           items:
             $ref: "#/components/schemas/Point"
+    PositionChange:
+      type: object
+      description: >-
+        Where a consumer group goes: the earliest message kept, the latest (skipping what it has
+        not read), or the first message at or after a time
+      required: [to]
+      properties:
+        to:
+          type: string
+          enum: [earliest, latest, time]
+        time:
+          type: string
+          format: date-time
+          description: Required when to is time; not in the future
+        topics:
+          type: array
+          description: >-
+            The topics to move it on; without them, every topic the group has a position on
+          items:
+            type: string
+        into:
+          type: string
+          description: >-
+            For a replay, the new group, which must not exist yet; the group in the path stays where
+            it is. Letters, digits, dots, dashes and underscores, at most 200
+    PositionPreview:
+      type: object
+      required: [group, members, topics]
+      properties:
+        group:
+          type: string
+          description: The group that moves, or the new one of a replay
+        members:
+          type: array
+          description: >-
+            The client IDs of the group's members; Kafka moves a group only while it has none
+          items:
+            type: string
+        topics:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopicPosition"
+        tieredSeconds:
+          type: integer
+          format: int64
+          description: >-
+            At least how long reading the messages kept in tiered storage takes, at the brokers'
+            limit for reading it back; absent when none come from there, or their size is unknown
+    TopicPosition:
+      type: object
+      description: >-
+        What a move does on one topic, in messages: offsets count transaction markers and the
+        messages compaction removed too, so on such topics the numbers are approximate
+      required: [topic, partitions, readAgain, skipped, toRead, tieredMessages]
+      properties:
+        topic:
+          type: string
+        partitions:
+          type: integer
+        readAgain:
+          type: integer
+          format: int64
+          description: The messages the group has read and reads again
+        skipped:
+          type: integer
+          format: int64
+          description: The messages the group has not read and never will
+        toRead:
+          type: integer
+          format: int64
+          description: The messages the group has to read after the move, up to now
+        tieredMessages:
+          type: integer
+          format: int64
+          description: Of those, the ones read back from tiered storage, older than the brokers keep on disk
+        from:
+          type: string
+          format: date-time
+          description: The time of the first message the group reads next; absent when it reads only new ones
     Throughput:
       type: object
       required: [range, stepSeconds, bytesIn, bytesOut]
@@ -2786,6 +2972,8 @@ components:
             - acl.added
             - acl.removed
             - group.rebalanced
+            - group.moved
+            - group.replayed
             - broker.restarted
             - client.throttled
             - client.unthrottled

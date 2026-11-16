@@ -286,16 +286,19 @@ func joinTransactions(snapshot *diagnosis.Snapshot, transactions []Transaction, 
 type changes struct {
 	rebalances      map[string]int
 	partitionsAdded map[string]bool
+	// moved is how admins last moved groups, or created them to replay,
+	// in the last hour.
+	moved map[string]*diagnosis.Move
 }
 
 // recentChanges reads the changes from the timeline. It is a help rather
 // than a need: without it, the rules that read it find nothing, and the
 // others still run.
 func (s *Server) recentChanges(ctx context.Context, customerID string, now time.Time) changes {
-	found := changes{rebalances: map[string]int{}, partitionsAdded: map[string]bool{}}
-	read := func(since time.Duration, kind events.Kind) []events.Event {
+	found := changes{rebalances: map[string]int{}, partitionsAdded: map[string]bool{}, moved: map[string]*diagnosis.Move{}}
+	read := func(since time.Duration, kinds ...events.Kind) []events.Event {
 		read, _, err := s.events.Read(ctx, events.Query{
-			Tenant: customerID, Start: now.Add(-since), End: now, Kinds: []events.Kind{kind}, Limit: events.MaxEvents,
+			Tenant: customerID, Start: now.Add(-since), End: now, Kinds: kinds, Limit: events.MaxEvents,
 		})
 		if err != nil {
 			s.logger.WarnContext(ctx, "diagnoses without the timeline", "customer", customerID, "error", err)
@@ -305,6 +308,12 @@ func (s *Server) recentChanges(ctx context.Context, customerID string, now time.
 	for _, change := range read(time.Hour, events.GroupRebalanced) {
 		if change.Rebalance && change.ConsumerGroup != "" {
 			found.rebalances[change.ConsumerGroup]++
+		}
+	}
+	for _, change := range read(time.Hour, events.GroupMoved, events.GroupReplayed) {
+		ago := now.Sub(change.Time)
+		if last, ok := found.moved[change.ConsumerGroup]; change.ConsumerGroup != "" && (!ok || ago < last.Ago) {
+			found.moved[change.ConsumerGroup] = &diagnosis.Move{By: change.Actor, Ago: ago, Replay: change.Kind == events.GroupReplayed}
 		}
 	}
 	for _, change := range read(24*time.Hour, events.TopicPartitionsAdded) {
@@ -362,7 +371,7 @@ func buildSnapshot(settings []TopicSettings, described []ConsumerGroup, values m
 		if g, ok := byGroup[name]; ok {
 			return g
 		}
-		g := &diagnosis.Group{Name: name, Rebalances: recent.rebalances[name]}
+		g := &diagnosis.Group{Name: name, Rebalances: recent.rebalances[name], Moved: recent.moved[name]}
 		byGroup[name] = g
 		return g
 	}

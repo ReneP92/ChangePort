@@ -301,6 +301,27 @@ func (e NewTopicCleanupPolicy) Valid() bool {
 	}
 }
 
+// Defines values for PositionChangeTo.
+const (
+	PositionChangeToEarliest PositionChangeTo = "earliest"
+	PositionChangeToLatest   PositionChangeTo = "latest"
+	PositionChangeToTime     PositionChangeTo = "time"
+)
+
+// Valid indicates whether the value is a known member of the PositionChangeTo enum.
+func (e PositionChangeTo) Valid() bool {
+	switch e {
+	case PositionChangeToEarliest:
+		return true
+	case PositionChangeToLatest:
+		return true
+	case PositionChangeToTime:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Provider.
 const (
 	Azure    Provider = "azure"
@@ -548,7 +569,9 @@ const (
 	BrokerRestarted   TimelineEventKind = "broker.restarted"
 	ClientThrottled   TimelineEventKind = "client.throttled"
 	ClientUnthrottled TimelineEventKind = "client.unthrottled"
+	GroupMoved        TimelineEventKind = "group.moved"
 	GroupRebalanced   TimelineEventKind = "group.rebalanced"
+	GroupReplayed     TimelineEventKind = "group.replayed"
 	TopicConfig       TimelineEventKind = "topic.config"
 	TopicCreated      TimelineEventKind = "topic.created"
 	TopicDeleted      TimelineEventKind = "topic.deleted"
@@ -568,7 +591,11 @@ func (e TimelineEventKind) Valid() bool {
 		return true
 	case ClientUnthrottled:
 		return true
+	case GroupMoved:
+		return true
 	case GroupRebalanced:
+		return true
+	case GroupReplayed:
 		return true
 	case TopicConfig:
 		return true
@@ -693,16 +720,16 @@ func (e TrialThroughput) Valid() bool {
 
 // Defines values for TailTopicParamsFrom.
 const (
-	Latest TailTopicParamsFrom = "latest"
-	Recent TailTopicParamsFrom = "recent"
+	TailTopicParamsFromLatest TailTopicParamsFrom = "latest"
+	TailTopicParamsFromRecent TailTopicParamsFrom = "recent"
 )
 
 // Valid indicates whether the value is a known member of the TailTopicParamsFrom enum.
 func (e TailTopicParamsFrom) Valid() bool {
 	switch e {
-	case Latest:
+	case TailTopicParamsFromLatest:
 		return true
-	case Recent:
+	case TailTopicParamsFromRecent:
 		return true
 	default:
 		return false
@@ -1194,6 +1221,35 @@ type Point struct {
 	Value float32   `json:"value"`
 }
 
+// PositionChange Where a consumer group goes: the earliest message kept, the latest (skipping what it has not read), or the first message at or after a time
+type PositionChange struct {
+	// Into For a replay, the new group, which must not exist yet; the group in the path stays where it is. Letters, digits, dots, dashes and underscores, at most 200
+	Into *string `json:"into,omitempty"`
+
+	// Time Required when to is time; not in the future
+	Time *time.Time       `json:"time,omitempty"`
+	To   PositionChangeTo `json:"to"`
+
+	// Topics The topics to move it on; without them, every topic the group has a position on
+	Topics *[]string `json:"topics,omitempty"`
+}
+
+// PositionChangeTo defines model for PositionChange.To.
+type PositionChangeTo string
+
+// PositionPreview defines model for PositionPreview.
+type PositionPreview struct {
+	// Group The group that moves, or the new one of a replay
+	Group string `json:"group"`
+
+	// Members The client IDs of the group's members; Kafka moves a group only while it has none
+	Members []string `json:"members"`
+
+	// TieredSeconds At least how long reading the messages kept in tiered storage takes, at the brokers' limit for reading it back; absent when none come from there, or their size is unknown
+	TieredSeconds *int64          `json:"tieredSeconds,omitempty"`
+	Topics        []TopicPosition `json:"topics"`
+}
+
 // Problem An error, after RFC 9457
 type Problem struct {
 	Detail *string `json:"detail,omitempty"`
@@ -1623,6 +1679,26 @@ type TopicPolicy struct {
 	RetentionPresets  []RetentionPreset `json:"retentionPresets"`
 }
 
+// TopicPosition What a move does on one topic, in messages: offsets count transaction markers and the messages compaction removed too, so on such topics the numbers are approximate
+type TopicPosition struct {
+	// From The time of the first message the group reads next; absent when it reads only new ones
+	From       *time.Time `json:"from,omitempty"`
+	Partitions int        `json:"partitions"`
+
+	// ReadAgain The messages the group has read and reads again
+	ReadAgain int64 `json:"readAgain"`
+
+	// Skipped The messages the group has not read and never will
+	Skipped int64 `json:"skipped"`
+
+	// TieredMessages Of those, the ones read back from tiered storage, older than the brokers keep on disk
+	TieredMessages int64 `json:"tieredMessages"`
+
+	// ToRead The messages the group has to read after the move, up to now
+	ToRead int64  `json:"toRead"`
+	Topic  string `json:"topic"`
+}
+
 // TopicProducer defines model for TopicProducer.
 type TopicProducer struct {
 	// InTransaction Whether it has a transaction open on the topic
@@ -1811,6 +1887,9 @@ type TrialRetention string
 // TrialThroughput Roughly how much they write at peak
 type TrialThroughput string
 
+// ConsumerGroupName defines model for ConsumerGroupName.
+type ConsumerGroupName = string
+
 // CustomerID defines model for CustomerID.
 type CustomerID = string
 
@@ -1902,6 +1981,15 @@ type ChangeAlertSettingsJSONRequestBody = AlertThresholds
 
 // SetAlertReceiverJSONRequestBody defines body for SetAlertReceiver for application/json ContentType.
 type SetAlertReceiverJSONRequestBody = ReceiverSecret
+
+// MoveGroupJSONRequestBody defines body for MoveGroup for application/json ContentType.
+type MoveGroupJSONRequestBody = PositionChange
+
+// PreviewGroupPositionJSONRequestBody defines body for PreviewGroupPosition for application/json ContentType.
+type PreviewGroupPositionJSONRequestBody = PositionChange
+
+// ReplayGroupJSONRequestBody defines body for ReplayGroup for application/json ContentType.
+type ReplayGroupJSONRequestBody = PositionChange
 
 // CreateEnvironmentJSONRequestBody defines body for CreateEnvironment for application/json ContentType.
 type CreateEnvironmentJSONRequestBody = NewEnvironment
@@ -1998,6 +2086,15 @@ type ServerInterface interface {
 	// GetConsumerGroupLag How far behind a consumer group was on each topic it reads, over a range
 	// (GET /api/customer/consumer-groups/{group}/lag)
 	GetConsumerGroupLag(w http.ResponseWriter, r *http.Request, group string, params GetConsumerGroupLagParams)
+	// MoveGroup Moves a consumer group without members to the earliest message, the latest or a time, for organization admins; every move is audited and recorded on the timeline
+	// (PUT /api/customer/consumer-groups/{group}/position)
+	MoveGroup(w http.ResponseWriter, r *http.Request, group ConsumerGroupName)
+	// PreviewGroupPosition What moving a consumer group, or replaying into a new one, would do, for organization admins; nothing changes
+	// (POST /api/customer/consumer-groups/{group}/position/preview)
+	PreviewGroupPosition(w http.ResponseWriter, r *http.Request, group ConsumerGroupName)
+	// ReplayGroup Creates a new consumer group at a point in the history of the topics a group reads, so a service can read them again without moving the group, for organization admins; every replay is audited and recorded on the timeline
+	// (POST /api/customer/consumer-groups/{group}/replays)
+	ReplayGroup(w http.ResponseWriter, r *http.Request, group ConsumerGroupName)
 	// ListDiagnoses The common Kafka problems the environment's cluster has, in plain language, the most severe first (docs/diagnosis.md): what is wrong, the numbers that show it and what to do
 	// (GET /api/customer/diagnoses)
 	ListDiagnoses(w http.ResponseWriter, r *http.Request)
@@ -2367,6 +2464,84 @@ func (siw *ServerInterfaceWrapper) GetConsumerGroupLag(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetConsumerGroupLag(w, r, group, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MoveGroup operation middleware
+func (siw *ServerInterfaceWrapper) MoveGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "group" -------------
+	var group ConsumerGroupName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "group", r.PathValue("group"), &group, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MoveGroup(w, r, group)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewGroupPosition operation middleware
+func (siw *ServerInterfaceWrapper) PreviewGroupPosition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "group" -------------
+	var group ConsumerGroupName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "group", r.PathValue("group"), &group, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewGroupPosition(w, r, group)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplayGroup operation middleware
+func (siw *ServerInterfaceWrapper) ReplayGroup(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "group" -------------
+	var group ConsumerGroupName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "group", r.PathValue("group"), &group, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplayGroup(w, r, group)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3674,6 +3849,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/events", wrapper.ListEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups/{group}/lag", wrapper.GetConsumerGroupLag)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/consumer-groups", wrapper.ListConsumerGroups)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/customer/consumer-groups/{group}/position/preview", wrapper.PreviewGroupPosition)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/consumer-groups/{group}/position", wrapper.MoveGroup)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/customer/consumer-groups/{group}/replays", wrapper.ReplayGroup)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/trial-requests", wrapper.RequestTrial)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/trial-requests/mine", wrapper.ListMyTrialRequests)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/trial-requests", wrapper.ListTrialRequests)
@@ -4706,6 +4884,327 @@ func (response GetConsumerGroupLag404JSONResponse) VisitGetConsumerGroupLagRespo
 type GetConsumerGroupLag503JSONResponse struct{ NotConfiguredJSONResponse }
 
 func (response GetConsumerGroupLag503JSONResponse) VisitGetConsumerGroupLagResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MoveGroupRequestObject struct {
+	Group ConsumerGroupName `json:"group"`
+	Body  *MoveGroupJSONRequestBody
+}
+
+type MoveGroupResponseObject interface {
+	VisitMoveGroupResponse(w http.ResponseWriter) error
+}
+
+type MoveGroup200JSONResponse PositionPreview
+
+func (response MoveGroup200JSONResponse) VisitMoveGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MoveGroup400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response MoveGroup400JSONResponse) VisitMoveGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MoveGroup401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response MoveGroup401JSONResponse) VisitMoveGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MoveGroup403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response MoveGroup403JSONResponse) VisitMoveGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MoveGroup404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response MoveGroup404JSONResponse) VisitMoveGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MoveGroup409JSONResponse struct{ ConflictJSONResponse }
+
+func (response MoveGroup409JSONResponse) VisitMoveGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MoveGroup503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response MoveGroup503JSONResponse) VisitMoveGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewGroupPositionRequestObject struct {
+	Group ConsumerGroupName `json:"group"`
+	Body  *PreviewGroupPositionJSONRequestBody
+}
+
+type PreviewGroupPositionResponseObject interface {
+	VisitPreviewGroupPositionResponse(w http.ResponseWriter) error
+}
+
+type PreviewGroupPosition200JSONResponse PositionPreview
+
+func (response PreviewGroupPosition200JSONResponse) VisitPreviewGroupPositionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewGroupPosition400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response PreviewGroupPosition400JSONResponse) VisitPreviewGroupPositionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewGroupPosition401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response PreviewGroupPosition401JSONResponse) VisitPreviewGroupPositionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewGroupPosition403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PreviewGroupPosition403JSONResponse) VisitPreviewGroupPositionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewGroupPosition404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response PreviewGroupPosition404JSONResponse) VisitPreviewGroupPositionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewGroupPosition409JSONResponse struct{ ConflictJSONResponse }
+
+func (response PreviewGroupPosition409JSONResponse) VisitPreviewGroupPositionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PreviewGroupPosition503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response PreviewGroupPosition503JSONResponse) VisitPreviewGroupPositionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayGroupRequestObject struct {
+	Group ConsumerGroupName `json:"group"`
+	Body  *ReplayGroupJSONRequestBody
+}
+
+type ReplayGroupResponseObject interface {
+	VisitReplayGroupResponse(w http.ResponseWriter) error
+}
+
+type ReplayGroup201JSONResponse PositionPreview
+
+func (response ReplayGroup201JSONResponse) VisitReplayGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayGroup400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response ReplayGroup400JSONResponse) VisitReplayGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayGroup401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ReplayGroup401JSONResponse) VisitReplayGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayGroup403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ReplayGroup403JSONResponse) VisitReplayGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayGroup404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ReplayGroup404JSONResponse) VisitReplayGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayGroup409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ReplayGroup409JSONResponse) VisitReplayGroupResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplayGroup503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ReplayGroup503JSONResponse) VisitReplayGroupResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -9177,6 +9676,15 @@ type StrictServerInterface interface {
 	// GetConsumerGroupLag How far behind a consumer group was on each topic it reads, over a range
 	// (GET /api/customer/consumer-groups/{group}/lag)
 	GetConsumerGroupLag(ctx context.Context, request GetConsumerGroupLagRequestObject) (GetConsumerGroupLagResponseObject, error)
+	// MoveGroup Moves a consumer group without members to the earliest message, the latest or a time, for organization admins; every move is audited and recorded on the timeline
+	// (PUT /api/customer/consumer-groups/{group}/position)
+	MoveGroup(ctx context.Context, request MoveGroupRequestObject) (MoveGroupResponseObject, error)
+	// PreviewGroupPosition What moving a consumer group, or replaying into a new one, would do, for organization admins; nothing changes
+	// (POST /api/customer/consumer-groups/{group}/position/preview)
+	PreviewGroupPosition(ctx context.Context, request PreviewGroupPositionRequestObject) (PreviewGroupPositionResponseObject, error)
+	// ReplayGroup Creates a new consumer group at a point in the history of the topics a group reads, so a service can read them again without moving the group, for organization admins; every replay is audited and recorded on the timeline
+	// (POST /api/customer/consumer-groups/{group}/replays)
+	ReplayGroup(ctx context.Context, request ReplayGroupRequestObject) (ReplayGroupResponseObject, error)
 	// ListDiagnoses The common Kafka problems the environment's cluster has, in plain language, the most severe first (docs/diagnosis.md): what is wrong, the numbers that show it and what to do
 	// (GET /api/customer/diagnoses)
 	ListDiagnoses(ctx context.Context, request ListDiagnosesRequestObject) (ListDiagnosesResponseObject, error)
@@ -9667,6 +10175,105 @@ func (sh *strictHandler) GetConsumerGroupLag(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetConsumerGroupLagResponseObject); ok {
 		if err := validResponse.VisitGetConsumerGroupLagResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MoveGroup operation middleware
+func (sh *strictHandler) MoveGroup(w http.ResponseWriter, r *http.Request, group ConsumerGroupName) {
+	var request MoveGroupRequestObject
+
+	request.Group = group
+
+	var body MoveGroupJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MoveGroup(ctx, request.(MoveGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MoveGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MoveGroupResponseObject); ok {
+		if err := validResponse.VisitMoveGroupResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PreviewGroupPosition operation middleware
+func (sh *strictHandler) PreviewGroupPosition(w http.ResponseWriter, r *http.Request, group ConsumerGroupName) {
+	var request PreviewGroupPositionRequestObject
+
+	request.Group = group
+
+	var body PreviewGroupPositionJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PreviewGroupPosition(ctx, request.(PreviewGroupPositionRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PreviewGroupPosition")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PreviewGroupPositionResponseObject); ok {
+		if err := validResponse.VisitPreviewGroupPositionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplayGroup operation middleware
+func (sh *strictHandler) ReplayGroup(w http.ResponseWriter, r *http.Request, group ConsumerGroupName) {
+	var request ReplayGroupRequestObject
+
+	request.Group = group
+
+	var body ReplayGroupJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplayGroup(ctx, request.(ReplayGroupRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplayGroup")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplayGroupResponseObject); ok {
+		if err := validResponse.VisitReplayGroupResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -15,7 +15,9 @@
 # delete topics and list consumer groups, but neither produce nor consume,
 # with or without a consumer group. The tail user, which the console reads messages as for
 # admins, reads a topic without a consumer group, and may neither produce nor
-# use a group.
+# use a group. The offsets user, which the console moves consumer groups as
+# for admins, commits a group's offsets, which the console user may not, and
+# may neither produce nor create topics.
 # Usage: hack/console-access-test.sh [customer-id] (default demo)
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -37,7 +39,7 @@ ensure_kubectl
 
 log "Console service account's access to the Secrets of customer $customer"
 can_i() { kubectl auth can-i --as "$console" "$@" 2>/dev/null || true; }
-for secret in changeport-console changeport-tail "$customer-cluster-ca-cert" admin external-listener-tls; do
+for secret in changeport-console changeport-tail changeport-offsets "$customer-cluster-ca-cert" admin external-listener-tls; do
   [[ $(can_i -n "$namespace" get "secret/$secret") == yes ]] || die "the console cannot read secret $namespace/$secret"
 done
 # The brokers' pods, for their health.
@@ -164,6 +166,8 @@ kubectl -n "$namespace" get secret changeport-console -o jsonpath='{.data.user\.
 kubectl -n "$namespace" get secret "$customer-cluster-ca-cert" -o jsonpath='{.data.ca\.crt}' | base64 -d >"$work/ca.crt"
 kubectl -n "$namespace" get secret changeport-tail -o jsonpath='{.data.user\.crt}' | base64 -d >"$work/tail.crt"
 kubectl -n "$namespace" get secret changeport-tail -o jsonpath='{.data.user\.key}' | base64 -d >"$work/tail.key"
+kubectl -n "$namespace" get secret changeport-offsets -o jsonpath='{.data.user\.crt}' | base64 -d >"$work/offsets.crt"
+kubectl -n "$namespace" get secret changeport-offsets -o jsonpath='{.data.user\.key}' | base64 -d >"$work/offsets.key"
 bootstrap="$customer-kafka-bootstrap.$namespace.svc:9093"
 # The pod's script: each step prints its output, then "step <name> <exit code>".
 cat >"$work/run.sh" <<SCRIPT
@@ -197,10 +201,21 @@ step tail-read \$bin/kafka-console-consumer.sh --bootstrap-server $bootstrap --c
 echo message | step tail-produce \$bin/kafka-console-producer.sh --bootstrap-server $bootstrap --command-config /tmp/tail.properties --topic $topic \\
   --producer-property enable.idempotence=false --producer-property acks=1
 step tail-group \$bin/kafka-console-consumer.sh --bootstrap-server $bootstrap --command-config /tmp/tail.properties --topic $topic --group $topic-tail --from-beginning --max-messages 1 --timeout-ms 15000
+# Moving a group, as the console does for admins: the console user may not,
+# the offsets user may, and may neither produce nor create topics.
+reset="--group $topic-offsets --topic $topic --reset-offsets --to-earliest --execute"
+step console-reset \$bin/kafka-consumer-groups.sh --bootstrap-server $bootstrap --command-config /tmp/console.properties \$reset
+cat /certs/offsets.key /certs/offsets.crt >/tmp/offsets-keystore.pem
+sed 's|/tmp/keystore.pem|/tmp/offsets-keystore.pem|' /tmp/console.properties >/tmp/offsets.properties
+step offsets-reset \$bin/kafka-consumer-groups.sh --bootstrap-server $bootstrap --command-config /tmp/offsets.properties \$reset
+echo message | step offsets-produce \$bin/kafka-console-producer.sh --bootstrap-server $bootstrap --command-config /tmp/offsets.properties --topic $topic \\
+  --producer-property enable.idempotence=false --producer-property acks=1
+step offsets-create \$bin/kafka-topics.sh --bootstrap-server $bootstrap --command-config /tmp/offsets.properties --create --topic $topic-offsets --partitions 1
 step delete \$bin/kafka-topics.sh --bootstrap-server $bootstrap --command-config /tmp/console.properties --delete --topic $topic
 SCRIPT
 kubectl -n changeport create secret generic "$name" --from-file="$work/user.crt" --from-file="$work/user.key" \
-  --from-file="$work/ca.crt" --from-file="$work/tail.crt" --from-file="$work/tail.key" --from-file="$work/run.sh" --dry-run=client -o yaml |
+  --from-file="$work/ca.crt" --from-file="$work/tail.crt" --from-file="$work/tail.key" \
+  --from-file="$work/offsets.crt" --from-file="$work/offsets.key" --from-file="$work/run.sh" --dry-run=client -o yaml |
   kubectl label --local -f - "changeport.io/console-access-test=$run_id" -o yaml |
   kubectl apply -f - >/dev/null
 
@@ -268,7 +283,12 @@ expect read refused "TopicAuthorizationException"
 expect tail-read authorized
 expect tail-produce refused "TopicAuthorizationException"
 expect tail-group refused "GroupAuthorizationException"
+expect console-reset refused "GroupAuthorizationException"
+expect offsets-reset ok
+expect offsets-produce refused "TopicAuthorizationException"
+expect offsets-create refused "AuthorizationException"
 expect delete ok
 log "The console user created, described and deleted $topic and listed groups; producing and consuming were refused"
 log "The tail user may read $topic without a group; producing and using a group were refused"
+log "The offsets user moved a group on $topic, which the console user may not; producing and creating topics were refused"
 log "Console access test passed for customer $customer"
