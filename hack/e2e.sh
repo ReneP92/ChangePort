@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Proves the per-customer approach end to end on kind, in three suites that
+# Proves the per-customer approach end to end on kind, in four suites that
 # CI runs on separate clusters, as the failover test freezes a zone. The core
 # suite: the
 # provisioning service creates a second customer's namespace and Kafka cluster
@@ -25,8 +25,11 @@
 # alerting pages, and the page resolves once it is back. The cdc suite takes a Postgres CDC source
 # of the demo customer from created through streaming and paused to deleted,
 # then makes the database lose a source's slot and recovers it as the
-# runbook says.
-# SUITE=core, failover or cdc runs one (default: all three, one after the
+# runbook says. The chaos suite crashes a three-broker customer's active
+# controller, cuts one broker off the others, and takes down the Kafka agent,
+# the provisioning controller, the Strimzi operator and tiered storage's
+# object store, each at the worst moment, under load (hack/chaos-test.sh).
+# SUITE=core, failover, cdc or chaos runs one (default: all four, one after the
 # other). Set KEEP=1 to keep the customers. Run just dev-up first.
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -44,8 +47,8 @@ stay_awake
 
 SUITE=${SUITE:-all}
 case $SUITE in
-core | failover | cdc | all) ;;
-*) die "SUITE must be core, failover, cdc or all, not $SUITE" ;;
+core | failover | cdc | chaos | all) ;;
+*) die "SUITE must be core, failover, cdc, chaos or all, not $SUITE" ;;
 esac
 
 core_suite() {
@@ -99,6 +102,9 @@ if [[ $SUITE == failover || $SUITE == all ]]; then
   # Three brokers replicate every byte, which usage must not count again.
   "$ROOT/hack/usage-test.sh" ha
   "$ROOT/hack/alerting-test.sh" ha
+fi
+if [[ $SUITE == chaos || $SUITE == all ]]; then
+  "$ROOT/hack/chaos-test.sh" chaos
 fi
 if [[ $SUITE == cdc || $SUITE == all ]]; then
   "$ROOT/hack/cdc-test.sh" "$DEMO_CUSTOMER"

@@ -164,15 +164,16 @@ jobs:
           retention-days: 14
 
   # The end-to-end suites on kind, each on a cluster of its own: the failover
-  # suite freezes a zone, which would disturb the core suite's tests.
+  # and chaos suites disrupt clusters, which would disturb the others' tests.
+  # The chaos suite's six disruptions take about 40 minutes of their own.
   e2e:
     name: End to end on kind (${{ matrix.suite }})
     runs-on: ubuntu-26.04
-    timeout-minutes: 45
+    timeout-minutes: ${{ matrix.suite == 'chaos' && 75 || 45 }}
     strategy:
       fail-fast: false
       matrix:
-        suite: [core, failover, cdc]
+        suite: [core, failover, cdc, chaos]
     env:
       BUILD_CACHE: gha
     steps:
@@ -200,10 +201,11 @@ jobs:
             ~/.cache/ms-playwright
             deploy/base/*/upstream/
           key: tools-${{ runner.os }}-${{ hashFiles('hack/lib.sh', 'tools/go.sum', 'web/bun.lock', 'deploy/upstream-files.txt') }}
-      # The failover suite brings its own customer.
+      # The failover and chaos suites bring their own customers.
       - run: just dev-up
         env:
-          DEMO_CUSTOMER: ${{ matrix.suite != 'failover' && 'demo' || '' }}
+          # (An empty string is false in expressions, so the demo is the true branch.)
+          DEMO_CUSTOMER: ${{ (matrix.suite == 'core' || matrix.suite == 'cdc') && 'demo' || '' }}
       - run: just e2e ${{ matrix.suite }}
       - if: matrix.suite == 'core'
         run: just platform-check

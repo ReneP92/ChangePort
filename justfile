@@ -288,9 +288,13 @@ console-access-test customer="demo":
 tiered-storage-test customer="demo":
     hack/tiered-storage-test.sh {{ customer }}
 
+# Replay a topic from tiered storage under a live consumer; the replay keeps to the brokers' limit
+[group('Local development (kind + Strimzi)')]
 replay-test customer="demo":
     hack/replay-test.sh {{ customer }}
 
+# Produce and consume a known number of bytes and check usage counts each once, replication left out
+[group('Local development (kind + Strimzi)')]
 usage-test customer="demo":
     hack/usage-test.sh {{ customer }}
 
@@ -314,6 +318,11 @@ deletion-protection-test customer:
 failover-test:
     hack/failover-test.sh
 
+# Crash the controller, cut a broker off, and restart the platform's parts at the worst moments, under load
+[group('Local development (kind + Strimzi)')]
+chaos-test:
+    hack/chaos-test.sh
+
 # Provision a customer's Kafka cluster on kind, with a profile (dev, dev-ha or production)
 [group('Local development (kind + Strimzi)')]
 provision customer="acme" profile="dev":
@@ -324,7 +333,7 @@ provision customer="acme" profile="dev":
 deprovision customer="acme":
     go run ./cmd/provisioner deprovision -context {{ kube_context }} -customer {{ customer }} -wait
 
-# Run the end-to-end suites on kind: core, failover or all; KEEP=1 keeps the customers
+# Run the end-to-end suites on kind: core, failover, cdc, chaos or all (chaos takes 40 minutes); KEEP=1 keeps the customers
 [group('Local development (kind + Strimzi)')]
 e2e suite="all" customer="acme":
     SUITE={{ suite }} hack/e2e.sh {{ customer }}

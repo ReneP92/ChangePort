@@ -3,10 +3,12 @@
 # it once show up in the metrics as the console reads them
 # (internal/metrics, UsageIn and UsageOut), each byte once. On a cluster of
 # three brokers the followers fetch every byte again to replicate it, which
-# must not count. Then the console's own usage queries (internal/metrics) run
-# on counters imported into the metrics store with its samples missing
-# around midnight, as while it restarts, which must count what each grew by
-# rather than its whole value.
+# must not count. Then the console's own queries (internal/metrics) run on
+# series imported into the metrics store for what is hard to stage: usage on
+# counters whose samples the store missed around midnight, as while it
+# restarts, which must count what each grew by rather than its whole value;
+# and the active brokers while one is cut off from the others, which must be
+# the active controller's count.
 # Usage: hack/usage-test.sh [customer-id] (default demo)
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -15,9 +17,9 @@ customer=${1:-demo}
 topic="usage-$(date +%s)-$RANDOM"
 messages=2000
 work=$(mktemp -d)
-forward=""
+METRICS_FORWARD=""
 cleanup() {
-  [[ -z $forward ]] || kill "$forward" 2>/dev/null || true
+  [[ -z $METRICS_FORWARD ]] || kill "$METRICS_FORWARD" 2>/dev/null || true
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -65,16 +67,9 @@ kafka kafka-consumer-groups.sh --bootstrap-server "$bootstrap" --command-config 
   --delete --group "$topic" >/dev/null 2>&1 || true
 kafka kafka-topics.sh --bootstrap-server "$bootstrap" --command-config /config/client.properties --delete --topic "$topic"
 
-log "The console's usage queries on counters with the metrics store's samples missing around midnight"
-kubectl -n metrics port-forward svc/victoria-metrics :8428 >"$work/forward" 2>&1 &
-forward=$!
-port=""
-for _ in $(seq 30); do
-  port=$(sed -nE 's/^Forwarding from 127\.0\.0\.1:([0-9]+) .*/\1/p' "$work/forward")
-  [[ -n $port ]] && break
-  sleep 1
-done
-[[ -n $port ]] || die "could not reach the metrics store: $(cat "$work/forward")"
-CHANGEPORT_VICTORIA_METRICS_URL="http://127.0.0.1:$port" go -C "$ROOT" test -count=1 -run TestUsageAgainstVictoriaMetrics ./internal/metrics/ ||
-  die "the console's usage queries counted a counter's gap wrongly"
+log "The console's queries on series imported into the metrics store"
+metrics_port_forward
+CHANGEPORT_VICTORIA_METRICS_URL="http://127.0.0.1:$METRICS_PORT" go -C "$ROOT" test -count=1 \
+  -run 'TestUsageAgainstVictoriaMetrics|TestControllerCountsAgainstVictoriaMetrics' ./internal/metrics/ ||
+  die "the console's queries got the imported series wrong"
 log "Usage test passed for customer $customer: each byte counted once, of $replicas copies"
