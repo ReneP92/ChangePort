@@ -174,8 +174,10 @@ var definitions = map[Query]definition{
 	UnderMinISR:       {`sum(kafka_server_replicamanager_underminisrpartitioncount{%s})`, perCluster},
 	OfflinePartitions: {`max(kafka_controller_kafkacontroller_offlinepartitionscount{%s})`, perCluster},
 	ActiveControllers: {`sum(kafka_controller_kafkacontroller_activecontrollercount{%s})`, perCluster},
-	ActiveBrokers:     {`max(kafka_controller_kafkacontroller_activebrokercount{%s})`, perCluster},
-	FencedBrokers:     {`max(kafka_controller_kafkacontroller_fencedbrokercount{%s})`, perCluster},
+	// The active controller's count: a controller cut off from the others
+	// keeps reporting what it last knew.
+	ActiveBrokers: {`sum(kafka_controller_kafkacontroller_activebrokercount{%[1]s} * on (tenant, node_id) kafka_controller_kafkacontroller_activecontrollercount{%[1]s})`, perCluster},
+	FencedBrokers: {`sum(kafka_controller_kafkacontroller_fencedbrokercount{%[1]s} * on (tenant, node_id) kafka_controller_kafkacontroller_activecontrollercount{%[1]s})`, perCluster},
 	// A client pushes to one broker at a time, and both expose its series
 	// for a while when it moves, so each client instance counts once.
 	ProducerBytes: {`sum by (principal, client_id, topic) (max by (principal, client_id, client_instance_id, topic) (rate(clients_org_apache_kafka_producer_topic_byte_total{%s}[5m])))`, perClient},

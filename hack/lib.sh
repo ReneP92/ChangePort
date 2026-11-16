@@ -758,18 +758,18 @@ check_named_queries() {
 # Evaluates the alerting rules of deploy/base/alerting/rules for a customer,
 # or one of its Postgres sources, against the local VictoriaMetrics, until
 # exactly the alerts in firing (comma-separated names) have a series for it,
-# ignoring how long they must hold; up to about 3 minutes, as the source
-# controller reads a slot every minute and VictoriaMetrics scrapes every 30
-# seconds.
-# Usage: check_alerts tenant source firing (source empty for the customer)
+# ignoring how long they must hold; up to about 3 minutes by default, as the
+# source controller reads a slot every minute and VictoriaMetrics scrapes
+# every 30 seconds, or attempts times 10 seconds.
+# Usage: check_alerts tenant source firing [attempts] (source empty for the customer)
 check_alerts() {
-  local tenant=$1 source=$2 firing=$3 output attempt
+  local tenant=$1 source=$2 firing=$3 attempts=${4:-18} output attempt
   output=$(mktemp)
   metrics_port_forward
-  for attempt in $(seq 18); do
+  for attempt in $(seq "$attempts"); do
     CHANGEPORT_METRICS_URL="http://127.0.0.1:$METRICS_PORT" CHANGEPORT_ALERTS_TENANT="$tenant" CHANGEPORT_ALERTS_SOURCE="$source" \
       CHANGEPORT_ALERTS_FIRING="$firing" go test -count=1 -run TestRulesAgainstVictoriaMetrics ./internal/alerts >"$output" 2>&1 && break
-    if [[ $attempt -eq 18 ]]; then
+    if [[ $attempt -eq $attempts ]]; then
       kill "$METRICS_FORWARD" 2>/dev/null || true
       die "the alerts of ${source:+source $source of }$tenant are not ${firing:-quiet}:"$'\n'"$(cat "$output")"
     fi

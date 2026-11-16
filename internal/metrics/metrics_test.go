@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -248,6 +249,42 @@ func TestQueriesAgainstVictoriaMetrics(t *testing.T) {
 		t.Logf("%s: %d series", q, len(series))
 		if expected[q] && len(series) == 0 {
 			t.Errorf("%s returned no series for tenant %s", q, tenant)
+		}
+	}
+}
+
+// TestClusterHealthAgainstVictoriaMetrics checks what the console's cluster
+// health queries say of a tenant against a real VictoriaMetrics while a test
+// disrupts its cluster (hack/chaos-test.sh): CHANGEPORT_HEALTH_EXPECT holds
+// query=value pairs, such as active_brokers=2,fenced_brokers=1.
+func TestClusterHealthAgainstVictoriaMetrics(t *testing.T) {
+	address, tenant, expect := os.Getenv("CHANGEPORT_METRICS_URL"), os.Getenv("CHANGEPORT_METRICS_TENANT"), os.Getenv("CHANGEPORT_HEALTH_EXPECT")
+	if address == "" || tenant == "" || expect == "" {
+		t.Skip("CHANGEPORT_METRICS_URL, CHANGEPORT_METRICS_TENANT and CHANGEPORT_HEALTH_EXPECT are not set; the chaos test sets them")
+	}
+	c, err := NewClient(address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for pair := range strings.SplitSeq(expect, ",") {
+		name, want, ok := strings.Cut(pair, "=")
+		if !ok {
+			t.Fatalf("%q is no query=value pair", pair)
+		}
+		q, err := ParseQuery(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		series, err := c.Instant(t.Context(), tenant, q, Filter{}, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := "none"
+		if len(series) == 1 && len(series[0].Points) == 1 {
+			got = strconv.FormatFloat(series[0].Points[0].Value, 'f', -1, 64)
+		}
+		if got != want {
+			t.Errorf("%s of %s = %s, want %s", q, tenant, got, want)
 		}
 	}
 }

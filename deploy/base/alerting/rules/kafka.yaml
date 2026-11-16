@@ -45,19 +45,27 @@ groups:
           description: "No KRaft controller leads the cluster, or the brokers report no metrics."
           runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#no-active-controller
       # A three-broker cluster with a broker down survives, but one more and
-      # partitions go under min.insync.replicas.
+      # partitions go under min.insync.replicas. The count is the active
+      # controller's: a broker cut off from the others is a controller too,
+      # and keeps reporting the brokers it last knew (hack/chaos-test.sh).
+      # With no active controller the count is 0, so this matches alongside
+      # KafkaNoActiveController; while two nodes briefly both claim to be
+      # active, their counts add up, which only restarts the wait.
       - alert: KafkaBrokersDown
         expr: >-
           changeport_customer_brokers{profile=~"dev-ha|production"}
           > on (tenant) group_left ()
-          (max by (tenant) (kafka_controller_kafkacontroller_activebrokercount) or on (tenant) (0 * changeport_customer_brokers))
+          (
+            sum by (tenant) (kafka_controller_kafkacontroller_activebrokercount * on (tenant, node_id) kafka_controller_kafkacontroller_activecontrollercount)
+            or on (tenant) (0 * changeport_customer_brokers)
+          )
           and on (tenant) changeport_customer_provisioned_timestamp_seconds
         for: 5m
         labels:
           severity: page
           audience: operator
         annotations:
-          summary: "The cluster of {{ $labels.tenant }} has fewer ready brokers than its {{ $value }}"
+          summary: "The cluster of {{ $labels.tenant }} has fewer active brokers than its {{ $value }}"
           description: "The active controller counts fewer active brokers than the cluster's {{ $labels.profile }} profile runs."
           runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-broker-is-down
       # The provisioning controller has not seen the cluster ready for a

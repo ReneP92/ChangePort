@@ -344,6 +344,9 @@ had fewer active brokers than its three for five minutes; `KafkaReady` turns
 false; the cluster's under-replicated partitions rise; a broker pod is not
 ready or restarts.
 
+If every broker pod runs and is ready, the broker is not down but cut off
+from the others: see [A broker is cut off from the others](#a-broker-is-cut-off-from-the-others).
+
 On a production or `dev-ha` cluster, one broker down does not stop the
 customer: every partition has three copies, two of which must be in sync, so
 the other two brokers take over its partitions' leadership and keep
@@ -372,6 +375,50 @@ back.
    and its KRaft metadata.
 4. Once the broker is back, check that it caught up: no under-replicated
    partitions, and `KafkaReady` true again.
+
+## A broker is cut off from the others
+
+**Signs:** `KafkaBrokersDown` pages while the broker's pod runs and is ready;
+the cluster's under-replicated partitions rise; the active controller counts
+a fenced broker; customers' clients stall on some partitions, with
+timeouts, while the others work.
+
+A broker that loses the network to the other brokers, but not to clients,
+is fenced by the controllers within about a minute, and the partitions it
+led get new leaders on the others. It does not know: it keeps serving as
+the leader it last was. Clients that ask it stall on those partitions,
+producers with timeouts and consumers with nothing new, until they refresh
+their metadata from another broker, which can take up to
+`metadata.max.age.ms` (5 minutes by default). Nothing is lost: what it
+accepted without its followers was never acknowledged with `acks=all`.
+
+1. Confirm it is cut off rather than down: its pod is ready, but the active
+   controller counts a fenced broker. In VictoriaMetrics, the active
+   controller's count (the others keep what they last knew, the cut-off one
+   too):
+
+   ```promql
+   sum(kafka_controller_kafkacontroller_fencedbrokercount{tenant="c-7f3k2q"}
+     * on (tenant, node_id) kafka_controller_kafkacontroller_activecontrollercount{tenant="c-7f3k2q"})
+   ```
+
+   Find which broker: each node reports the active brokers it knows, and
+   the cut-off one, which hears from nobody, still reports more than the
+   others do:
+
+   ```promql
+   kafka_controller_kafkacontroller_activebrokercount{tenant="c-7f3k2q"}
+   ```
+
+2. Restart the broker, so that clients stop asking it and it catches up
+   once the network is back: `kubectl -n customer-c-7f3k2q delete pod
+   c-7f3k2q-dual-role-1`.
+3. Find the network fault between its node and the others' (security
+   groups, network policies, the node's network); on EKS, AWS Health for
+   the zone.
+
+The chaos test cuts a broker off on kind and checks that every message
+arrives exactly once once it is back ([Chaos tests](#chaos-tests)).
 
 ## An availability zone is down
 
@@ -570,6 +617,30 @@ kubectl -n metrics port-forward svc/vmalert 8880        # http://localhost:8880
 three-broker customer on kind and waits for the page, then for it to
 resolve; `just alerting-check` validates the rules and Alertmanager's
 configuration.
+
+## Chaos tests
+
+`hack/chaos-test.sh` (the `chaos` suite of `hack/e2e.sh`, its own CI job)
+disrupts a three-broker customer on kind under load, with every message
+checked to arrive exactly once, and checks what the entries here say:
+
+| Disruption | What the test checks | Entry |
+| --- | --- | --- |
+| The active KRaft controller crashes | Another controller takes over within a minute; clients keep working; `KafkaNoActiveController` does not fire | [No active controller](#no-active-controller) |
+| A broker is cut off from the others for 90 seconds, not from clients | The console's health counts 2 active brokers and 1 fenced; `KafkaBrokersDown` matches; clients may stall on its partitions; it catches up once back | [A broker is cut off from the others](#a-broker-is-cut-off-from-the-others) |
+| The Kafka agent is down while a topic is created | It tiers the topic once it is back | [The Kafka agent is not reconciling](#the-kafka-agent-is-not-reconciling) |
+| The provisioning controller restarts while it creates and while it deletes a customer | Both finish | [A customer is not ready](#a-customer-is-not-ready) |
+| The Strimzi operator restarts during a rolling restart | It finishes the roll | [Upgrading Strimzi](#upgrading-strimzi) |
+| Tiered storage's object store is down | `TieredStorageCopyErrors` matches; clients work on; the brokers copy what they kept once it is back | [Tiered storage falls behind](#tiered-storage-falls-behind) |
+
+Alerts are checked as matching (pending or firing in vmalert) rather than
+waited on for their full duration; `hack/alerting-test.sh` checks the whole
+way to a page once. After each disruption of the customer's cluster its
+alerts must be quiet again. Not tested yet: a full volume, as kind's volumes
+enforce no size and report no stats, which waits for the EKS dev
+environment (#29); an object store that is slow rather than down; and the
+diagnoses, which are about customers' clients rather than the cluster,
+during a disruption.
 
 ## Partitions are not in sync
 
