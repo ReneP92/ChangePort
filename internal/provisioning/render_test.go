@@ -504,7 +504,7 @@ func TestJVMFlags(t *testing.T) {
 // Transactions are as durable as the data they commit: on clusters of
 // three brokers, the transaction log keeps three copies and refuses writes
 // with fewer than two in sync, so a committed transaction survives a lost
-// zone (docs/connecting.md, "Delivery guarantees").
+// zone (site/content/docs/connecting.md, "Delivery guarantees").
 func TestRenderDurableTransactionLog(t *testing.T) {
 	for profile, want := range map[Profile][2]string{DevProfile: {"1", "1"}, DevHAProfile: {"3", "2"}, ProductionProfile: {"3", "2"}} {
 		objects, err := Render(Spec{CustomerID: "acme", Profile: profile, Platform: KindPlatform})

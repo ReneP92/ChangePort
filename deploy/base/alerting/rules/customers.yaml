@@ -7,7 +7,10 @@
 # topics and clients are not the customer's, as the console hides them too:
 # groups and topics with the reserved prefixes of internal/topics, and
 # clients that connect with certificates (User:CN=...), as only the
-# platform's do; customers' connect with passwords.
+# platform's do; customers' connect with passwords. Each alert's docs
+# annotation is its section of the customer docs (site/content/docs/alerts.md),
+# relative to the docs' address, which the console and the alert's
+# notifications link.
 groups:
   - name: customers
     rules:
@@ -25,7 +28,7 @@ groups:
         annotations:
           summary: "Consumer group {{ $labels.consumer_group }} is {{ $value | humanizeDuration }} behind on {{ $labels.topic }}"
           description: "Its oldest message on {{ $labels.topic }} that it has not consumed is older than your threshold."
-          runbook: https://github.com/ReneP92/changeport/blob/main/docs/alerts.md#a-consumer-group-falls-behind
+          docs: alerts.html#a-consumer-group-falls-behind
       # A consumer group stopped committing while messages wait for it on a
       # topic that still grows: its consumers are stuck or gone.
       - alert: ConsumerGroupStuck
@@ -42,7 +45,7 @@ groups:
         annotations:
           summary: "Consumer group {{ $labels.consumer_group }} stopped committing on {{ $labels.topic }}"
           description: "It has not committed for {{ $value | humanizeDuration }}, while messages keep arriving on {{ $labels.topic }}."
-          runbook: https://github.com/ReneP92/changeport/blob/main/docs/alerts.md#a-consumer-group-is-stuck
+          docs: alerts.html#a-consumer-group-is-stuck
       # Clients the brokers throttle, as they report it themselves (KIP-714).
       - alert: ClientThrottled
         expr: >-
@@ -59,7 +62,7 @@ groups:
         annotations:
           summary: "Client {{ $labels.client_id }} is throttled for up to {{ $value | humanize }} ms"
           description: "The brokers delay its requests, as it exceeds a quota."
-          runbook: https://github.com/ReneP92/changeport/blob/main/docs/alerts.md#a-client-is-throttled
+          docs: alerts.html#a-client-is-throttled
       # The brokers fail a share of a topic's produce and fetch requests.
       - alert: TopicRequestErrors
         expr: >-
@@ -82,7 +85,7 @@ groups:
         annotations:
           summary: "{{ $value | humanizePercentage }} of the requests to {{ $labels.topic }} fail"
           description: "The brokers refuse produce or fetch requests to the topic, such as messages that are too large or requests without permission."
-          runbook: https://github.com/ReneP92/changeport/blob/main/docs/alerts.md#requests-fail
+          docs: alerts.html#requests-fail
       # A producer fails to send a share of its records, as it reports it
       # itself (KIP-714).
       - alert: ClientRecordErrors
@@ -100,4 +103,4 @@ groups:
         annotations:
           summary: "Producer {{ $labels.client_id }} fails to send {{ $value | humanizePercentage }} of its records"
           description: "Its records are lost unless it retries them."
-          runbook: https://github.com/ReneP92/changeport/blob/main/docs/alerts.md#requests-fail
+          docs: alerts.html#requests-fail

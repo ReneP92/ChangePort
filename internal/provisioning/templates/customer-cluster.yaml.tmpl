@@ -258,7 +258,7 @@ spec:
 {{- end }}
 {{- if gt .Profile.Zones 1 }}
     # broker.rack, which clients set client.rack to, to read from a replica
-    # in their own zone (docs/connecting.md).
+    # in their own zone (site/content/docs/connecting.md).
     rack:
       topologyKey: {{ .Platform.RackLabel }}
 {{- end }}

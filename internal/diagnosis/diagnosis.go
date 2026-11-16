@@ -82,8 +82,9 @@ type Topic struct {
 	// window.
 	BytesRejected float64
 	// IdempotentProducers are the producers Kafka keeps state for that
-	// wrote to the topic over the window: idempotent or transactional ones.
-	// Kafka keeps none for other producers. Nil when not known.
+	// wrote to the topic since the console's last look: idempotent or
+	// transactional ones, whose sequence moved on. Kafka keeps none for
+	// other producers. Nil when not known.
 	IdempotentProducers *int
 	// Hanging are the topic's hanging transactions.
 	Hanging []HangingTransaction
@@ -220,6 +221,9 @@ type Finding struct {
 	Title       string
 	Explanation string
 	Suggestion  string
+	// Docs is the rule's page in the customer docs, relative to their
+	// address: site/content/docs/troubleshooting/<rule>.md, rendered.
+	Docs string
 }
 
 // Rule finds one kind of problem.
@@ -253,6 +257,7 @@ func Diagnose(s Snapshot) []Finding {
 	for _, rule := range Rules {
 		for _, f := range rule.Find(s) {
 			f.Rule = rule.Name
+			f.Docs = "troubleshooting/" + rule.Name + ".html"
 			f.ID = rule.Name + ":" + strings.Join(slices.DeleteFunc(
 				[]string{f.Subject.ConsumerGroup, f.Subject.Topic, f.Subject.TransactionalID, f.Subject.Principal, f.Subject.ClientID},
 				func(s string) bool { return s == "" }), "/")

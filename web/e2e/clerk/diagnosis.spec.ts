@@ -105,6 +105,14 @@ test("a consumer group that can't keep up is told so, until it catches up", asyn
     await expect(finding).toContainText(
       `Run more consumers in ${group}. It has 1 consumer for the 3 partitions of ${topic}, so up to 2 more can share the work.`,
     );
+    // Its page in the customer docs, where kind's console says they are
+    // (deploy/overlays/kind), in a new tab.
+    const docs = finding.getByRole("link", { name: /^Learn more/ });
+    await expect(docs).toHaveAttribute(
+      "href",
+      "http://localhost:5174/docs/troubleshooting/consumer-too-slow.html",
+    );
+    await expect(docs).toHaveAttribute("target", "_blank");
     await expectNoSidewaysScroll(page);
 
     // The group needs attention: in the consumer groups' table, which sorts

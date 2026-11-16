@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
+import { content, renderDocs } from "./scripts/docs.ts";
 
 // The landing site at the domain's root (docs/site.md): plain HTML pages
 // with Tailwind's CSS, one small script and no cookies. The console's address,
@@ -14,6 +15,9 @@ const consoleURL = (process.env.CHANGEPORT_CONSOLE_URL ?? "http://localhost:8088
   "",
 );
 const siteURL = (process.env.CHANGEPORT_SITE_URL ?? "http://localhost:4174").replace(/\/$/, "");
+
+// The customer docs' pages, rendered from content/docs into docs/.
+const docs = await renderDocs();
 
 /**
  * Puts the shared partials into each page, where it says
@@ -113,8 +117,32 @@ function contentSecurityPolicy(): Plugin {
   };
 }
 
+/**
+ * Renders the docs again when their Markdown changes, while the site runs
+ * with hot reload, and reloads the page. A page that fails its checks says
+ * why in the terminal, and keeps its last rendering.
+ */
+function docsPages(): Plugin {
+  return {
+    name: "changeport-docs",
+    apply: "serve",
+    configureServer(server) {
+      server.watcher.add(content);
+      const render = (file: string) => {
+        if (file.startsWith(content)) {
+          renderDocs().then(
+            () => server.ws.send({ type: "full-reload" }),
+            (error: unknown) => server.config.logger.error(String(error)),
+          );
+        }
+      };
+      server.watcher.on("add", render).on("change", render).on("unlink", render);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [pages(), tailwindcss(), inlineStyles(), contentSecurityPolicy()],
+  plugins: [pages(), tailwindcss(), inlineStyles(), contentSecurityPolicy(), docsPages()],
   build: {
     rolldownOptions: {
       // 404.html is what the host serves for an address it has no page for.
@@ -123,6 +151,7 @@ export default defineConfig({
         privacy: "privacy.html",
         terms: "terms.html",
         notFound: "404.html",
+        ...Object.fromEntries(docs.map((file) => [file.replace(/\.html$/, ""), file])),
       },
     },
   },

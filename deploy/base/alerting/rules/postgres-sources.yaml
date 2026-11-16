@@ -3,7 +3,9 @@
 # Alertmanager come with #96, which pages Changeport's operators, and #97
 # alerts customers themselves. Each alert carries tenant, cluster, env and
 # source, says who it is for (audience) and how urgent (severity: page or
-# warn), and links its section of docs/runbook.md. internal/alerts checks
+# warn), and links its section of docs/runbook.md, or for the customer's
+# alerts, of the customer docs (site/content/docs/alerts.md, by the
+# annotation docs, which their notifications link). internal/alerts checks
 # them, and the end-to-end tests evaluate them on kind.
 groups:
   - name: postgres-sources
@@ -44,7 +46,7 @@ groups:
         annotations:
           summary: "Postgres source {{ $labels.source }} holds back {{ $value | humanize1024 }}B of WAL"
           description: "The database keeps the WAL the source has not read, on its disk. A paused, failed or slow source makes it grow."
-          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-postgres-source-fails
+          docs: alerts.html#a-source-holds-back-a-lot-of-history
       # The source failed, and stays failed: its connector stopped on an
       # error its status explains, and its slot keeps WAL meanwhile.
       - alert: PostgresSourceFailed
@@ -78,7 +80,7 @@ groups:
         annotations:
           summary: "Postgres source {{ $labels.source }} is more than 15 minutes behind its database"
           description: "The changes the source writes to Kafka happened more than 15 minutes ago in the database."
-          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-postgres-source-fails
+          docs: alerts.html#a-source-is-behind-its-database
       # The source controller could not read the slot for a while: the
       # database does not answer it, and nobody sees the WAL grow.
       - alert: PostgresSourceDatabaseUnreachable
@@ -89,7 +91,7 @@ groups:
         annotations:
           summary: "Changeport cannot reach the database of Postgres source {{ $labels.source }}"
           description: "The source controller has not read the source's slot for more than 15 minutes."
-          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-sources-database-is-unreachable
+          docs: alerts.html#changeport-cant-reach-a-sources-database
       # A deleted source waits for its slot to be dropped, which keeps WAL
       # in the customer's database until it is.
       - alert: PostgresSourceSlotNotDropped
@@ -112,4 +114,4 @@ groups:
         annotations:
           summary: "Postgres source {{ $labels.source }} has been paused for a day"
           description: "A paused source keeps its slot, which keeps every change since it paused in the database's WAL."
-          runbook: https://github.com/ReneP92/changeport/blob/main/docs/runbook.md#a-postgres-source-fails
+          docs: alerts.html#a-source-has-been-paused-for-a-day

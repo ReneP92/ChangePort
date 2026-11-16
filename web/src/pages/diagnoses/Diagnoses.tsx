@@ -1,7 +1,9 @@
 import { CircleAlert, Info, TriangleAlert, type LucideIcon } from "lucide-react";
 import { Link } from "react-router";
 import type { Diagnosis } from "@/api/client";
+import { useDocsUrl } from "@/api/config";
 import { useDiagnoses } from "@/api/queries";
+import { DocsLink } from "@/components/DocsLink";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -46,7 +48,7 @@ const titleID = (id: string) => `diagnosis-${id.replace(/[^\w-]/g, "_")}`;
 
 /**
  * The diagnoses, one per row: what is wrong, what shows it, what to do,
- * and, with links, where to look.
+ * its page in the docs, and, with links, where to look.
  */
 export function DiagnosisRows({
   diagnoses,
@@ -56,11 +58,13 @@ export function DiagnosisRows({
   links?: boolean;
 }) {
   const envPath = useEnvironmentPath();
+  const docsUrl = useDocsUrl();
   return (
     <ul className="flex flex-col divide-y">
       {diagnoses.map((diagnosis) => {
         const severity = severities[diagnosis.severity];
         const Icon = severity.icon;
+        const subject = links && (diagnosis.consumerGroup ?? diagnosis.topic) !== undefined;
         return (
           <li
             key={diagnosis.id}
@@ -80,9 +84,10 @@ export function DiagnosisRows({
                 <span className="font-medium">What to do: </span>
                 <WithCode text={diagnosis.suggestion} />
               </p>
-              {links && (diagnosis.consumerGroup ?? diagnosis.topic) !== undefined && (
+              {(subject || (docsUrl && diagnosis.docs)) && (
                 <p className="flex flex-wrap gap-x-3 text-muted-foreground">
-                  {diagnosis.consumerGroup !== undefined && (
+                  <DocsLink page={diagnosis.docs}>Learn more</DocsLink>
+                  {links && diagnosis.consumerGroup !== undefined && (
                     <Link
                       to={envPath(
                         `/consumer-groups/${encodeURIComponent(diagnosis.consumerGroup)}`,
@@ -92,7 +97,7 @@ export function DiagnosisRows({
                       Consumer group {diagnosis.consumerGroup}
                     </Link>
                   )}
-                  {diagnosis.topic !== undefined && (
+                  {links && diagnosis.topic !== undefined && (
                     <Link
                       to={envPath(`/topics/${encodeURIComponent(diagnosis.topic)}`)}
                       className="underline-offset-4 hover:text-foreground hover:underline"

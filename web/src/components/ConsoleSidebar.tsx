@@ -11,6 +11,7 @@ import {
   Keyboard,
   LayoutDashboard,
   Layers,
+  LibraryBig,
   LogOut,
   Menu,
   MessageCircle,
@@ -24,7 +25,7 @@ import {
 import { useState } from "react";
 import { Link, matchPath, NavLink, useLocation } from "react-router";
 import type { Environment } from "@/api/client";
-import { useSupportEmail } from "@/api/config";
+import { useDocsUrl, useSupportEmail } from "@/api/config";
 import { useEnvironmentAlerts, useMe, useTrialRequests } from "@/api/queries";
 import { ChangeportMark } from "@/components/ChangeportMark";
 import { Button } from "@/components/ui/button";
@@ -503,14 +504,15 @@ function Count({ value }: { value: number }) {
 /** Collapses the sidebar to icons, or expands it, on wider screens. */
 /**
  * Help, behind Changeport's mark as Linear's is behind its: the getting
- * started guide of the environment shown, the keyboard shortcuts, support's
- * address when the console has one, and the theme.
+ * started guide of the environment shown, the customer docs and support's
+ * address when the console has them, the keyboard shortcuts, and the theme.
  */
 function HelpMenu() {
   const me = useMe();
   const environmentPath = useEnvironmentPath();
   const openShortcuts = useOpenShortcuts();
   const supportEmail = useSupportEmail();
+  const docsUrl = useDocsUrl();
   const theme = useTheme();
   const { isMobile, setOpenMobile } = useSidebar();
   const customer = me.data?.access === "customer";
@@ -543,6 +545,14 @@ function HelpMenu() {
               <BookOpen />
               Getting started
             </Link>
+          </DropdownMenuItem>
+        )}
+        {customer && docsUrl !== undefined && (
+          <DropdownMenuItem asChild>
+            <a href={`${docsUrl}/`} target="_blank" rel="noreferrer" onClick={close}>
+              <LibraryBig />
+              Docs
+            </a>
           </DropdownMenuItem>
         )}
         {customer && supportEmail !== undefined && (

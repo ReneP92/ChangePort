@@ -132,13 +132,14 @@ resource "aws_cloudfront_origin_access_control" "site" {
 }
 
 # www.<domain> answers with a permanent redirect to the domain, so the site
-# has one address for links and search engines.
-resource "aws_cloudfront_function" "www_redirect" {
-  name    = "${var.name}-site-www-redirect"
-  comment = "Redirects www.${var.domain} to ${var.domain}"
+# has one address for links and search engines; an address ending in a
+# slash, such as /docs/, gets that folder's index.html, as the root does.
+resource "aws_cloudfront_function" "viewer_request" {
+  name    = "${var.name}-site-viewer-request"
+  comment = "Redirects www.${var.domain} to ${var.domain}, and serves folders' index.html"
   runtime = "cloudfront-js-2.0"
   publish = true
-  code    = templatefile("${path.module}/www-redirect.js", { domain = var.domain })
+  code    = templatefile("${path.module}/viewer-request.js", { domain = var.domain })
 }
 
 # What browsers are told on every response. The site's pages carry their own
@@ -208,7 +209,7 @@ resource "aws_cloudfront_distribution" "site" {
 
     function_association {
       event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.www_redirect.arn
+      function_arn = aws_cloudfront_function.viewer_request.arn
     }
   }
 

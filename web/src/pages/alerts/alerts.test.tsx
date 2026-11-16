@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, render, screen } from "@testing-library/react";
 import type { Alert } from "@/api/client";
 import { alertsAbout } from "@/lib/alerts";
+import { testDocsUrl, withConfig } from "@/lib/withConfig";
 import { AlertBadge, AlertRows } from "@/pages/alerts/ActiveAlerts";
 
 afterEach(cleanup);
@@ -18,7 +19,7 @@ const alert = (name: string, extra: Partial<Alert> = {}): Alert => ({
 const alerts = [
   alert("ConsumerGroupLagHigh", { topic: "orders", consumerGroup: "billing" }),
   alert("ConsumerGroupStuck", { topic: "orders", consumerGroup: "billing" }),
-  alert("TopicRequestErrors", { topic: "orders" }),
+  alert("TopicRequestErrors", { topic: "orders", docs: "alerts.html#requests-fail" }),
   alert("ClientThrottled", { clientId: "loader" }),
 ];
 
@@ -55,10 +56,15 @@ describe("AlertBadge", () => {
 
 describe("AlertRows", () => {
   test("shows each alert's summary and what it means", () => {
-    render(<AlertRows alerts={alerts.slice(2)} />);
+    render(withConfig(<AlertRows alerts={alerts.slice(2)} />));
     const rows = screen.getAllByRole("listitem");
     expect(rows).toHaveLength(2);
     expect(rows[0]?.textContent).toContain("TopicRequestErrors summary");
     expect(rows[0]?.textContent).toContain("What it means. Since ");
+    // With its section of the docs, when it has one.
+    const links = screen.getAllByRole("link", { name: /^What to do/ });
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      `${testDocsUrl}/alerts.html#requests-fail`,
+    ]);
   });
 });

@@ -742,6 +742,9 @@ type Alert struct {
 	ConsumerGroup *string `json:"consumerGroup,omitempty"`
 	Description   string  `json:"description"`
 
+	// Docs Its section in the customer docs, relative to the docs' address, such as alerts.html#a-consumer-group-is-stuck
+	Docs *string `json:"docs,omitempty"`
+
 	// Name The alert, such as ConsumerGroupLagHigh
 	Name     string `json:"name"`
 	Severity string `json:"severity"`
@@ -834,6 +837,9 @@ type ConditionType string
 type Config struct {
 	// ClerkPublishableKey The Clerk publishable key the web app signs in with
 	ClerkPublishableKey string `json:"clerkPublishableKey"`
+
+	// DocsUrl Where the customer docs are, such as https://changeport.io/docs; the console links each diagnosis, alert and warning to its page there, and without it to none
+	DocsUrl *string `json:"docsUrl,omitempty"`
 
 	// SupportEmail Where customers contact Changeport's support; without it the console offers no address
 	SupportEmail *openapi_types.Email `json:"supportEmail,omitempty"`
@@ -948,6 +954,9 @@ type CustomerUsageList struct {
 type Diagnosis struct {
 	ClientId      *string `json:"clientId,omitempty"`
 	ConsumerGroup *string `json:"consumerGroup,omitempty"`
+
+	// Docs Its page in the customer docs, relative to the docs' address, such as troubleshooting/consumer-too-slow.html
+	Docs *string `json:"docs,omitempty"`
 
 	// Explanation What shows it, with the numbers
 	Explanation string `json:"explanation"`

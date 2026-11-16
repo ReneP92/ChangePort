@@ -61,12 +61,12 @@ a topic-rewriting proxy follow in Phase 6, then Kafka Connect and CDC.
 More on the data plane:
 
 - [docs/architecture/data-plane.md](docs/architecture/data-plane.md): how the customers' clusters run, as built.
-- [docs/connecting.md](docs/connecting.md): the customers' guide to connecting, with examples in Java, Python, Go and Node.js.
-- [docs/alerts.md](docs/alerts.md): the customers' guide to the alerts about their applications, and how they work.
+- [site/content/docs](site/content/docs/index.md): the customer docs, which the site publishes under `/docs/`: connecting, with examples in Java, Python, Go and Node.js, topics, consumer groups, delivery guarantees, Postgres sources, alerts, and a troubleshooting page per diagnosis.
+- [docs/alerts.md](docs/alerts.md): the alerts about customers' applications, and how they work.
 - [docs/timeline.md](docs/timeline.md): the change timeline over the console's graphs, and how changes are recorded.
 - [docs/diagnosis.md](docs/diagnosis.md): the common Kafka problems the console diagnoses, and how.
 - [docs/runbook.md](docs/runbook.md): the operators' procedures, from provisioning to upgrades.
-- [docs/site.md](docs/site.md): the landing site, its screenshots, its tests and its Lighthouse check.
+- [docs/site.md](docs/site.md): the landing site and the customer docs on it, its screenshots, its tests and its Lighthouse check.
 
 ## Roadmap
 

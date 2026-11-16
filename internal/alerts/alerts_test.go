@@ -30,10 +30,11 @@ func load(t *testing.T) []Rule {
 	return rules
 }
 
-// anchors are the anchors of a document's sections.
+// anchors are the anchors of a document's sections, a path from the
+// repository's root.
 func anchors(t *testing.T, document string) []string {
 	t.Helper()
-	file, err := os.Open(filepath.Join(root, "docs", document))
+	file, err := os.Open(filepath.Join(root, document))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,11 +54,12 @@ const docsURL = "https://github.com/ReneP92/changeport/blob/main/docs/"
 var metricName = regexp.MustCompile(`\b(changeport|debezium|kafka_connect)_[a-z_]+\b`)
 
 func TestRules(t *testing.T) {
-	// Operators' alerts link the runbook; customers' may link the guide to
-	// their alerts instead.
+	// Operators' alerts link the runbook, and the timeline's its guide;
+	// customers' link their section of the customer docs instead.
 	documents := map[string][]string{
-		"runbook.md": anchors(t, "runbook.md"), "alerts.md": anchors(t, "alerts.md"), "timeline.md": anchors(t, "timeline.md"),
+		"runbook.md": anchors(t, "docs/runbook.md"), "timeline.md": anchors(t, "docs/timeline.md"),
 	}
+	customerAlerts := anchors(t, "site/content/docs/alerts.md")
 	documented, err := os.ReadFile(filepath.Join(root, "docs", "metrics-labels.md"))
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +86,14 @@ func TestRules(t *testing.T) {
 		if timeline && rule.Alert != events.ThrottlingAlert {
 			t.Errorf("%s is for the timeline, which records only %s", rule.Alert, events.ThrottlingAlert)
 		}
-		for _, annotation := range []string{"summary", "description", "runbook"} {
+		// Customers' alerts link the customer docs, and everyone else's the
+		// runbook.
+		customer := rule.Labels["audience"] == "customer"
+		link := "runbook"
+		if customer {
+			link = "docs"
+		}
+		for _, annotation := range []string{"summary", "description", link} {
 			if rule.Annotations[annotation] == "" {
 				t.Errorf("%s has no %s", rule.Alert, annotation)
 			}
@@ -106,15 +115,26 @@ func TestRules(t *testing.T) {
 		if rule.Group == "postgres-sources" && !strings.Contains(summary, "$labels.source") {
 			t.Errorf("%s's summary does not name the source: %q", rule.Alert, summary)
 		}
-		document, anchor, _ := strings.Cut(strings.TrimPrefix(rule.Annotations["runbook"], docsURL), "#")
-		if document == "alerts.md" && rule.Labels["audience"] != "customer" {
-			t.Errorf("%s is for operators, but links the customers' guide", rule.Alert)
-		}
-		if (document == "timeline.md") != timeline {
-			t.Errorf("%s links %s; only the timeline's alerts, and all of them, link docs/timeline.md", rule.Alert, document)
-		}
-		if !strings.HasPrefix(rule.Annotations["runbook"], docsURL) || !slices.Contains(documents[document], anchor) {
-			t.Errorf("%s's runbook %q is no section of docs/runbook.md, docs/alerts.md or docs/timeline.md", rule.Alert, rule.Annotations["runbook"])
+		if customer {
+			// The customer docs are relative to their address, which the
+			// console and the provisioner are given.
+			if anchor, ok := strings.CutPrefix(rule.Annotations["docs"], "alerts.html#"); !ok || !slices.Contains(customerAlerts, anchor) {
+				t.Errorf("%s's docs %q is no section of site/content/docs/alerts.md", rule.Alert, rule.Annotations["docs"])
+			}
+			if rule.Annotations["runbook"] != "" {
+				t.Errorf("%s is for customers, but links the operators' runbook", rule.Alert)
+			}
+		} else {
+			if rule.Annotations["docs"] != "" {
+				t.Errorf("%s is for operators, but links the customer docs", rule.Alert)
+			}
+			document, anchor, _ := strings.Cut(strings.TrimPrefix(rule.Annotations["runbook"], docsURL), "#")
+			if (document == "timeline.md") != timeline {
+				t.Errorf("%s links %s; only the timeline's alerts, and all of them, link docs/timeline.md", rule.Alert, document)
+			}
+			if !strings.HasPrefix(rule.Annotations["runbook"], docsURL) || !slices.Contains(documents[document], anchor) {
+				t.Errorf("%s's runbook %q is no section of docs/runbook.md or docs/timeline.md", rule.Alert, rule.Annotations["runbook"])
+			}
 		}
 		for _, name := range metricName.FindAllString(rule.Expr, -1) {
 			if !strings.Contains(string(documented), "`"+name+"`") {

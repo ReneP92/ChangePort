@@ -106,7 +106,16 @@ func toAPIAlert(a gettableAlert) api.Alert {
 		ConsumerGroup: optional("consumer_group"),
 		ClientId:      optional("client_id"),
 		Source:        optional("source"),
+		Docs:          optionalAnnotation(a.Annotations, "docs"),
 	}
+}
+
+// optionalAnnotation is an alert's annotation, or nil without it.
+func optionalAnnotation(annotations map[string]string, name string) *string {
+	if value := annotations[name]; value != "" {
+		return ptr.To(value)
+	}
+	return nil
 }
 
 // sortAlerts puts the newest alerts first, and the others in a stable order.

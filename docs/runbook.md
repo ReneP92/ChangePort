@@ -159,7 +159,7 @@ proves the names to Let's Encrypt with a record in the `kafka.*` hosted zone
 (see [Certificates](#certificates)).
 
 When the customer is `Ready`, its admins download `client.properties` in the
-console (Overview, Connection) and connect as [connecting.md](connecting.md)
+console (Overview, Connection) and connect as [connecting.md](../site/content/docs/connecting.md)
 describes. Operators can print the same file:
 
 ```bash
@@ -442,7 +442,7 @@ kind, by freezing one zone's node under load for a minute.
    move to another zone, and the spread constraint keeps a third broker from
    starting in one of the remaining zones; they come back with the zone.
 4. Customers whose clients set a small `retries`, against
-   [connecting.md](connecting.md), see failed sends; point them to the
+   [connecting.md](../site/content/docs/connecting.md), see failed sends; point them to the
    guide.
 5. When the zone is back, the brokers rejoin and catch up. Check that every
    cluster is `Ready` with no under-replicated partitions.
@@ -528,6 +528,7 @@ ConfigMap `changeport-mail` in the `changeport` namespace:
 | `CHANGEPORT_OPERATOR_EMAILS` | Who hears of new trial requests, comma-separated |
 | `CHANGEPORT_CONSOLE_URL` | Where the provisioner's emails link |
 | `CHANGEPORT_SUPPORT_EMAIL` | The address the console's help menu offers customers for support; without it, it offers none |
+| `CHANGEPORT_DOCS_URL` | Where the customer docs are, such as `https://<domain>/docs`, which the console's diagnoses, alerts and warnings and customers' alert notifications link; without it, nothing links them ([site.md](site.md#the-customer-docs)) |
 
 Without the ConfigMap no email is sent, and the logs say so (`mail is off`).
 A send is tried four times; every attempt that succeeds or finally fails is

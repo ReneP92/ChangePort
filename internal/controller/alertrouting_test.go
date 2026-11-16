@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -48,7 +49,7 @@ func TestAlertmanagerConfigRoutesEachCustomerToItsOwnReceivers(t *testing.T) {
 	out, err := AlertmanagerConfig(base, []CustomerReceivers{
 		{Tenant: "globex", Webhook: "https://hooks.globex.example/alerts"},
 		{Tenant: "acme", Slack: "https://hooks.slack.com/services/T/B/acme", PagerDuty: "acme-routing-key"},
-	})
+	}, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,8 +95,53 @@ func TestAlertmanagerConfigRoutesEachCustomerToItsOwnReceivers(t *testing.T) {
 }
 
 func TestAlertmanagerConfigRefusesAnInvalidTenant(t *testing.T) {
-	if _, err := AlertmanagerConfig(baseAlertmanagerConfig(t), []CustomerReceivers{{Tenant: `acme",tenant=~".*`, Webhook: "https://x.example"}}); err == nil {
+	if _, err := AlertmanagerConfig(baseAlertmanagerConfig(t), []CustomerReceivers{{Tenant: `acme",tenant=~".*`, Webhook: "https://x.example"}}, ""); err == nil {
 		t.Error("a tenant that is no customer ID was accepted")
+	}
+}
+
+// With the docs' address, customers' Slack messages and PagerDuty incidents
+// link each alert's section of the customer docs; an address that a
+// template would read as its own is refused.
+func TestAlertmanagerConfigLinksTheDocs(t *testing.T) {
+	out, err := AlertmanagerConfig(baseAlertmanagerConfig(t), []CustomerReceivers{
+		{Tenant: "acme", Slack: "https://hooks.slack.com/services/T/B/acme", PagerDuty: "acme-routing-key"},
+	}, "https://changeport.example/docs/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	type receiver struct {
+		Name         string `json:"name"`
+		SlackConfigs []struct {
+			Text string `json:"text"`
+		} `json:"slack_configs"`
+		PagerDutyConfigs []struct {
+			Links []struct {
+				Href string `json:"href"`
+			} `json:"links"`
+		} `json:"pagerduty_configs"`
+	}
+	var config struct {
+		Receivers []receiver `json:"receivers"`
+	}
+	if err := yaml.Unmarshal(out, &config); err != nil {
+		t.Fatal(err)
+	}
+	link := "https://changeport.example/docs/{{ .CommonAnnotations.docs }}"
+	i := slices.IndexFunc(config.Receivers, func(r receiver) bool { return r.Name == "customer-acme" })
+	if i < 0 {
+		t.Fatalf("no receiver for acme:\n%s", out)
+	}
+	acme := config.Receivers[i]
+	if len(acme.SlackConfigs) != 1 || !strings.Contains(acme.SlackConfigs[0].Text, "<"+link+"|What to do>") {
+		t.Errorf("acme's Slack messages do not link the docs: %+v", acme.SlackConfigs)
+	}
+	if len(acme.PagerDutyConfigs) != 1 || len(acme.PagerDutyConfigs[0].Links) != 1 || acme.PagerDutyConfigs[0].Links[0].Href != link {
+		t.Errorf("acme's PagerDuty incidents do not link the docs: %+v", acme.PagerDutyConfigs)
+	}
+	// internal/alerts tests what else it refuses.
+	if _, err := AlertmanagerConfig(baseAlertmanagerConfig(t), nil, "https://changeport.example/{{ .Status }}"); err == nil {
+		t.Error("a docs' address with a template in it was accepted")
 	}
 }
 
@@ -107,7 +153,7 @@ func TestAlertmanagerConfigPassesAmtool(t *testing.T) {
 	}
 	out, err := AlertmanagerConfig(baseAlertmanagerConfig(t), []CustomerReceivers{
 		{Tenant: "acme", Slack: "https://hooks.slack.com/services/T/B/C", PagerDuty: "0123456789abcdef0123456789abcdef", Webhook: "https://hooks.acme.example/alerts"},
-	})
+	}, "https://changeport.example/docs")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -347,6 +347,7 @@ func newFixture(t *testing.T) *fixture {
 		Origins:             []string{origin, "http://localhost:5173"},
 		OperatorEmails:      []string{"ops@changeport.test"},
 		SupportEmail:        "support@changeport.test",
+		DocsURL:             "https://changeport.test/docs/",
 	}, Options{
 		Customers:     f.customers,
 		Organizations: f.organizations,
@@ -395,6 +396,25 @@ func TestConfigNamesTheSupportAddress(t *testing.T) {
 	}
 	if config := response.(api.GetConfig200JSONResponse); config.SupportEmail != nil {
 		t.Errorf("supportEmail = %q without one configured, want none", *config.SupportEmail)
+	}
+}
+
+// The console links diagnoses, alerts and warnings to the customer docs at
+// the address it is configured with, joined to their pages by a slash, and
+// to none without one.
+func TestConfigNamesTheDocs(t *testing.T) {
+	f := newFixture(t)
+	status, body, _ := get(t, f.handler, "/api/config", "")
+	if status != http.StatusOK || !strings.Contains(body, `"docsUrl":"https://changeport.test/docs"`) {
+		t.Errorf("GET /api/config = %d %s, want the docs' address without its trailing slash", status, body)
+	}
+	response, err := (&Server{config: Config{PublishableKey: publishableKey}}).
+		GetConfig(t.Context(), api.GetConfigRequestObject{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config := response.(api.GetConfig200JSONResponse); config.DocsUrl != nil {
+		t.Errorf("docsUrl = %q without one configured, want none", *config.DocsUrl)
 	}
 }
 

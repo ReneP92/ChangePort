@@ -18,14 +18,18 @@ async function openHelp(page: Page) {
   return menu;
 }
 
-test("the help menu leads to the guide, support and the shortcuts", async ({ page }) => {
+test("the help menu leads to the guide, the docs, support and the shortcuts", async ({ page }) => {
   await openOverview(page, fixtures.users.adminA);
   let menu = await openHelp(page);
-  // On kind the console names support@changeport.test (deploy/overlays/kind).
+  // On kind the console names support@changeport.test, and the docs as just
+  // site-dev serves them (deploy/overlays/kind).
   await expect(menu.getByRole("menuitem", { name: "Contact support" })).toHaveAttribute(
     "href",
     "mailto:support@changeport.test",
   );
+  const docs = menu.getByRole("menuitem", { name: "Docs" });
+  await expect(docs).toHaveAttribute("href", "http://localhost:5174/docs/");
+  await expect(docs).toHaveAttribute("target", "_blank");
   await menu.getByRole("menuitem", { name: "Getting started" }).click();
   await expect(page).toHaveURL(/\/e\/production\/welcome$/);
 

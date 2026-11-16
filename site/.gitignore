@@ -5,3 +5,6 @@ public/screens/
 lighthouse/
 playwright-report/
 test-results/
+
+# Rendered by scripts/docs.ts from content/docs.
+/docs/

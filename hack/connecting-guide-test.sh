@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests the examples of the customer connection guide (docs/connecting.md)
+# Tests the examples of the customer connection guide (site/content/docs/connecting.md)
 # against a customer's cluster on kind: each example, taken from the guide as
 # it is written, produces a message and consumes it back as a consumer group,
 # from outside the cluster through the load balancers, with the customer's
@@ -11,7 +11,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 customer=${1:-demo}
-guide="$ROOT/docs/connecting.md"
+guide="$ROOT/site/content/docs/connecting.md"
 run_id="$(date +%s)-$RANDOM"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -132,18 +132,34 @@ kafka_tool kafka-topics.sh --bootstrap-server "$bootstrap" --command-config /con
 kafka_tool kafka-topics.sh --bootstrap-server "$bootstrap" --command-config /config/client.properties --delete --topic "$eos_out" >/dev/null
 kafka_tool kafka-consumer-groups.sh --bootstrap-server "$bootstrap" --command-config /config/client.properties --delete --group example-exactly-once >/dev/null
 
+# The command line example lists the topics with Kafka's own tools, from
+# the directory that holds client.properties, as the guide says.
+example "### Command line" bash >"$work/command-line.sh"
+log "Running the guide's command line example"
+output=$(docker run "${KAFKA_CLIENT[@]}" -e "KAFKA_BOOTSTRAP=$bootstrap" -v "$work/command-line.sh:/command-line.sh:ro" \
+  -w /config --entrypoint sh "$KAFKA_IMAGE" -c 'PATH=/opt/kafka/bin:$PATH; . /command-line.sh' 2>&1) ||
+  die "the guide's command line example failed:"$'\n'"$output"
+grep -qx "guide-java-$run_id" <<<"$output" || die "the guide's command line example lists no topics:"$'\n'"$output"
+
+# The guide's client.properties has the settings the console's has, in the
+# same order; kind's adds only the local CA's truststore.
+guide_keys=$(example "## Your connection details" properties | cut -d= -f1)
+console_keys=$(grep -E '^[a-z.]+=' "$properties" | cut -d= -f1 | grep -v '^ssl\.truststore\.')
+[[ $guide_keys == "$console_keys" ]] ||
+  die "the guide's client.properties has $(tr '\n' ' ' <<<"$guide_keys")but the console's $(tr '\n' ' ' <<<"$console_keys")"
+
 # The producers say acks=all and idempotence outright.
 for language in java python go node; do
-  grep -Eq '"?acks"?[,:] *"all"|kgo\.RequiredAcks\(kgo\.AllISRAcks\(\)\)' "$work/$language"/* ||
+  grep -Eqs '"?acks"?[,:] *"all"|kgo\.RequiredAcks\(kgo\.AllISRAcks\(\)\)' "$work/$language"/* ||
     die "the guide's $language example leaves acks to the client's default"
-  [[ $language == go ]] || grep -Eq 'enable\.idempotence"[,:] *("true"|true|True)' "$work/$language"/* ||
+  [[ $language == go ]] || grep -Eqs 'enable\.idempotence"[,:] *("true"|true|True)' "$work/$language"/* ||
     die "the guide's $language example leaves idempotence to the client's default"
 done
 
 # They committed by themselves rather than on a timer: consumers that commit
 # on a timer also commit when they close, so the offsets alone cannot tell.
 for language in java python go node; do
-  grep -Eq 'enable\.auto\.commit"[,:] *("false"|false|False)|kgo\.DisableAutoCommit\(\)' "$work/$language"/* ||
+  grep -Eqs 'enable\.auto\.commit"[,:] *("false"|false|False)|kgo\.DisableAutoCommit\(\)' "$work/$language"/* ||
     die "the guide's $language example leaves automatic commits on"
 done
 

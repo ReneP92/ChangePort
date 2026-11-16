@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
+	"github.com/ReneP92/changeport/internal/alerts"
 	"github.com/ReneP92/changeport/internal/cdc"
 	"github.com/ReneP92/changeport/internal/clusters"
 	"github.com/ReneP92/changeport/internal/console"
@@ -129,6 +130,12 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	docsURL := os.Getenv("CHANGEPORT_DOCS_URL")
+	if docsURL != "" {
+		if err := alerts.ValidateDocsURL(docsURL); err != nil {
+			return fmt.Errorf("CHANGEPORT_DOCS_URL: %w", err)
+		}
+	}
 	server, err := console.New(console.Config{
 		PublishableKey:      os.Getenv("CLERK_PUBLISHABLE_KEY"),
 		SecretKey:           os.Getenv("CLERK_SECRET_KEY"),
@@ -136,6 +143,7 @@ func run(ctx context.Context, args []string) error {
 		Origins:             splitList(os.Getenv("CHANGEPORT_CONSOLE_ORIGINS")),
 		OperatorEmails:      splitList(os.Getenv("CHANGEPORT_OPERATOR_EMAILS")),
 		SupportEmail:        os.Getenv("CHANGEPORT_SUPPORT_EMAIL"),
+		DocsURL:             docsURL,
 		MaxEnvironments:     *maxEnvironments,
 		DiagnosisWindow:     *diagnosisWindow,
 	}, console.Options{

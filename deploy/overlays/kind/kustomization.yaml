@@ -24,6 +24,9 @@ configMapGenerator:
       - CHANGEPORT_OPERATOR_EMAILS=operators@changeport.test
       - CHANGEPORT_SUPPORT_EMAIL=support@changeport.test
       - CHANGEPORT_CONSOLE_URL=http://localhost:8088
+      # The customer docs as just site-dev serves them, which the console
+      # and customers' alerts link.
+      - CHANGEPORT_DOCS_URL=http://localhost:5174/docs
     options:
       disableNameSuffixHash: true
   - name: alertmanager-config

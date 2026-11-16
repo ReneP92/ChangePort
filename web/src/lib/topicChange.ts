@@ -9,7 +9,20 @@ import { formatDuration, formatRetention } from "@/lib/format";
 export interface ChangeWarning {
   loss: boolean;
   text: string;
+  docs: DocsSection;
 }
+
+/** A section of the customer docs that explains a kind of change. */
+export interface DocsSection {
+  page: string;
+  title: string;
+}
+
+/** The sections of the customer docs about changing a topic. */
+export const changeDocs = {
+  retention: { page: "topics.html#changing-retention", title: "Changing retention" },
+  partitions: { page: "topics.html#adding-partitions", title: "Adding partitions" },
+} satisfies Record<string, DocsSection>;
 
 /** Whether a topic keeps the latest message per key, and so has no retention. */
 export function compacted(topic: Topic): boolean {
@@ -39,6 +52,7 @@ export function changeWarnings(
     if (readers === undefined) {
       warnings.push({
         loss: true,
+        docs: changeDocs.retention,
         text: `How far behind the consumer groups are is not known, so a group further behind than ${retention} may lose messages it has not read.`,
       });
     }
@@ -50,31 +64,37 @@ export function changeWarnings(
       if (reader.lagSeconds * 1000 >= retentionMs) {
         warnings.push({
           loss: true,
+          docs: changeDocs.retention,
           text: `${reader.group} is ${lag} behind. Keeping messages for ${retention}, ${topic.name} deletes messages ${reader.group} has not read yet.`,
         });
       } else if (reader.lagSeconds * 1000 >= retentionMs / 2) {
         warnings.push({
           loss: false,
+          docs: changeDocs.retention,
           text: `${reader.group} is ${lag} behind, close to the ${retention} ${topic.name} would keep messages. Unless it catches up, messages are deleted before it reads them.`,
         });
       }
     }
     warnings.push({
       loss: false,
+      docs: changeDocs.retention,
       text: `Kafka then deletes messages older than ${retention} for good, a log segment at a time: within minutes on a busy topic, and on a quiet one once its current segment closes, after up to 7 days.`,
     });
   }
   if (partitions > topic.partitions) {
     warnings.push({
       loss: false,
+      docs: changeDocs.partitions,
       text: "Messages with the same key always go to the same partition. With more partitions, a key's new messages may go to another partition than its earlier ones, so for a while consumers may read them out of order.",
     });
     warnings.push({
       loss: false,
+      docs: changeDocs.partitions,
       text: "Consumers find the new partitions within 5 minutes (`metadata.max.age.ms`). Those with `auto.offset.reset=latest`, the Java client's default, skip the messages that reach a new partition before they do.",
     });
     warnings.push({
       loss: false,
+      docs: changeDocs.partitions,
       text: "Partitions can be added, never removed.",
     });
   }

@@ -1005,6 +1005,11 @@ export interface components {
              * @description Where customers contact Changeport's support; without it the console offers no address
              */
             supportEmail?: string;
+            /**
+             * Format: uri
+             * @description Where the customer docs are, such as https://changeport.io/docs; the console links each diagnosis, alert and warning to its page there, and without it to none
+             */
+            docsUrl?: string;
         };
         Me: {
             userID: string;
@@ -1377,6 +1382,8 @@ export interface components {
             clientId?: string;
             /** @description The Postgres source, for a source's alerts */
             source?: string;
+            /** @description Its section in the customer docs, relative to the docs' address, such as alerts.html#a-consumer-group-is-stuck */
+            docs?: string;
         };
         AlertList: {
             alerts: components["schemas"]["Alert"][];
@@ -1643,6 +1650,8 @@ export interface components {
             explanation: string;
             /** @description What to do about it. Commands and settings are between backticks, as code */
             suggestion: string;
+            /** @description Its page in the customer docs, relative to the docs' address, such as troubleshooting/consumer-too-slow.html */
+            docs?: string;
         };
         Topology: {
             /** @description The producers that report their own metrics (KIP-714), by Kafka user and client ID */

@@ -3,7 +3,7 @@
 How the customers' Kafka clusters run, as built. The decisions behind it are
 in [PROJECT_PLAN.md](../PROJECT_PLAN.md); operating it is in
 [runbook.md](../runbook.md); connecting to it is in
-[connecting.md](../connecting.md).
+[connecting.md](../../site/content/docs/connecting.md).
 
 ## One environment
 
