@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,7 +24,9 @@ import (
 // platform's __consumer_offsets is in every answer, to be left out.
 type usageMetrics struct {
 	t *testing.T
-	// ranges are the daily ranges asked for.
+	// ranges are the daily ranges asked for, which the console asks for at
+	// once.
+	mu     sync.Mutex
 	ranges []string
 }
 
@@ -54,6 +57,8 @@ func (m *usageMetrics) Instant(_ context.Context, _ string, q metrics.Query, fil
 }
 
 func (m *usageMetrics) Range(_ context.Context, _ string, q metrics.Query, filter metrics.Filter, start, end time.Time, step time.Duration) ([]metrics.Series, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.ranges = append(m.ranges, fmt.Sprintf("%s %v %s..%s every %v", q, filter.Window, start.Format(time.DateOnly), end.Format(time.DateOnly), step))
 	scale := 1.0
 	if q == metrics.UsageOut {
