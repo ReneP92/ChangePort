@@ -46,6 +46,13 @@ just site-check   # type-check, format-check, build, test, then Lighthouse
   `%SITE_URL%`.
 - **The stylesheet** is put into each page as a `<style>` when the site is
   built, so the browser can draw it without a second request.
+- **Fonts** are preloaded, the Latin Geist and Geist Mono, and optional
+  rather than swapped in (`steadyFonts` in `site/vite.config.ts`): a page
+  uses them if they arrive in its first moment, and otherwise keeps the
+  system font until the next page, which finds them cached. Swapping them in
+  late moves text that is already drawn, which Lighthouse counts as layout
+  shift, and Linux's fallback fonts, as CI has, differ from Geist enough to
+  fail the check.
 - **Animations** are CSS transitions and keyframes, and SMIL for the moving
   dots of the SVG diagrams. Anything that hides content until it animates
   sits behind the `js` class, which an inline script puts on the root

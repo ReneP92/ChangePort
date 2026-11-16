@@ -76,6 +76,47 @@ function inlineStyles(): Plugin {
 }
 
 /**
+ * Keeps text from moving as the fonts arrive, which Lighthouse counts as
+ * layout shift: each page preloads the Latin Geist and Geist Mono it
+ * shows, and the fonts are optional rather than swapped in, so a page uses
+ * them if they arrive in its first moment, and otherwise keeps the system
+ * font until the next page, which finds them cached.
+ */
+function steadyFonts(): Plugin {
+  return {
+    name: "changeport-steady-fonts",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler: (html, { bundle }) => {
+        const fonts = Object.keys(bundle ?? {}).filter((file) =>
+          /\/geist(-mono)?-latin-wght-normal-[\w-]+\.woff2$/.test(file),
+        );
+        if (fonts.length !== 2) {
+          throw new Error(
+            `expected the Latin Geist and Geist Mono to preload, found ${fonts.join(", ")}`,
+          );
+        }
+        const links = fonts
+          .map(
+            (file) =>
+              `<link rel="preload" href="/${file}" as="font" type="font/woff2" crossorigin />`,
+          )
+          .join("\n    ");
+        // The stylesheet is in the page by now (inlineStyles), with
+        // fontsource's declarations.
+        if (!html.includes("font-display:swap")) {
+          throw new Error("the stylesheet declares no swapped fonts to make optional");
+        }
+        return html
+          .replace("</title>", `</title>\n    ${links}`)
+          .replaceAll("font-display:swap", "font-display:optional");
+      },
+    },
+  };
+}
+
+/**
  * Gives each built page a Content-Security-Policy: only the site's own
  * files, and of inline scripts only those the page was built with, by their
  * hashes. Styles may be inline, as the stylesheet and a few style attributes
@@ -142,7 +183,14 @@ function docsPages(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [pages(), tailwindcss(), inlineStyles(), contentSecurityPolicy(), docsPages()],
+  plugins: [
+    pages(),
+    tailwindcss(),
+    inlineStyles(),
+    steadyFonts(),
+    contentSecurityPolicy(),
+    docsPages(),
+  ],
   build: {
     rolldownOptions: {
       // 404.html is what the host serves for an address it has no page for.
