@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import type { Customer } from "@/api/client";
-import { useCustomers, useMe } from "@/api/queries";
+import type { Customer, EnvironmentUsage } from "@/api/client";
+import { useCustomerUsage, useCustomers, useMe } from "@/api/queries";
 import { StatusBadge } from "@/components/CustomerSummary";
+import { formatBytes } from "@/lib/format";
 import { parts } from "@/lib/parts";
 import { formatDay, trialEnding, trialLeft } from "@/lib/trials";
 import { Notice } from "@/components/Notice";
@@ -36,6 +37,7 @@ export function OperatorCustomers() {
 
 function CustomerTable() {
   const customers = useCustomers();
+  const usage = useCustomerUsage();
   if (customers.isPending) {
     return <Notice title="Loading" busy />;
   }
@@ -57,6 +59,7 @@ function CustomerTable() {
                 <th className="py-2 font-medium">Customer</th>
                 <th className="py-2 font-medium">Profile</th>
                 <th className="py-2 font-medium">Trial</th>
+                <th className="py-2 text-right font-medium">Last 30 days</th>
                 <th className="py-2 font-medium">Progress</th>
                 <th className="py-2 font-medium">Status</th>
               </tr>
@@ -80,6 +83,15 @@ function CustomerTable() {
                   <td className="py-3 whitespace-nowrap">
                     <TrialCell customer={customer} />
                   </td>
+                  <td className="py-3 text-right whitespace-nowrap tabular-nums">
+                    {usage.isPending ? (
+                      <span className="text-muted-foreground">Loading</span>
+                    ) : (
+                      <ProcessedCell
+                        usage={usage.data?.find((u) => u.customerID === customer.id)}
+                      />
+                    )}
+                  </td>
                   <td className="py-3">
                     <ConditionDots customer={customer} />
                   </td>
@@ -99,6 +111,22 @@ function CustomerTable() {
         </div>
       )}
     </Page>
+  );
+}
+
+/** The bytes a customer's cluster processed over the last 30 days, in and out. */
+function ProcessedCell({ usage }: { usage: EnvironmentUsage | undefined }) {
+  const { bytesIn, bytesOut } = usage ?? {};
+  if (bytesIn === undefined || bytesOut === undefined) {
+    return <span className="text-muted-foreground">Not known</span>;
+  }
+  return (
+    <span>
+      {formatBytes(bytesIn + bytesOut)}
+      <span className="block text-muted-foreground">
+        {formatBytes(bytesIn)} in, {formatBytes(bytesOut)} out
+      </span>
+    </span>
   );
 }
 

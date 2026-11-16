@@ -3,6 +3,7 @@ import {
   Bell,
   BookOpen,
   Building2,
+  ChartColumn,
   ChevronDown,
   ChevronRight,
   Database,
@@ -346,6 +347,13 @@ function EnvironmentSection({
               active={page("/alerts")}
               onClick={close}
               count={{ value: alerts, label: "active" }}
+            />
+            <SubItem
+              to={environmentPath(environment.name, "/usage")}
+              icon={ChartColumn}
+              label="Usage"
+              active={page("/usage")}
+              onClick={close}
             />
           </SidebarMenuSub>
         </CollapsibleContent>

@@ -84,6 +84,7 @@ core_suite() {
   "$ROOT/hack/console-test.sh"
   "$ROOT/hack/tiered-storage-test.sh" "$DEMO_CUSTOMER"
   "$ROOT/hack/replay-test.sh" "$DEMO_CUSTOMER"
+  "$ROOT/hack/usage-test.sh" "$DEMO_CUSTOMER"
   "$ROOT/hack/host-access-test.sh" "$DEMO_CUSTOMER"
   "$ROOT/hack/connecting-guide-test.sh" "$DEMO_CUSTOMER"
   "$ROOT/hack/postgres-test.sh"
@@ -95,6 +96,8 @@ if [[ $SUITE == failover || $SUITE == all ]]; then
   # The alerting test freezes a broker of the failover test's customer, and
   # deprovisions it then.
   KEEP=1 "$ROOT/hack/failover-test.sh" ha
+  # Three brokers replicate every byte, which usage must not count again.
+  "$ROOT/hack/usage-test.sh" ha
   "$ROOT/hack/alerting-test.sh" ha
 fi
 if [[ $SUITE == cdc || $SUITE == all ]]; then

@@ -1075,6 +1075,44 @@ paths:
           $ref: "#/components/responses/NotFound"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/customer/usage:
+    get:
+      operationId: getUsage
+      summary: >-
+        The data the environment's cluster processed over the last 30 days, per day and per topic,
+        and what it stores now
+      responses:
+        "200":
+          description: The usage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Usage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/customer/usage/environments:
+    get:
+      operationId: listEnvironmentUsage
+      summary: The data each of the organization's environments processed over the last 30 days
+      responses:
+        "200":
+          description: Each environment's usage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvironmentUsageList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/customer/topology:
     get:
       operationId: getTopology
@@ -1467,6 +1505,23 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
+  /api/operator/usage:
+    get:
+      operationId: listCustomerUsage
+      summary: The data each customer's cluster processed over the last 30 days, for operators
+      responses:
+        "200":
+          description: Each customer's usage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerUsageList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/NotConfigured"
   /api/operator/customers:
@@ -2686,6 +2741,100 @@ components:
           type: string
           format: date-time
           description: The time of the first message the group reads next; absent when it reads only new ones
+    Usage:
+      type: object
+      description: >-
+        The data a cluster processed over the last 30 days, in bytes: what producers wrote to its
+        topics and consumers read from them, each byte once, without replication or the platform's
+        own topics; and what its topics store now
+      required: [bytesIn, bytesOut, days, topics, localBytes, remoteBytes]
+      properties:
+        bytesIn:
+          type: integer
+          format: int64
+        bytesOut:
+          type: integer
+          format: int64
+        days:
+          type: array
+          description: The last 30 days in UTC, oldest first; the last is today so far
+          items:
+            $ref: "#/components/schemas/UsageDay"
+        topics:
+          type: array
+          description: The topics, most data processed first, with what they store now
+          items:
+            $ref: "#/components/schemas/TopicUsage"
+        localBytes:
+          type: integer
+          format: int64
+          description: What the topics keep on the brokers' disks now, one copy
+        remoteBytes:
+          type: integer
+          format: int64
+          description: What the topics keep in tiered storage now
+    UsageDay:
+      type: object
+      required: [date, bytesIn, bytesOut]
+      properties:
+        date:
+          type: string
+          format: date
+        bytesIn:
+          type: integer
+          format: int64
+        bytesOut:
+          type: integer
+          format: int64
+    TopicUsage:
+      type: object
+      required: [topic, bytesIn, bytesOut, localBytes, remoteBytes]
+      properties:
+        topic:
+          type: string
+        bytesIn:
+          type: integer
+          format: int64
+        bytesOut:
+          type: integer
+          format: int64
+        localBytes:
+          type: integer
+          format: int64
+        remoteBytes:
+          type: integer
+          format: int64
+    EnvironmentUsageList:
+      type: object
+      required: [environments]
+      properties:
+        environments:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnvironmentUsage"
+    EnvironmentUsage:
+      type: object
+      description: >-
+        The data an environment's cluster processed over the last 30 days, in bytes; absent while
+        the metrics store does not answer for it
+      required: [customerID]
+      properties:
+        customerID:
+          type: string
+        bytesIn:
+          type: integer
+          format: int64
+        bytesOut:
+          type: integer
+          format: int64
+    CustomerUsageList:
+      type: object
+      required: [customers]
+      properties:
+        customers:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnvironmentUsage"
     Throughput:
       type: object
       required: [range, stepSeconds, bytesIn, bytesOut]

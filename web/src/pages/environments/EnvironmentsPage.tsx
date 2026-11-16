@@ -12,6 +12,7 @@ import {
 import {
   useChangeEnvironment,
   useCreateEnvironment,
+  useEnvironmentUsage,
   useEnvironments,
   useRemoveEnvironment,
 } from "@/api/queries";
@@ -34,6 +35,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { environmentPath, renameRemembered } from "@/lib/environments";
+import { formatBytes } from "@/lib/format";
 import { profiles } from "@/lib/profiles";
 import { OrganizationArea } from "@/pages/OrganizationArea";
 
@@ -89,6 +91,13 @@ function EnvironmentsCard({ list, admin }: { list: Environments; admin: boolean 
   const atLimit = environments.length >= list.limit;
   // The organization keeps one environment that is not being removed.
   const live = environments.filter((e) => !e.deleting).length;
+  const usage = useEnvironmentUsage();
+  const processed = (customerID: string) => {
+    const one = usage.data?.find((u) => u.customerID === customerID);
+    return one?.bytesIn === undefined || one.bytesOut === undefined
+      ? undefined
+      : one.bytesIn + one.bytesOut;
+  };
   return (
     <Card>
       <CardHeader>
@@ -125,7 +134,10 @@ function EnvironmentsCard({ list, admin }: { list: Environments; admin: boolean 
               aria-label={environment.name}
               className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0"
             >
-              <EnvironmentSummary environment={environment} />
+              <EnvironmentSummary
+                environment={environment}
+                processed={processed(environment.customerID)}
+              />
               {admin && !environment.deleting && (
                 <div className="flex items-center gap-1">
                   <RenameDialog environment={environment} />
@@ -185,7 +197,14 @@ function EnvironmentsCard({ list, admin }: { list: Environments; admin: boolean 
 }
 
 /** An environment's name, state and profile. */
-export function EnvironmentSummary({ environment }: { environment: Environment }) {
+export function EnvironmentSummary({
+  environment,
+  processed,
+}: {
+  environment: Environment;
+  /** The bytes it processed over the last 30 days, once known. */
+  processed?: number | undefined;
+}) {
   const profile = profiles.find((p) => p.name === environment.profile);
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -220,6 +239,14 @@ export function EnvironmentSummary({ environment }: { environment: Environment }
         {environment.profile}
         {profile && `: ${profile.description}`}
       </span>
+      {processed !== undefined && !environment.deleting && (
+        <Link
+          to={environmentPath(environment.name, "/usage")}
+          className="w-fit text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          {formatBytes(processed)} processed in the last 30 days
+        </Link>
+      )}
     </div>
   );
 }
