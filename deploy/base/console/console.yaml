@@ -104,7 +104,9 @@ spec:
             # Email about trials (internal/mail): CHANGEPORT_MAIL,
             # CHANGEPORT_MAIL_FROM and CHANGEPORT_OPERATOR_EMAILS, which
             # overlays set. Without them, no email is sent. And
-            # CHANGEPORT_SUPPORT_EMAIL, the address the help menu offers.
+            # CHANGEPORT_SUPPORT_EMAIL, the address the help menu offers, and
+            # CHANGEPORT_DOCS_URL, the customer docs' address, which the
+            # console links diagnoses, alerts and warnings to.
             - configMapRef:
                 name: changeport-mail
                 optional: true

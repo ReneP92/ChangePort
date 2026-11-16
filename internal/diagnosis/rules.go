@@ -131,7 +131,7 @@ func nobodyConsuming(s Snapshot) []Finding {
 					"%s has no consumers running, while %s receives %s messages a second: it is %s behind, and falls further behind.",
 					g.Name, r.Topic, rate(t.MessagesInPerSecond), duration(r.LagSeconds)),
 				Suggestion: fmt.Sprintf(
-					"Start the consumers of %s again. If nothing uses %s any more, delete it, for example with `kafka-consumer-groups --delete --group %s`, so that it no longer counts as behind.",
+					"Start the consumers of %s again. If nothing uses %s any more, delete it, for example with Kafka's `kafka-consumer-groups.sh --delete --group %s`, so that it no longer counts as behind.",
 					g.Name, g.Name, g.Name),
 			})
 		}
@@ -557,7 +557,7 @@ func openTransaction(s Snapshot) []Finding {
 				f.Suggestion = "Keep transactions short: commit every few seconds, or every few hundred messages. A producer that stops in the middle of one holds consumers back until `transaction.timeout.ms` passes, so keep that short too: a minute by default in Java and librdkafka-based clients, 40 seconds in franz-go."
 			} else {
 				f.Explanation += " Its coordinator writes the markers that finish it to every partition it wrote to, and keeps trying while one cannot take them."
-				f.Suggestion = "Check that every partition it wrote to has a leader and enough replicas in sync (the cluster's health above): markers wait for them."
+				f.Suggestion = "Check that every partition it wrote to has a leader and enough replicas in sync (the cluster's health on the overview): markers wait for them."
 			}
 			found = append(found, f)
 		}
@@ -609,7 +609,7 @@ func producersNotIdempotent(s Snapshot) []Finding {
 			Subject:  Subject{Topic: t.Name},
 			Title:    fmt.Sprintf("The producers of %s are not idempotent", t.Name),
 			Explanation: fmt.Sprintf(
-				"%s received %s messages a second over the last %s, none of them from an idempotent producer. A producer that is not sends a message again when an answer is lost, and may write it twice.",
+				"%s received %s messages a second over the last %s, and no idempotent producer has written to it since the console last looked. A producer that is not sends a message again when an answer is lost, and may write it twice.",
 				t.Name, rate(t.MessagesInPerSecond), duration(s.Window.Seconds())),
 			Suggestion: "Set `enable.idempotence=true` and `acks=all` on its producers. Java clients from 3.2 are idempotent by default unless another setting turns it off, such as `acks=1`; librdkafka-based clients, such as the Python and Node.js ones, are not unless told.",
 		})

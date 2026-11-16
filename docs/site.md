@@ -2,9 +2,10 @@
 
 `site/` is the public site at the domain's root: what Changeport is, how a
 trial works, questions and answers, and the call to action that leads to
-the console's trial request (`<console>/trial`). It also holds the privacy
-policy and the terms, as plain-language drafts for legal review before
-launch.
+the console's trial request (`<console>/trial`). It also holds the
+customer docs, under `/docs/` (see [The customer docs](#the-customer-docs)),
+and the privacy policy and the terms, as plain-language drafts for legal
+review before launch.
 
 It is plain HTML with Tailwind's CSS in the console's brand
 ([docs/brand](brand)), and one small script with no framework,
@@ -45,11 +46,54 @@ just site-check   # type-check, format-check, build, test, then Lighthouse
   `%SITE_URL%`.
 - **The stylesheet** is put into each page as a `<style>` when the site is
   built, so the browser can draw it without a second request.
+- **Fonts** are preloaded, the Latin Geist and Geist Mono, and optional
+  rather than swapped in (`steadyFonts` in `site/vite.config.ts`): a page
+  uses them if they arrive in its first moment, and otherwise keeps the
+  system font until the next page, which finds them cached. Swapping them in
+  late moves text that is already drawn, which Lighthouse counts as layout
+  shift, and Linux's fallback fonts, as CI has, differ from Geist enough to
+  fail the check.
 - **Animations** are CSS transitions and keyframes, and SMIL for the moving
   dots of the SVG diagrams. Anything that hides content until it animates
   sits behind the `js` class, which an inline script puts on the root
   element, so that the page never depends on the script to show. Elements
   with `data-reveal` rise into view; `--delay` staggers them.
+
+## The customer docs
+
+The docs customers build with are on the site, under `/docs/`: public, so
+that a link from an alert or a diagnosis works without signing in, a
+prospect can read them, and search engines find them. They are written in
+Markdown, in `site/content/docs`, which GitHub shows as it is, and
+`site/scripts/docs.ts` renders them into pages when the site is built, or
+again as they change under `just site-dev`. The pages are written into
+`site/docs`, which git ignores, so that the Markdown is the one copy.
+
+- **Plain language first, Kafka's terms second.** Each page starts with its
+  title and a paragraph that says what it is about, which is its
+  description for search engines.
+- **One page per diagnosis rule,** under `troubleshooting/`, named by the
+  rule. A test in `internal/diagnosis` fails a rule without its page.
+- **Links between pages** are relative links to the Markdown files, as
+  GitHub follows them, with the sections' anchors as GitHub makes them. The
+  build turns them into the pages' addresses, and fails on a link to a page
+  or a section that does not exist.
+- **The navigation** is `navigation` in `site/scripts/docs.ts`; the build
+  fails on a page it lacks, and on one it names that does not exist. The
+  troubleshooting pages show in it only among themselves.
+- **Code** is allowed only in the connection guide, whose examples
+  `hack/connecting-guide-test.sh` runs on kind; elsewhere it fails the
+  build, as nothing would test it.
+- **Code is highlighted** when the site is built (Shiki, its high-contrast
+  light theme), so the pages need no script for it.
+- **Folders' index pages,** such as `/docs/`, are served by the CloudFront
+  function that redirects www (`terraform/modules/static-site`), as the
+  bucket has no folders.
+
+The console links each diagnosis, alert and topic change warning to its
+page. It and the provisioner learn where the docs are from
+`CHANGEPORT_DOCS_URL`; on kind that is `http://localhost:5174/docs`, so the
+links work while `just site-dev` runs.
 
 ## Tests
 
@@ -57,9 +101,11 @@ just site-check   # type-check, format-check, build, test, then Lighthouse
 a desktop and a phone: that the lag simulator alerts past a minute behind
 and resolves, that the tour switches screens by click, arrow keys and by
 itself, that the questions open, that phones get a menu and nothing scrolls
-sideways, that reduced motion keeps the hero still, and that without the
-script every section and console screen shows. axe checks every page for
-accessibility violations, such as text without enough contrast, with
+sideways, that reduced motion keeps the hero still, that without the
+script every section and console screen shows, and that the docs lead from
+page to page with nothing scrolling sideways. axe checks every page, and a
+page of each kind of the docs, for accessibility violations, such as text
+or code without enough contrast, with
 reduced motion so that every section is on show: Lighthouse only audits
 what is visible on load, and misses what waits to rise into view.
 
@@ -91,7 +137,8 @@ changes its layout, check the crop regions in `screens.ts` against
 ## Lighthouse
 
 `just site-check` serves the build with `vite preview` and audits every
-page with Lighthouse, on a throttled phone and on a desktop, in the Chromium
+page, and the docs' index, connection guide and a troubleshooting page,
+with Lighthouse, on a throttled phone and on a desktop, in the Chromium
 that Playwright installs. It fails unless every page scores at least 95 for
 performance, accessibility, best practices and SEO, and names the audits
 that fell short. Its reports are in `site/lighthouse`; CI runs it, after the tests, in the

@@ -1,6 +1,8 @@
 package diagnosis
 
 import (
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -619,5 +621,25 @@ func TestLevels(t *testing.T) {
 	}
 	if len(topics) != 1 || len(groups) != 1 {
 		t.Errorf("topics %v, groups %v: a client's finding is neither's", topics, groups)
+	}
+}
+
+// Every rule has its page in the customer docs, which each finding links
+// to; the site's build fails on a page its navigation lacks.
+func TestEveryRuleHasItsPage(t *testing.T) {
+	for _, rule := range Rules {
+		page := filepath.Join("..", "..", "site", "content", "docs", "troubleshooting", rule.Name+".md")
+		if _, err := os.Stat(page); err != nil {
+			t.Errorf("rule %s has no page in the customer docs: %v", rule.Name, err)
+		}
+	}
+	found := Diagnose(Snapshot{Window: 15 * time.Minute, Topics: []Topic{orders()}, Groups: []Group{billing(200, 720, 240)}})
+	if len(found) == 0 {
+		t.Fatal("billing, too slow for orders, is not diagnosed")
+	}
+	for _, f := range found {
+		if f.Docs != "troubleshooting/"+f.Rule+".html" {
+			t.Errorf("%s links %q, want its own page", f.ID, f.Docs)
+		}
 	}
 }

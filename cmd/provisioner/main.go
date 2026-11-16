@@ -33,6 +33,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
+	"github.com/ReneP92/changeport/internal/alerts"
 	"github.com/ReneP92/changeport/internal/cdc"
 	"github.com/ReneP92/changeport/internal/controller"
 	"github.com/ReneP92/changeport/internal/events"
@@ -346,8 +347,14 @@ func runController(ctx context.Context, args []string, logger *slog.Logger, stde
 	mailTo := fs.String("mail", os.Getenv("CHANGEPORT_MAIL"), `where trials' contacts are emailed through: smtp://host:port, or ses; "" for no email`)
 	mailFrom := fs.String("mail-from", os.Getenv("CHANGEPORT_MAIL_FROM"), "the address trials' emails come from")
 	consoleURL := fs.String("console-url", os.Getenv("CHANGEPORT_CONSOLE_URL"), "the console's address, where trials' emails link")
+	docsURL := fs.String("docs-url", os.Getenv("CHANGEPORT_DOCS_URL"), `the customer docs' address, which customers' alerts link; "" for none`)
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *docsURL != "" {
+		if err := alerts.ValidateDocsURL(*docsURL); err != nil {
+			return err
+		}
 	}
 	mailer, err := mail.New(ctx, *mailTo, *mailFrom, logger)
 	if err != nil {
@@ -421,7 +428,7 @@ func runController(ctx context.Context, args []string, logger *slog.Logger, stde
 	if err := sources.SetupWithManager(mgr); err != nil {
 		return err
 	}
-	routing := &controller.AlertRoutingReconciler{Client: mgr.GetClient(), ResyncInterval: 10 * time.Minute}
+	routing := &controller.AlertRoutingReconciler{Client: mgr.GetClient(), ResyncInterval: 10 * time.Minute, DocsURL: *docsURL}
 	if err := routing.SetupWithManager(mgr); err != nil {
 		return err
 	}

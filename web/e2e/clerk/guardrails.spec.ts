@@ -109,6 +109,16 @@ test("an admin adds partitions and shortens retention, told what it does first",
     await expect(warnings).toContainText("Partitions can be added, never removed.");
     // The group is caught up, so it loses nothing.
     await expect(warnings).not.toContainText(group);
+    // Each kind of change, once, in its section of the customer docs.
+    for (const [name, section] of [
+      ["Changing retention", "changing-retention"],
+      ["Adding partitions", "adding-partitions"],
+    ]) {
+      await expect(edit.getByRole("link", { name: new RegExp(`^${name}`) })).toHaveAttribute(
+        "href",
+        `http://localhost:5174/docs/topics.html#${section}`,
+      );
+    }
     await page.setViewportSize({ width: 390, height: 844 });
     await expectNoSidewaysScroll(page);
     await page.setViewportSize({ width: 1280, height: 900 });

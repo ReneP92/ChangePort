@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 import examples from "@/lib/connecting-examples.json";
 import { extractExamples } from "@/lib/examples";
 
-const guide = await Bun.file(new URL("../../../docs/connecting.md", import.meta.url)).text();
+const guide = await Bun.file(
+  new URL("../../../site/content/docs/connecting.md", import.meta.url),
+).text();
 
 describe("the connection guide's examples", () => {
-  test("are those of docs/connecting.md; bun run generate updates them", () => {
+  test("are those of site/content/docs/connecting.md; bun run generate updates them", () => {
     expect(examples).toEqual(extractExamples(guide));
   });
 

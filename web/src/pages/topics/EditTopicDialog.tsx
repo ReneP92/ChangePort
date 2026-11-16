@@ -7,7 +7,9 @@ import {
   type TopicChange,
   type TopicPolicy,
 } from "@/api/client";
+import { useDocsUrl } from "@/api/config";
 import { useChangeTopic, useConsumerGroups, useTopicPolicy } from "@/api/queries";
+import { DocsLink } from "@/components/DocsLink";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -153,6 +155,9 @@ export function EditTopicForm({
     readers,
   );
   const loss = warnings.some((warning) => warning.loss);
+  const docsUrl = useDocsUrl();
+  // Each kind of change once, with its section of the docs.
+  const docs = [...new Map(warnings.map((warning) => [warning.docs.page, warning.docs])).values()];
   const unchanged = change.partitions === undefined && change.retentionMs === undefined;
 
   // The server has the last word; its problem is shown by the field it is about.
@@ -248,6 +253,15 @@ export function EditTopicForm({
             </li>
           ))}
         </ul>
+      )}
+      {docsUrl && docs.length > 0 && (
+        <p className="-mt-2 flex flex-wrap gap-x-3 pl-6 text-sm text-muted-foreground">
+          {docs.map((section) => (
+            <DocsLink key={section.page} page={section.page}>
+              {section.title}
+            </DocsLink>
+          ))}
+        </p>
       )}
       {/* Always there, so that screen readers hear what a choice adds; out of
           the layout, so that it adds no gap. */}

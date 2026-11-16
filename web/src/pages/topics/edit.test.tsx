@@ -3,15 +3,16 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import type { ReactNode } from "react";
 import { ApiError, type ConsumerGroupLag, type Topic, type TopicPolicy } from "@/api/client";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { testDocsUrl, withConfig } from "@/lib/withConfig";
 import { EditTopicForm } from "@/pages/topics/EditTopicDialog";
 
 afterEach(cleanup);
 
 function inDialog(children: ReactNode) {
-  return (
+  return withConfig(
     <Dialog open>
       <DialogContent>{children}</DialogContent>
-    </Dialog>
+    </Dialog>,
   );
 }
 
@@ -105,6 +106,11 @@ describe("EditTopicForm", () => {
       within(warnings).getByText(/a key's new messages may go to another partition/),
     ).toBeDefined();
     expect(within(warnings).getByText("Partitions can be added, never removed.")).toBeDefined();
+    // Once, in its section of the docs.
+    expect(screen.getByRole("link", { name: /^Adding partitions/ }).getAttribute("href")).toBe(
+      `${testDocsUrl}/topics.html#adding-partitions`,
+    );
+    expect(screen.queryByRole("link", { name: /^Changing retention/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(onSave).toHaveBeenCalledWith({ partitions: 6 });
   });

@@ -2,6 +2,7 @@ import { TriangleAlert } from "lucide-react";
 import { Link } from "react-router";
 import type { Alert } from "@/api/client";
 import { useAlerts } from "@/api/queries";
+import { DocsLink } from "@/components/DocsLink";
 import { Badge } from "@/components/ui/badge";
 import { formatSince, shortName } from "@/lib/alerts";
 import { cn } from "@/lib/utils";
@@ -33,7 +34,8 @@ export function AlertRows({ alerts, className }: { alerts: Alert[]; className?: 
         >
           <span className="font-medium [overflow-wrap:anywhere]">{alert.summary}</span>
           <span className="text-muted-foreground">
-            {alert.description} Since {formatSince(alert.startsAt)}.
+            {alert.description} Since {formatSince(alert.startsAt)}.{" "}
+            <DocsLink page={alert.docs}>What to do</DocsLink>
           </span>
         </li>
       ))}

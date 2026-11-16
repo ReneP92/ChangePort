@@ -1,17 +1,22 @@
-# Alerts about your applications
+# Alerts about customers' applications
 
-Changeport watches how your applications use your cluster and tells you when
-something looks wrong: a consumer group that falls behind or stops, clients
-that are throttled, and requests that fail. Alerts show in the console as
-they fire and clear, on the overview and on the topic or consumer group they
-are about. Admins choose their thresholds, and where else they go: Slack,
-PagerDuty or a webhook of their own.
+Changeport watches how customers' applications use their clusters and tells
+them when something looks wrong: a consumer group that falls behind or
+stops, clients that are throttled, requests that fail, and Postgres sources
+that hold back their database. Alerts show in the console as they fire and
+clear, and go to the customer's own Slack, PagerDuty or webhook. Admins
+choose the thresholds of the alerts about their applications.
 
-These alerts are about your applications. Changeport's operators are paged
-about the cluster itself, such as a broker that is down, and act on it; see
-[runbook.md](runbook.md).
+What each alert means for the customer, and what to do about it, is in the
+customer docs: [site/content/docs/alerts.md](../site/content/docs/alerts.md),
+published at `/docs/alerts.html` on the site. Each customer alert's `docs`
+annotation names its section there, relative to the docs' address, which
+`internal/alerts`'s tests check; the console links it from the alert, and
+customers' Slack messages and PagerDuty incidents link it too
+(`CHANGEPORT_DOCS_URL`, below).
 
-## The alerts
+Changeport's operators are paged about the cluster itself, such as a broker
+that is down, and act on it; see [runbook.md](runbook.md).
 
 | Alert | Fires when | Default |
 | --- | --- | --- |
@@ -22,62 +27,9 @@ about the cluster itself, such as a broker that is down, and act on it; see
 | `ClientRecordErrors` | A producer fails to send more than the threshold of its records, for 5 minutes | 5% |
 
 Each alert can be turned off. The errors threshold is shared by the two
-error alerts. Settings take effect within a minute.
-
-### A consumer group falls behind
-
-The age of the oldest message a group has not consumed yet, which the
-console's consumer groups card shows too. A group falls behind when its
-consumers are slower than its producers, or not running.
-
-- Check that the group's consumers run and are not restarting.
-- Compare the topic's messages in with how fast the group consumes; a group
-  with fewer consumers than the topic has partitions can add some.
-- A burst of messages can put a healthy group behind for a while; raise the
-  threshold if that is normal for the topic.
-
-### A consumer group is stuck
-
-The group has not committed offsets on the topic for longer than the
-threshold, while messages wait for it and new ones arrive: its consumers are
-stuck on a message, crashing on it before they commit, or gone.
-
-- Look for a consumer that fails on the same message again and again.
-- A group that no longer exists in your applications keeps its committed
-  offsets; delete the group once you no longer need it.
-
-### A client is throttled
-
-The brokers delay a client's requests when it exceeds a quota. Clients
-report the delay themselves (KIP-714), so it shows for clients of Kafka 3.7
-and newer, and of librdkafka 2.5 and newer.
-
-### Requests fail
-
-The brokers refuse produce or fetch requests to a topic, or a producer fails
-to send its records. Common causes are messages larger than the topic
-allows, a client without permission, or a client that keeps reconnecting.
-Your clients' logs say why each request failed.
-
-## Where alerts go
-
-Every alert shows in the console: at the top of the overview, as a badge on
-the topic or consumer group it is about, and on the Alerts page, which the
-sidebar counts them next to. Admins choose on the Alerts page where else
-alerts go, and can choose all three:
-
-- **Slack:** an incoming webhook URL (`https://hooks.slack.com/...`), which
-  posts to the channel it was made for. Alerts post when they fire and when
-  they resolve.
-- **PagerDuty:** the routing key of an Events API v2 integration. Alerts
-  raise incidents, and resolve them.
-- **Webhook:** an HTTPS URL that receives
-  [Alertmanager's webhook payload](https://prometheus.io/docs/alerting/latest/configuration/#webhook_config)
-  as JSON, once when an alert fires and once when it resolves.
-
-The console keeps these secrets where nobody can read them back, not even
-the console: it shows only which receivers are set, with a hint such as the
-webhook's host. To change one, enter it again.
+error alerts. Settings take effect within a minute. The Postgres sources'
+alerts for customers (`deploy/base/alerting/rules/postgres-sources.yaml`)
+have fixed thresholds.
 
 ## How it works
 
@@ -94,6 +46,13 @@ For operators:
   Secret of type `changeport.io/alert-receiver` in the customer's namespace,
   which the console's admission policy allows it and nothing else, and
   names the Secret in the settings. Only the provisioner reads it.
+- **Links to the docs:** the console and the provisioner read the docs'
+  address from `CHANGEPORT_DOCS_URL`. The console passes each alert's `docs`
+  annotation on, and the web app joins the two. The provisioner puts the
+  address into customers' Slack messages ("What to do") and PagerDuty
+  incidents (a link), and refuses an address a template would read as its
+  own. Webhooks get the annotation as it is. Without the address, nothing
+  links the docs.
 - **Routing:** the provisioner writes Alertmanager's configuration, the
   Secret `alertmanager-generated` in `metrics`, from the base configuration
   (the ConfigMap `alertmanager-config`, with the operators' routes) and a

@@ -1,5 +1,5 @@
 /**
- * The client examples of the connection guide, docs/connecting.md, which
+ * The client examples of the connection guide, site/content/docs/connecting.md, which
  * hack/connecting-guide-test.sh runs against a cluster on kind: the console
  * shows the same code. bun run generate extracts them into
  * connecting-examples.json, and a unit test checks it is up to date.

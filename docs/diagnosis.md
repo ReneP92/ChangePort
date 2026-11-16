@@ -98,6 +98,12 @@ Severities: **critical** hurts now, **warning** needs attention before it
 hurts, **info** is worth knowing and may be fine. The platform's own topics
 and groups are left out.
 
+Each rule has a page in the customer docs,
+`site/content/docs/troubleshooting/<rule>.md`, which says why the problem
+happens and what to do at more length than a finding can. Each finding
+names it (`docs` in the API), and the console links it as **Learn more**;
+`internal/diagnosis`'s tests fail a rule without its page.
+
 | Rule | Finds | Severity |
 | --- | --- | --- |
 | `consumer-too-slow` | A stable group, some of whose members read the topic, that consumed less than 90% of what the topic received over the window, at least a minute behind, and further behind than a window ago. Topics below a message a second are too quiet to tell, and a group whose offsets went back in the window (replaying the topic) is left alone. | warning |
@@ -177,14 +183,14 @@ What each suggests:
   whether messages carry keys, and even the messages themselves cannot say
   whether their consumers rely on their order, so a guess would flag every
   unkeyed topic, most of them fine. The connection guide explains keys and
-  order instead ([connecting.md](connecting.md#use-keys-for-order)), and
+  order instead ([connecting.md](../site/content/docs/connecting.md#use-keys-for-order)), and
   the console warns before partitions are added; `partitions-added` notes
   partitions added elsewhere.
 - **Offsets committed before the messages are processed** happen inside
   consumers and leave no trace on the brokers: a commit looks the same
   whenever it comes. The connection guide's examples, which the console's
   snippets are, commit after processing
-  ([connecting.md](connecting.md#commit-offsets-after-processing)).
+  ([connecting.md](../site/content/docs/connecting.md#commit-offsets-after-processing)).
 - **Why a record failed** is not in a producer's telemetry, so
   `producer-errors` names the usual causes rather than the one; only the
   brokers' rejected bytes pin a refusal on a message's size, and while a

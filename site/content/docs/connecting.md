@@ -88,7 +88,7 @@ Committing after processing means a consumer that crashes in between
 processes those messages again when it restarts, so make processing safe to
 repeat where that matters, for example by writing with the message's key.
 Changeport cannot see when your consumers commit, so this is on you
-([diagnosis.md](diagnosis.md)).
+([Delivery guarantees](delivery-guarantees.md#reading-at-least-once)).
 
 ### Use keys for order
 
@@ -100,9 +100,10 @@ are spread over the partitions, with no order between them.
 
 Adding partitions to a topic sends a key's new messages to another partition
 than its earlier ones, so for a while they may be read out of order; the
-console says so before you add them ([console.md](console.md)). A key with
-few values, such as a country, loads some partitions more than others, which
-the diagnoses flag as a hot partition.
+console says so before you add them
+([Adding partitions](topics.md#adding-partitions)). A key with few values,
+such as a country, loads some partitions more than others, which the
+diagnoses flag as a [hot partition](troubleshooting/hot-partition.md).
 
 ### Keep messages small
 
@@ -142,7 +143,8 @@ aborting, holds back every `read_committed` consumer of its partitions
 until Kafka aborts it, after the producer's `transaction.timeout.ms` (a
 minute by default in Java and librdkafka-based clients, 40 seconds in
 franz-go). The console shows open transactions and diagnoses one
-that hangs ([console.md](console.md)).
+that hangs
+([Transactions that stay open](delivery-guarantees.md#transactions-that-stay-open)).
 
 ## Examples
 
@@ -273,7 +275,9 @@ consumer.close()
 ### Go
 
 With [franz-go](https://github.com/twmb/franz-go)
-(`go get github.com/twmb/franz-go`).
+(`go get github.com/twmb/franz-go`). It reports less about itself than the
+other clients, so the console shows its producers without their names
+([why](troubleshooting/producers-without-telemetry.md)).
 
 ```go
 package main

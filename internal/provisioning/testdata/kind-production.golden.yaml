@@ -121,7 +121,7 @@ spec:
     metadataVersion: 4.3-IV0
     image: changeport/kafka:local
     # broker.rack, which clients set client.rack to, to read from a replica
-    # in their own zone (docs/connecting.md).
+    # in their own zone (site/content/docs/connecting.md).
     rack:
       topologyKey: topology.kubernetes.io/zone
     listeners:

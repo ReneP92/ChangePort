@@ -111,6 +111,11 @@ test("a stalled consumer group raises an alert in the console and at a webhook, 
   const banner = page.getByRole("region", { name: /^\d+ alerts?$/ });
   const alert = banner.getByRole("listitem").filter({ hasText: `Consumer group ${group} is` });
   await expect(alert).toContainText(`behind on ${topic}`, { timeout: 6 * 60_000 });
+  // What to do, in its section of the customer docs (deploy/overlays/kind).
+  await expect(alert.getByRole("link", { name: /^What to do/ })).toHaveAttribute(
+    "href",
+    "http://localhost:5174/docs/alerts.html#a-consumer-group-falls-behind",
+  );
   const groups = page
     .getByRole("main")
     .locator('[data-slot="card"]')

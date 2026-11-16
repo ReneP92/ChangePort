@@ -68,7 +68,7 @@ func (s *Server) ListDiagnoses(ctx context.Context, _ api.ListDiagnosesRequestOb
 	for _, f := range findings {
 		d := api.Diagnosis{
 			Id: f.ID, Rule: f.Rule, Severity: api.DiagnosisSeverity(f.Severity),
-			Title: f.Title, Explanation: f.Explanation, Suggestion: f.Suggestion,
+			Title: f.Title, Explanation: f.Explanation, Suggestion: f.Suggestion, Docs: ptr.To(f.Docs),
 		}
 		if f.Subject.Topic != "" {
 			d.Topic = ptr.To(f.Subject.Topic)

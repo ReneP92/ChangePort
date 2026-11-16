@@ -16,7 +16,7 @@
 # test opens the console as a browser does, the tiered storage test offloads a
 # topic of the demo customer to the object store and reads it back, the host
 # access test produces and consumes as an application on this machine, the
-# connection guide test runs the examples of docs/connecting.md, the
+# connection guide test runs the examples of site/content/docs/connecting.md, the
 # Postgres test checks the database that stands in for a customer's in the
 # Postgres CDC source, and the CDC runtime test checks that a customer's
 # first source brings Kafka Connect and the schema registry, and the last

@@ -20,6 +20,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/ReneP92/changeport/api/v1alpha1"
+	"github.com/ReneP92/changeport/internal/alerts"
 	"github.com/ReneP92/changeport/internal/provisioning"
 )
 
@@ -53,6 +54,10 @@ type AlertRoutingReconciler struct {
 	// Now is the time receiver Secrets' ages are measured at; time.Now by
 	// default.
 	Now func() time.Time
+	// DocsURL is where the customer docs are, which customers' Slack
+	// messages and PagerDuty incidents link each alert's section of; without
+	// it they link none.
+	DocsURL string
 }
 
 // alertRoutingRequest is the reconciler's one request: Alertmanager's
@@ -108,7 +113,7 @@ func (r *AlertRoutingReconciler) Reconcile(ctx context.Context, _ ctrl.Request) 
 			return ctrl.Result{}, err
 		}
 	}
-	config, err := AlertmanagerConfig([]byte(base.Data[alertmanagerConfigKey]), customers)
+	config, err := AlertmanagerConfig([]byte(base.Data[alertmanagerConfigKey]), customers, r.DocsURL)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -233,8 +238,19 @@ func customerReceiver(tenant string) string { return "customer-" + tenant }
 // routes, a route for each customer's alerts and a receiver with the
 // customer's Slack, PagerDuty and webhook configurations. Tenants are
 // customer IDs, which need no quoting in a matcher; the receivers' secrets
-// are YAML values, never part of a template.
-func AlertmanagerConfig(base []byte, customers []CustomerReceivers) ([]byte, error) {
+// are YAML values, never part of a template. With docsURL, Slack messages
+// and PagerDuty incidents link each alert's section of the customer docs,
+// its annotation docs; webhooks get the annotation as it is.
+func AlertmanagerConfig(base []byte, customers []CustomerReceivers, docsURL string) ([]byte, error) {
+	slackText, pagerDutyLinks := `{{ .CommonAnnotations.description }}`, []any(nil)
+	if docsURL != "" {
+		if err := alerts.ValidateDocsURL(docsURL); err != nil {
+			return nil, err
+		}
+		docs := strings.TrimSuffix(docsURL, "/") + "/{{ .CommonAnnotations.docs }}"
+		slackText += "{{ if .CommonAnnotations.docs }} <" + docs + "|What to do>{{ end }}"
+		pagerDutyLinks = []any{map[string]any{"href": docs, "text": "What to do"}}
+	}
 	var config map[string]any
 	if err := yaml.Unmarshal(base, &config); err != nil {
 		return nil, fmt.Errorf("read Alertmanager's base configuration: %w", err)
@@ -263,15 +279,19 @@ func AlertmanagerConfig(base []byte, customers []CustomerReceivers) ([]byte, err
 				"api_url":       c.Slack,
 				"send_resolved": true,
 				"title":         `{{ if eq .Status "firing" }}Changeport{{ else }}Resolved{{ end }}: {{ .CommonAnnotations.summary }}`,
-				"text":          `{{ .CommonAnnotations.description }}`,
+				"text":          slackText,
 			}}
 		}
 		if c.PagerDuty != "" {
-			receiver["pagerduty_configs"] = []any{map[string]any{
+			pagerDuty := map[string]any{
 				"routing_key":   c.PagerDuty,
 				"send_resolved": true,
 				"description":   `{{ .CommonAnnotations.summary }}`,
-			}}
+			}
+			if pagerDutyLinks != nil {
+				pagerDuty["links"] = pagerDutyLinks
+			}
+			receiver["pagerduty_configs"] = []any{pagerDuty}
 		}
 		if c.Webhook != "" {
 			receiver["webhook_configs"] = []any{map[string]any{"url": c.Webhook, "send_resolved": true}}

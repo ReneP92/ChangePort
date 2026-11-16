@@ -20,7 +20,7 @@ import (
 )
 
 // Transaction is a transaction open on a customer's cluster, as its
-// coordinator describes it (docs/connecting.md, "Delivery guarantees").
+// coordinator describes it (site/content/docs/connecting.md, "Delivery guarantees").
 type Transaction struct {
 	// ID is its transactional ID, and ProducerID the producer's.
 	ID         string

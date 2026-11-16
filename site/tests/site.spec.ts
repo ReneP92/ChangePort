@@ -3,8 +3,17 @@ import { expect, test, type Page } from "@playwright/test";
 
 const wide = (page: Page) => (page.viewportSize()?.width ?? 0) >= 768;
 
+/** The docs' pages the tests visit: each kind of page once. */
+const docs = [
+  "/docs/",
+  "/docs/connecting.html",
+  "/docs/topics.html",
+  "/docs/troubleshooting/",
+  "/docs/troubleshooting/consumer-too-slow.html",
+];
+
 /** Every page of the site; 404.html is what the host serves for an unknown address. */
-const pages = ["/", "/privacy.html", "/terms.html", "/404.html"];
+const pages = ["/", "/privacy.html", "/terms.html", "/404.html", ...docs];
 
 // Each page's Content-Security-Policy (vite.config.ts) lets its own scripts
 // and styles run, and nothing it does is refused.
@@ -160,6 +169,56 @@ test("phones get a menu, and nothing scrolls sideways", async ({ page }) => {
   await expect(page).toHaveURL(/#faq$/);
   // The menu closes, so that it does not cover where it led.
   await expect(page.getByRole("navigation", { name: "Site" })).toBeHidden();
+});
+
+test("the docs lead from page to page, and nothing scrolls sideways", async ({ page }) => {
+  await page.goto("/");
+  if (wide(page)) {
+    await page
+      .getByRole("navigation", { name: "Site" })
+      .getByRole("link", { name: "Docs" })
+      .click();
+  } else {
+    await page.locator("summary", { hasText: "Menu" }).click();
+    await page
+      .getByRole("navigation", { name: "Site" })
+      .getByRole("link", { name: "Docs" })
+      .click();
+  }
+  await expect(page).toHaveURL(/\/docs\/$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Changeport docs");
+  await expect(page).toHaveTitle("Changeport docs");
+
+  // The navigation is beside the page on wide screens, and behind a menu on
+  // phones; either way it marks the page shown.
+  if (!wide(page)) {
+    await page.locator("summary", { hasText: "All docs" }).click();
+  }
+  const navigation = page.getByRole("navigation", { name: "Docs" }).locator("visible=true");
+  await expect(navigation.getByRole("link", { name: "Changeport docs" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  // The troubleshooting pages show only among themselves.
+  await expect(navigation.getByRole("link", { name: /can't keep up/ })).toHaveCount(0);
+  await navigation.getByRole("link", { name: "Topics, partitions and keys" }).click();
+  await expect(page).toHaveURL(/\/docs\/topics\.html$/);
+  await expect(page).toHaveTitle("Topics, partitions and keys: Changeport docs");
+
+  // A link to a section of another page lands on that section.
+  await page
+    .getByRole("main")
+    .getByRole("link", { name: "one partition gets most of the messages" })
+    .click();
+  await expect(page).toHaveURL(/\/docs\/troubleshooting\/hot-partition\.html$/);
+  await page.getByRole("link", { name: /^Next/ }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("more partitions");
+
+  for (const path of docs) {
+    await page.goto(path);
+    const width = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(width, path).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0);
+  }
 });
 
 test.describe("with reduced motion", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ConsumerGroupLag, Topic } from "@/api/client";
-import { changeWarnings } from "@/lib/topicChange";
+import { changeDocs, changeWarnings } from "@/lib/topicChange";
 
 const hour = 60 * 60 * 1000;
 const week = 7 * 24 * hour;
@@ -47,18 +47,22 @@ describe("changeWarnings", () => {
     expect(warnings).toEqual([
       {
         loss: true,
+        docs: changeDocs.retention,
         text: "audit is more than 30 hours behind. Keeping messages for 1 hour, orders deletes messages audit has not read yet.",
       },
       {
         loss: true,
+        docs: changeDocs.retention,
         text: "billing is 3 hours behind. Keeping messages for 1 hour, orders deletes messages billing has not read yet.",
       },
       {
         loss: false,
+        docs: changeDocs.retention,
         text: "search is 40 minutes behind, close to the 1 hour orders would keep messages. Unless it catches up, messages are deleted before it reads them.",
       },
       {
         loss: false,
+        docs: changeDocs.retention,
         text: "Kafka then deletes messages older than 1 hour for good, a log segment at a time: within minutes on a busy topic, and on a quiet one once its current segment closes, after up to 7 days.",
       },
     ]);
@@ -81,6 +85,7 @@ describe("changeWarnings", () => {
     const warnings = changeWarnings(orders, 3, hour, undefined);
     expect(warnings[0]).toEqual({
       loss: true,
+      docs: changeDocs.retention,
       text: "How far behind the consumer groups are is not known, so a group further behind than 1 hour may lose messages it has not read.",
     });
     // Nothing shortened, nothing to fear.
@@ -95,11 +100,32 @@ describe("changeWarnings", () => {
 
   test("more partitions move keys", () => {
     const warnings = changeWarnings(orders, 6, week, []);
-    expect(warnings.every((w) => !w.loss)).toBe(true);
+    expect(warnings.every((w) => !w.loss && w.docs === changeDocs.partitions)).toBe(true);
     expect(texts(warnings)).toEqual([
       "Messages with the same key always go to the same partition. With more partitions, a key's new messages may go to another partition than its earlier ones, so for a while consumers may read them out of order.",
       "Consumers find the new partitions within 5 minutes (`metadata.max.age.ms`). Those with `auto.offset.reset=latest`, the Java client's default, skip the messages that reach a new partition before they do.",
       "Partitions can be added, never removed.",
     ]);
+  });
+
+  // The anchor GitHub and the site's docs give a heading.
+  const anchor = (heading: string) =>
+    heading
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+      .replace(/\s/g, "-");
+
+  test("each kind of change links its section of the customer docs", async () => {
+    const page = await Bun.file(
+      new URL("../../../site/content/docs/topics.md", import.meta.url),
+    ).text();
+    const sections = [...page.matchAll(/^#{2,3} (.+)$/gm)].map(([, heading]) =>
+      anchor(heading ?? ""),
+    );
+    for (const docs of Object.values(changeDocs)) {
+      const [file, section] = docs.page.split("#");
+      expect(file).toBe("topics.html");
+      expect(sections).toContain(section ?? "");
+    }
   });
 });

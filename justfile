@@ -268,7 +268,7 @@ cdc-runtime-test customer="demo":
 postgres-test:
     hack/postgres-test.sh
 
-# Run the examples of the customer connection guide (docs/connecting.md) against a customer's cluster
+# Run the examples of the customer connection guide (site/content/docs/connecting.md) against a customer's cluster
 [group('Local development (kind + Strimzi)')]
 connecting-guide-test customer="demo":
     hack/connecting-guide-test.sh {{ customer }}

@@ -11,7 +11,15 @@ import { preview } from "vite";
 
 // 404.html is left out: it asks search engines not to index it, which the SEO
 // audit counts against it. The tests check it for accessibility instead.
-const pages = ["/", "/privacy.html", "/terms.html"];
+const pages = [
+  "/",
+  "/privacy.html",
+  "/terms.html",
+  // The docs: their index, the page with the most code, and a short one.
+  "/docs/",
+  "/docs/connecting.html",
+  "/docs/troubleshooting/consumer-too-slow.html",
+];
 const categories = ["performance", "accessibility", "best-practices", "seo"];
 const minimum = 95;
 const reports = path.join(import.meta.dirname, "..", "lighthouse");

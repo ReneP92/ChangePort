@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
+import { content, renderDocs } from "./scripts/docs.ts";
 
 // The landing site at the domain's root (docs/site.md): plain HTML pages
 // with Tailwind's CSS, one small script and no cookies. The console's address,
@@ -14,6 +15,9 @@ const consoleURL = (process.env.CHANGEPORT_CONSOLE_URL ?? "http://localhost:8088
   "",
 );
 const siteURL = (process.env.CHANGEPORT_SITE_URL ?? "http://localhost:4174").replace(/\/$/, "");
+
+// The customer docs' pages, rendered from content/docs into docs/.
+const docs = await renderDocs();
 
 /**
  * Puts the shared partials into each page, where it says
@@ -72,6 +76,47 @@ function inlineStyles(): Plugin {
 }
 
 /**
+ * Keeps text from moving as the fonts arrive, which Lighthouse counts as
+ * layout shift: each page preloads the Latin Geist and Geist Mono it
+ * shows, and the fonts are optional rather than swapped in, so a page uses
+ * them if they arrive in its first moment, and otherwise keeps the system
+ * font until the next page, which finds them cached.
+ */
+function steadyFonts(): Plugin {
+  return {
+    name: "changeport-steady-fonts",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler: (html, { bundle }) => {
+        const fonts = Object.keys(bundle ?? {}).filter((file) =>
+          /\/geist(-mono)?-latin-wght-normal-[\w-]+\.woff2$/.test(file),
+        );
+        if (fonts.length !== 2) {
+          throw new Error(
+            `expected the Latin Geist and Geist Mono to preload, found ${fonts.join(", ")}`,
+          );
+        }
+        const links = fonts
+          .map(
+            (file) =>
+              `<link rel="preload" href="/${file}" as="font" type="font/woff2" crossorigin />`,
+          )
+          .join("\n    ");
+        // The stylesheet is in the page by now (inlineStyles), with
+        // fontsource's declarations.
+        if (!html.includes("font-display:swap")) {
+          throw new Error("the stylesheet declares no swapped fonts to make optional");
+        }
+        return html
+          .replace("</title>", `</title>\n    ${links}`)
+          .replaceAll("font-display:swap", "font-display:optional");
+      },
+    },
+  };
+}
+
+/**
  * Gives each built page a Content-Security-Policy: only the site's own
  * files, and of inline scripts only those the page was built with, by their
  * hashes. Styles may be inline, as the stylesheet and a few style attributes
@@ -113,8 +158,39 @@ function contentSecurityPolicy(): Plugin {
   };
 }
 
+/**
+ * Renders the docs again when their Markdown changes, while the site runs
+ * with hot reload, and reloads the page. A page that fails its checks says
+ * why in the terminal, and keeps its last rendering.
+ */
+function docsPages(): Plugin {
+  return {
+    name: "changeport-docs",
+    apply: "serve",
+    configureServer(server) {
+      server.watcher.add(content);
+      const render = (file: string) => {
+        if (file.startsWith(content)) {
+          renderDocs().then(
+            () => server.ws.send({ type: "full-reload" }),
+            (error: unknown) => server.config.logger.error(String(error)),
+          );
+        }
+      };
+      server.watcher.on("add", render).on("change", render).on("unlink", render);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [pages(), tailwindcss(), inlineStyles(), contentSecurityPolicy()],
+  plugins: [
+    pages(),
+    tailwindcss(),
+    inlineStyles(),
+    steadyFonts(),
+    contentSecurityPolicy(),
+    docsPages(),
+  ],
   build: {
     rolldownOptions: {
       // 404.html is what the host serves for an address it has no page for.
@@ -123,6 +199,7 @@ export default defineConfig({
         privacy: "privacy.html",
         terms: "terms.html",
         notFound: "404.html",
+        ...Object.fromEntries(docs.map((file) => [file.replace(/\.html$/, ""), file])),
       },
     },
   },

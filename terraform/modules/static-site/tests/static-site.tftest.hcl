@@ -53,7 +53,7 @@ mock_provider "aws" {
   }
   mock_resource "aws_cloudfront_function" {
     defaults = {
-      arn = "arn:aws:cloudfront::123456789012:function/changeport-test-site-www-redirect"
+      arn = "arn:aws:cloudfront::123456789012:function/changeport-test-site-viewer-request"
     }
   }
   mock_resource "aws_iam_role" {
@@ -150,12 +150,16 @@ run "the_redirect_names_the_domain" {
   command = apply
 
   assert {
-    condition     = strcontains(aws_cloudfront_function.www_redirect.code, "\"www.changeport.example\"") && strcontains(aws_cloudfront_function.www_redirect.code, "\"https://changeport.example\"")
+    condition     = strcontains(aws_cloudfront_function.viewer_request.code, "\"www.changeport.example\"") && strcontains(aws_cloudfront_function.viewer_request.code, "\"https://changeport.example\"")
     error_message = "www.<domain> redirects to https://<domain>."
   }
   assert {
-    condition     = aws_cloudfront_function.www_redirect.publish
+    condition     = aws_cloudfront_function.viewer_request.publish
     error_message = "The function is published, so the distribution runs it."
+  }
+  assert {
+    condition     = strcontains(aws_cloudfront_function.viewer_request.code, "request.uri += \"index.html\"")
+    error_message = "An address ending in a slash, such as /docs/, gets its folder's index.html."
   }
 }
 

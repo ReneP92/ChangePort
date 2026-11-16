@@ -76,7 +76,7 @@ brings it back.
    examples read it by. Then come the variables the examples read, with the
    bootstrap address, the user and the topic filled in and the password
    read from `client.properties`, and the examples of the
-   [connection guide](connecting.md) in Python, Go and JavaScript (Node.js),
+   [connection guide](../site/content/docs/connecting.md) in Python, Go and JavaScript (Node.js),
    which `hack/connecting-guide-test.sh` runs against kind.
 
    ![Connecting an app](screenshots/48-welcome-connect-desktop.png)
@@ -105,7 +105,10 @@ what to do: a group that can't keep up with its topic, one nobody consumes,
 one about to lose messages to retention, a partition that takes more than
 its share, producers whose records fail. Here `search-indexer` has no
 consumers running while `orders` keeps receiving. A topic's and a group's
-pages show what is about them, and the data flow map marks them.
+pages show what is about them, and the data flow map marks them. Each
+finding's **Learn more** opens its page of the customer docs in a new tab,
+as an alert's **What to do** and a topic change's warnings do
+([site.md](site.md#the-customer-docs)).
 [diagnosis.md](diagnosis.md) describes every rule.
 
 Each topic and consumer group has a health level from them: **Healthy**,
@@ -183,7 +186,7 @@ describe transactional IDs and nothing more; the producers with
 read-only user of the topic tail, which returns no messages here. The
 connection guide's examples set `acks=all` and idempotence outright, and
 show exactly once from topic to topic
-([connecting.md](connecting.md#delivery-guarantees)).
+([connecting.md](../site/content/docs/connecting.md#delivery-guarantees)).
 
 ### Changing a topic
 

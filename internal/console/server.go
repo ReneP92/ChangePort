@@ -58,6 +58,10 @@ type Config struct {
 	// SupportEmail is where customers contact Changeport's support, which
 	// the console's help menu offers; without it, it offers no address.
 	SupportEmail string
+	// DocsURL is where the customer docs are, such as
+	// https://changeport.io/docs, which the console links diagnoses, alerts
+	// and warnings to; without it, it links none.
+	DocsURL string
 	// DiagnosisWindow is how far back the diagnoses look; 15 minutes
 	// unless set.
 	DiagnosisWindow time.Duration
@@ -477,6 +481,9 @@ func (s *Server) GetConfig(context.Context, api.GetConfigRequestObject) (api.Get
 	config := api.GetConfig200JSONResponse{ClerkPublishableKey: s.config.PublishableKey}
 	if s.config.SupportEmail != "" {
 		config.SupportEmail = ptr.To(openapi_types.Email(s.config.SupportEmail))
+	}
+	if s.config.DocsURL != "" {
+		config.DocsUrl = ptr.To(strings.TrimSuffix(s.config.DocsURL, "/"))
 	}
 	return config, nil
 }

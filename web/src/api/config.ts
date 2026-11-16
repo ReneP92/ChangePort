@@ -5,7 +5,12 @@ import type { paths } from "@/api/schema";
 
 /** What the web app learns from the console before anyone signs in. */
 export type ConsoleConfig =
-  | { state: "ready"; publishableKey: string; supportEmail?: string | undefined }
+  | {
+      state: "ready";
+      publishableKey: string;
+      supportEmail?: string | undefined;
+      docsUrl?: string | undefined;
+    }
   // The console has no Clerk configuration, so it refuses everything.
   | { state: "not-configured" };
 
@@ -18,6 +23,7 @@ export async function fetchConfig(): Promise<ConsoleConfig> {
       state: "ready",
       publishableKey: data.clerkPublishableKey,
       supportEmail: data.supportEmail,
+      docsUrl: data.docsUrl,
     };
   }
   if (response.status === 503) {
@@ -38,4 +44,13 @@ export const configQuery = {
 export function useSupportEmail(): string | undefined {
   const config = useQuery(configQuery).data;
   return config?.state === "ready" ? config.supportEmail : undefined;
+}
+
+/**
+ * Where the customer docs are, which diagnoses, alerts and warnings link
+ * their pages of, when the console names an address.
+ */
+export function useDocsUrl(): string | undefined {
+  const config = useQuery(configQuery).data;
+  return config?.state === "ready" ? config.docsUrl : undefined;
 }
