@@ -44,6 +44,12 @@ const (
 	// GroupRebalanced is a consumer group whose members changed, so it
 	// assigned its partitions anew.
 	GroupRebalanced Kind = "group.rebalanced"
+	// GroupMoved is a consumer group an admin moved to another position in
+	// the console, to read messages again or skip them.
+	GroupMoved Kind = "group.moved"
+	// GroupReplayed is a new consumer group an admin created in the console
+	// at a point in the history of another group's topics.
+	GroupReplayed Kind = "group.replayed"
 	// BrokerRestarted is a broker that restarted, or whose pod was replaced.
 	BrokerRestarted Kind = "broker.restarted"
 	// ClientThrottled and ClientUnthrottled are a client the brokers started
@@ -56,7 +62,7 @@ const (
 func Kinds() []Kind {
 	return []Kind{
 		TopicCreated, TopicDeleted, TopicConfigChanged, TopicPartitionsAdded, ACLAdded, ACLRemoved,
-		GroupRebalanced, BrokerRestarted, ClientThrottled, ClientUnthrottled,
+		GroupRebalanced, GroupMoved, GroupReplayed, BrokerRestarted, ClientThrottled, ClientUnthrottled,
 	}
 }
 

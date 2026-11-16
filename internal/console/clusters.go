@@ -57,6 +57,14 @@ type Clusters interface {
 	// ConsumerGroups describes every consumer group: its state, and each
 	// member with what it reads, for the topology map and the diagnoses.
 	ConsumerGroups(ctx context.Context, customerID string) ([]ConsumerGroup, error)
+	// GroupPositions returns where a consumer group is on every partition
+	// of the topics, or of every topic it has a position on without any,
+	// and where to puts it: ErrNoSuchTopic for a topic that does not exist.
+	GroupPositions(ctx context.Context, customerID, group string, topics []string, to Position) ([]PartitionPosition, error)
+	// CommitGroupOffsets moves a consumer group to the positions' targets,
+	// and returns those Kafka moved it to, also when it fails on others:
+	// ErrGroupActive while the group has members.
+	CommitGroupOffsets(ctx context.Context, customerID, group string, positions []PartitionPosition) ([]PartitionPosition, error)
 	// Transactions returns the transactions open on the cluster, with the
 	// messages each holds back from read_committed consumers.
 	Transactions(ctx context.Context, customerID string) ([]Transaction, error)

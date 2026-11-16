@@ -49,7 +49,7 @@ var readyTrue = map[string]any{"type": "Ready", "status": "True"}
 
 // setUsersReady marks the template's KafkaUsers ready and the agent available.
 func (f *fakeCluster) setUsersReady(spec Spec) {
-	for _, user := range []string{AdminUser, AgentUser, ConsoleUser, TailUser} {
+	for _, user := range []string{AdminUser, AgentUser, ConsoleUser, TailUser, OffsetsUser} {
 		f.setStatus(kafkaUserGVK, spec.Namespace(), user, readyTrue)
 	}
 	agent := f.objects[fakeKey(deploymentGVK, spec.Namespace(), "changeport-agent")]
@@ -201,6 +201,7 @@ func TestReconcileAppliesTemplateInOrder(t *testing.T) {
 		"KafkaUser:customer-acme/changeport-agent",
 		"KafkaUser:customer-acme/changeport-console",
 		"KafkaUser:customer-acme/changeport-tail",
+		"KafkaUser:customer-acme/changeport-offsets",
 		"Role:customer-acme/changeport-console",
 		"RoleBinding:customer-acme/changeport-console",
 		"Deployment:customer-acme/changeport-agent",
@@ -216,8 +217,8 @@ func TestReconcileIsIdempotent(t *testing.T) {
 	for range 2 {
 		provision(t, p, acme)
 	}
-	if len(cluster.objects) != 12 {
-		t.Errorf("cluster holds %d objects after provisioning twice, want 12", len(cluster.objects))
+	if len(cluster.objects) != 13 {
+		t.Errorf("cluster holds %d objects after provisioning twice, want 13", len(cluster.objects))
 	}
 }
 

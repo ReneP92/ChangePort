@@ -3,7 +3,9 @@
 // changeport-console Kafka user, which may manage topics but never read or
 // write messages; and, as the changeport-tail user, which may read topics and
 // nothing else, a reader for the tail of a topic, and an admin client for
-// describing producers, which Kafka authorizes as reading.
+// describing producers, which Kafka authorizes as reading; and, as the
+// changeport-offsets user, an admin client for committing consumer groups'
+// offsets, which Kafka authorizes as reading the group and its topics.
 package clusters
 
 import (
@@ -110,6 +112,18 @@ func (p *Pool) Admin(ctx context.Context, customerID string) (*kadm.Client, erro
 // without returning its messages: describing the producers that write it.
 func (p *Pool) Reading(ctx context.Context, customerID string) (*kadm.Client, error) {
 	entry, err := p.entry(ctx, customerID, provisioning.TailUser)
+	if err != nil {
+		return nil, err
+	}
+	return entry.admin, nil
+}
+
+// Offsets returns an admin client of the customer's cluster as the offsets
+// user, pooled like Admin's, only for committing consumer groups' offsets
+// when admins move a group or replay into a new one; it never fetches
+// messages, though Kafka would let it.
+func (p *Pool) Offsets(ctx context.Context, customerID string) (*kadm.Client, error) {
+	entry, err := p.entry(ctx, customerID, provisioning.OffsetsUser)
 	if err != nil {
 		return nil, err
 	}

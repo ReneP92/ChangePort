@@ -353,6 +353,10 @@ spec:
       auto.create.topics.enable: false
       # Tiered topics keep a day on the brokers' disks; the rest is in S3.
       log.local.retention.ms: 86400000
+      # Reads of history from S3, such as replays, are capped per broker and
+      # run on the remote log reader's own threads, so that consumers of
+      # recent messages, read from local disk, keep their throughput.
+      remote.log.manager.fetch.max.bytes.per.second: {{ .Profile.RemoteFetchBytesPerSecond }}
       rlmm.config.remote.log.metadata.topic.replication.factor: {{ .Profile.ReplicationFactor }}
 {{- if gt .Profile.Zones 1 }}
       # Follower fetching: consumers that set client.rack read from a replica
@@ -528,6 +532,35 @@ spec:
   authorization:
     type: simple
     acls:
+      - resource:
+          type: topic
+          name: "*"
+          patternType: literal
+        operations: [Read, Describe]
+---
+# The user the console moves consumer groups' positions as, when admins reset
+# a group or replay history into a new one, and only while the group has no
+# members. Kafka authorizes committing a group's offsets as reading the group
+# and its topics; the console never fetches messages as this user.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: {{ .OffsetsUser }}
+  namespace: {{ .Namespace }}
+  labels:
+    strimzi.io/cluster: {{ quote .ClusterName }}
+{{- template "labels" . }}
+spec:
+  authentication:
+    type: tls
+  authorization:
+    type: simple
+    acls:
+      - resource:
+          type: group
+          name: "*"
+          patternType: literal
+        operations: [Read, Describe]
       - resource:
           type: topic
           name: "*"

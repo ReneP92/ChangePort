@@ -77,7 +77,7 @@ func (s *Server) TailTopic(ctx context.Context, request api.TailTopicRequestObje
 		return api.TailTopic404JSONResponse{NotFoundJSONResponse: api.NotFoundJSONResponse(noSuchTopic(request.Topic))}, nil
 	}
 	start := TailStart{Recent: tailRecent}
-	if ptr.Deref(request.Params.From, api.Recent) == api.Latest {
+	if ptr.Deref(request.Params.From, api.TailTopicParamsFromRecent) == api.TailTopicParamsFromLatest {
 		start.Recent = 0
 	}
 	if resume := ptr.Deref(request.Params.Resume, ""); resume != "" {

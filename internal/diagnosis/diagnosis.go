@@ -111,7 +111,30 @@ type Group struct {
 	// Rebalances is how often it shared its partitions out again in the
 	// last hour, as members joined or left while it consumed.
 	Rebalances int
-	Reads      []Read
+	// Moved is how an admin last moved the group in the console, or created
+	// it to replay another's topics, in the last hour; nil if none did.
+	Moved *Move
+	Reads []Read
+}
+
+// Move is an admin moving a consumer group in the console, so that it reads
+// messages again or skips them, or creating one to replay another's topics.
+type Move struct {
+	// By is who, and Ago how long ago.
+	By  string
+	Ago time.Duration
+	// Replay is whether it was created to replay another group's topics.
+	Replay bool
+}
+
+// words says who moved the group and when, as in "Ada moved billing in the
+// console 4 minutes ago".
+func (m Move) words(group string) string {
+	by := cmp.Or(m.By, "an admin")
+	if m.Replay {
+		return fmt.Sprintf("%s created %s in the console %s ago to replay messages", by, group, behind(m.Ago.Seconds()))
+	}
+	return fmt.Sprintf("%s moved %s in the console %s ago", by, group, behind(m.Ago.Seconds()))
 }
 
 // Read is a consumer group reading a topic.
@@ -303,6 +326,14 @@ func rate(perSecond float64) string {
 	default:
 		return strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%.2f", perSecond), "0"), ".")
 	}
+}
+
+// upperFirst starts a sentence with a capital.
+func upperFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 // behind says how far behind, with less than a minute as such.

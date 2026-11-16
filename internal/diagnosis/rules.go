@@ -107,6 +107,22 @@ func nobodyConsuming(s Snapshot) []Finding {
 			if !ok || t.MessagesInPerSecond <= 0 || r.LagMessages == 0 {
 				continue
 			}
+			if g.Moved != nil {
+				// Its consumers were stopped to move it, or it is new: the
+				// lag is the point until they start.
+				found = append(found, Finding{
+					Severity: Info,
+					Subject:  Subject{ConsumerGroup: g.Name, Topic: r.Topic},
+					Title:    g.Name + " waits for its consumers",
+					Explanation: fmt.Sprintf(
+						"%s. It has no consumers running yet, so it is %s behind on %s, which receives %s messages a second.",
+						upperFirst(g.Moved.words(g.Name)), duration(r.LagSeconds), r.Topic, rate(t.MessagesInPerSecond)),
+					Suggestion: fmt.Sprintf(
+						"Start the consumers of %s, with `group.id=%s`. They read from where it was moved, then keep up with %s.",
+						g.Name, g.Name, r.Topic),
+				})
+				continue
+			}
 			found = append(found, Finding{
 				Severity: Warning,
 				Subject:  Subject{ConsumerGroup: g.Name, Topic: r.Topic},
@@ -153,13 +169,17 @@ func behindRetention(s Snapshot) []Finding {
 						g.Name, g.Name, r.Topic),
 				})
 			case r.LagSeconds >= retentionShare*retention && r.LagMessages > 0:
+				explanation := fmt.Sprintf(
+					"%s is %s behind on %s, which keeps messages for %s. Unless it catches up, messages are deleted before it reads them.",
+					g.Name, duration(r.LagSeconds), r.Topic, duration(retention))
+				if g.Moved != nil {
+					explanation += fmt.Sprintf(" It is this far behind because %s.", g.Moved.words(g.Name))
+				}
 				found = append(found, Finding{
-					Severity: Warning,
-					Subject:  subject,
-					Title:    fmt.Sprintf("%s is close to losing messages of %s", g.Name, r.Topic),
-					Explanation: fmt.Sprintf(
-						"%s is %s behind on %s, which keeps messages for %s. Unless it catches up, messages are deleted before it reads them.",
-						g.Name, duration(r.LagSeconds), r.Topic, duration(retention)),
+					Severity:    Warning,
+					Subject:     subject,
+					Title:       fmt.Sprintf("%s is close to losing messages of %s", g.Name, r.Topic),
+					Explanation: explanation,
 					Suggestion: fmt.Sprintf(
 						"Help %s catch up, or keep the messages of %s longer while it does.", g.Name, r.Topic),
 				})

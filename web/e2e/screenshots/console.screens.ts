@@ -533,6 +533,16 @@ test("every screen of the console", async ({ browser }) => {
     admin.getByRole("region", { name: "Changes" }).getByText(/created topic orders/),
   ).toBeVisible({ timeout: 60_000 });
   await shot(admin, "18-consumer-group");
+  // Replaying what the group reads into a new group, which its running
+  // consumers do not hold up, as they would a move.
+  await admin.getByRole("button", { name: "Change position" }).click();
+  const position = admin.getByRole("dialog", { name: "Change where search-indexer reads" });
+  await position.getByRole("radio", { name: /A new group, to replay/ }).click();
+  await expect(
+    position.getByRole("region", { name: "What this does" }).getByRole("listitem").first(),
+  ).toBeVisible({ timeout: 30_000 });
+  await shot(admin, "58-replay-group");
+  await position.getByRole("button", { name: "Cancel" }).click();
   await nav.getByRole("link", { name: "Overview" }).click();
   await nav.getByRole("link", { name: /^Alerts/ }).click();
   await expect(card(admin, "Active").getByText(/search-indexer is .* behind/)).toBeVisible();

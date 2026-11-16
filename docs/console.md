@@ -236,6 +236,56 @@ it starts and when it ends, with who read which topic, never with what the
 messages hold, and Changeport keeps no message: they pass through on their
 way to the browser. An organization runs at most three tails at once.
 
+### Moving a consumer group
+
+Admins change where a consumer group reads from **Change position** on its
+page: from a point in time, from the oldest message its topics keep, or
+from now, skipping what it has not read, on all the topics it reads or
+some of them. The group itself moves, or a new
+group is created there to **replay** the messages to a service started with
+it, leaving the group where it is. A replay is how a service rebuilds its
+state, or a fixed bug's output is made again, without touching the
+consumers running in production.
+
+Before anything changes, the dialog says per topic how many messages the
+group reads again or skips, and from when, worked out on the server from
+the group's committed offsets and Kafka's offsets at that time. Offsets
+count transaction markers and messages compaction removed too, so on such
+topics the numbers are about right rather than exact. It says how many
+messages come back from tiered storage, older than the brokers keep on
+disk, and how long that takes at least at the brokers' limit for reading it
+back (below). It warns that the service handles the messages again, with
+whatever they trigger, and that skipped messages are never read.
+
+Kafka moves a group only while it has no consumers, as they keep their own
+position: the dialog names the ones running and waits until they stop,
+which a replay does not need. Moving the group itself takes its name typed.
+After a replay the dialog shows the `group.id` to start the service with.
+Platform groups cannot be moved, and a replay's group must be new.
+
+Every move and replay is audited (`consumer group moved` and `consumer
+group replayed`, with the position, the topics and the messages read again
+and skipped), and shows on the group's timeline with who made it. For the
+hour after it, the diagnoses explain the group's lag by the move, and its
+having no consumers yet is a note rather than a warning
+([diagnosis.md](diagnosis.md)).
+
+The console moves groups as a Kafka user of its own, `changeport-offsets`.
+Kafka authorizes committing a group's offsets as reading the group and its
+topics, which the console's own user may not: it describes groups only, so
+a compromise of the console's main user still cannot move one. The offsets
+user is used for nothing but commits.
+
+Reading history back from tiered storage is capped per broker
+(`remote.log.manager.fetch.max.bytes.per.second`: 8 MiB/s on the
+production profile, 2 MiB/s on the dev profiles) and runs on the remote
+log reader's own threads, for every client, so a replay or any read of old
+messages leaves the brokers to the consumers of recent ones, which read
+from local disk. Here Ada replays what `search-indexer` reads into a new
+group while its consumers keep running.
+
+![Replaying into a new group](screenshots/58-replay-group-desktop.png)
+
 Creating a topic within the guardrails, which the dialog applies as Ada
 types.
 

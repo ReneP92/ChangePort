@@ -150,6 +150,29 @@ func TestNobodyConsuming(t *testing.T) {
 	}
 }
 
+// A group an admin moved, or created to replay, waits for its consumers:
+// the lag is the point of the move, so it is a note rather than a warning.
+func TestNobodyConsumingAfterAMove(t *testing.T) {
+	g := billing(0, 720, 240)
+	g.Members, g.State = 0, "Empty"
+	g.Moved = &Move{By: "Ada Lovelace", Ago: 4 * time.Minute}
+	found := only(t, "nobody-consuming", Snapshot{Window: 15 * time.Minute, Topics: []Topic{orders()}, Groups: []Group{g}})
+	if len(found) != 1 || found[0].Severity != Info {
+		t.Fatalf("found %v, want one note", found)
+	}
+	if want := "Ada Lovelace moved billing in the console 4 minutes ago. It has no consumers running yet, so it is 12 minutes behind on orders, which receives 350 messages a second."; found[0].Explanation != want {
+		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
+	}
+	if want := "Start the consumers of billing, with `group.id=billing`. They read from where it was moved, then keep up with orders."; found[0].Suggestion != want {
+		t.Errorf("suggestion = %q\nwant %q", found[0].Suggestion, want)
+	}
+	g.Moved = &Move{Ago: 30 * time.Second, Replay: true}
+	found = only(t, "nobody-consuming", Snapshot{Window: 15 * time.Minute, Topics: []Topic{orders()}, Groups: []Group{g}})
+	if want := "An admin created billing in the console less than a minute ago to replay messages."; len(found) != 1 || !strings.HasPrefix(found[0].Explanation, want) {
+		t.Errorf("found %+v, want an explanation starting %q", found, want)
+	}
+}
+
 func TestBehindRetention(t *testing.T) {
 	day := ptr.To(int64(24 * 3600 * 1000))
 	short := orders()
@@ -162,6 +185,14 @@ func TestBehindRetention(t *testing.T) {
 	}
 	if want := "billing is 13 hours behind on orders, which keeps messages for 24 hours. Unless it catches up, messages are deleted before it reads them."; found[0].Explanation != want {
 		t.Errorf("explanation = %q\nwant %q", found[0].Explanation, want)
+	}
+
+	// Moved back by an admin, it says why it is behind.
+	moved := behind
+	moved.Moved = &Move{By: "Ada Lovelace", Ago: 10 * time.Minute}
+	found = only(t, "behind-retention", Snapshot{Window: 15 * time.Minute, Topics: []Topic{short}, Groups: []Group{moved}})
+	if want := "It is this far behind because Ada Lovelace moved billing in the console 10 minutes ago."; len(found) != 1 || !strings.HasSuffix(found[0].Explanation, want) {
+		t.Errorf("found %+v, want an explanation ending %q", found, want)
 	}
 
 	lost := billing(200, 60, 30)

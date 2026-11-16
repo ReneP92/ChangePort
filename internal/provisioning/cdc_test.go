@@ -138,11 +138,13 @@ func TestRenderCDCUsersCannotReadCustomerTopics(t *testing.T) {
 		}
 	}
 
-	// Of all users but the customer's own and the console's tail, which
-	// shows admins messages (TestRenderTailUserOnlyReads), only these read
-	// topics, all of them the platform's.
+	// Of all users but the customer's own, the console's tail, which shows
+	// admins messages (TestRenderTailUserOnlyReads), and the offsets user,
+	// which Kafka lets commit offsets only as a reader
+	// (TestRenderOffsetsUserOnlyCommits), only these read topics, all of
+	// them the platform's.
 	for _, obj := range objects {
-		if obj.GetKind() != "KafkaUser" || obj.GetName() == AdminUser || obj.GetName() == TailUser {
+		if obj.GetKind() != "KafkaUser" || obj.GetName() == AdminUser || obj.GetName() == TailUser || obj.GetName() == OffsetsUser {
 			continue
 		}
 		for _, acl := range acls(t, obj) {

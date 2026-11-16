@@ -308,6 +308,35 @@ kubectl -n object-store exec deploy/seaweedfs -- \
   sh -c "echo 'fs.rm -r /buckets/changeport-tiered-storage/customer-c-7f3k2q' | weed shell"
 ```
 
+## Undoing a move of a consumer group
+
+Admins move consumer groups in the console ([console.md](console.md#moving-a-consumer-group)),
+and a move cannot be undone there: a group moved by mistake reads messages
+again or skips them once its consumers start. While they are still stopped,
+the group can go back to where it was. Every move's audit line holds the
+group's offsets before it, as `topic,partition,offset;...`:
+
+```bash
+kubectl -n changeport logs deploy/changeport-console --since=24h |
+  grep 'msg="consumer group moved"' | grep 'tenant=c-7f3k2q' | grep 'group=billing'
+```
+
+Write the line's `offsets_before` one entry a line into `offsets.csv`, then,
+with the customer's consumers of the group stopped, move it back as the
+customer's own user, with the `client.properties` the console's overview
+downloads (on kind, `just kafka-client c-7f3k2q` opens a shell with it at
+`/config/client.properties`):
+
+```bash
+kafka-consumer-groups.sh --bootstrap-server bootstrap.c-7f3k2q.kafka.<domain>:9094 --command-config client.properties \
+  --group billing --reset-offsets --from-file offsets.csv --dry-run
+# Then again with --execute in place of --dry-run.
+```
+
+Kafka refuses while the group has members, as the console does. Messages
+the group had read again or skipped once its consumers started cannot be
+taken back; the timeline shows when they started.
+
 ## A broker is down
 
 **Signs:** `KafkaBrokersDown` pages once a production or `dev-ha` cluster has

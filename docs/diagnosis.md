@@ -30,8 +30,9 @@ request:
   with or without telemetry), each group's lag now and a window ago, each
   partition's size, the bytes each topic refused as too large, and each
   producer's sends, errors and retries, with its errors per topic.
-- **The timeline:** each group's rebalances in the last hour, and the
-  topics that got partitions in the last day.
+- **The timeline:** each group's rebalances in the last hour, the groups
+  admins moved or created to replay in the console in the last hour, and
+  the topics that got partitions in the last day.
 - **Transactions and producers,** from Kafka's Admin API on each request,
   within 10 seconds: the producers Kafka keeps state for on each partition,
   the idempotent and transactional ones, with their sequence numbers and
@@ -100,8 +101,8 @@ and groups are left out.
 | Rule | Finds | Severity |
 | --- | --- | --- |
 | `consumer-too-slow` | A stable group, some of whose members read the topic, that consumed less than 90% of what the topic received over the window, at least a minute behind, and further behind than a window ago. Topics below a message a second are too quiet to tell, and a group whose offsets went back in the window (replaying the topic) is left alone. | warning |
-| `nobody-consuming` | A group without members, with messages waiting, whose topic still receives more. | warning |
-| `behind-retention` | A group behind by half its topic's retention or more: messages may be deleted before it reads them. Critical once retention deleted messages it never read (its committed offset is below the log's start). Compacted topics keep each key's latest message, so they are left out. | warning, critical |
+| `nobody-consuming` | A group without members, with messages waiting, whose topic still receives more. In the hour after an admin moved it or created it to replay in the console, a note that it waits for its consumers, with who moved it and the `group.id` to start them with, rather than a warning: the lag is the point of the move. | warning, info |
+| `behind-retention` | A group behind by half its topic's retention or more: messages may be deleted before it reads them. In the hour after an admin moved it, it says the move is why. Critical once retention deleted messages it never read (its committed offset is below the log's start). Compacted topics keep each key's latest message, so they are left out. | warning, critical |
 | `idle-consumers` | A stable group with members assigned no partition: more consumers than partitions, or partitions handed out topic by topic to the same consumers. | info |
 | `frequent-rebalances` | A group that shared its partitions out again 6 times or more in the last hour, as members joined or left while it consumed, from the timeline. A group starting, or its last member leaving, does not count. | warning |
 | `hot-partition` | A tiered topic of 3 partitions or more, with at least 64 MB on the brokers, where one partition holds twice its fair share or more: a few busy keys. Tiered topics keep only their last day on the brokers, so the sizes show how messages spread now; topics that got partitions within the day are left out, as new partitions start empty. | warning |

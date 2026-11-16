@@ -159,7 +159,7 @@ func TestRenderProducesLabeledObjectsInApplyOrder(t *testing.T) {
 	}
 	// The tiered storage keys and the certificate come before the Kafka
 	// cluster that uses them.
-	wantKinds := []string{"Namespace", "Secret", "Certificate", "KafkaNodePool", "Kafka", "KafkaUser", "KafkaUser", "KafkaUser", "KafkaUser", "Role", "RoleBinding", "Deployment"}
+	wantKinds := []string{"Namespace", "Secret", "Certificate", "KafkaNodePool", "Kafka", "KafkaUser", "KafkaUser", "KafkaUser", "KafkaUser", "KafkaUser", "Role", "RoleBinding", "Deployment"}
 	if len(objects) != len(wantKinds) {
 		t.Fatalf("got %d objects, want %d", len(objects), len(wantKinds))
 	}
@@ -256,7 +256,7 @@ func TestRenderConsoleSecretAccess(t *testing.T) {
 				v, _, _ := unstructured.NestedStringSlice(r, "verbs")
 				return strings.Join(res, ","), strings.Join(n, ","), strings.Join(v, ",")
 			}
-			if res, names, verbs := rule(0); res != "secrets" || verbs != "get" || names != "changeport-console,changeport-tail,acme-cluster-ca-cert,admin,external-listener-tls" {
+			if res, names, verbs := rule(0); res != "secrets" || verbs != "get" || names != "changeport-console,changeport-tail,changeport-offsets,acme-cluster-ca-cert,admin,external-listener-tls" {
 				t.Errorf("Role %s allows %s on %s named %s, want get on the console's secrets by name", obj.GetName(), verbs, res, names)
 			}
 			if res, names, verbs := rule(1); res != "pods" || verbs != "get,list" || names != "" {
@@ -452,6 +452,42 @@ func TestRenderTailUserOnlyReads(t *testing.T) {
 	}
 	if got, want := acls(t, kafkaUser(t, objects, TailUser)), []string{"Read topic literal *", "Describe topic literal *"}; !slices.Equal(got, want) {
 		t.Errorf("the tail user's ACLs are %v, want %v", got, want)
+	}
+}
+
+// The console moves consumer groups' positions as the offsets user, which
+// may read and describe groups and topics, as Kafka requires for committing a
+// group's offsets, and nothing else: it cannot write, nor change topics.
+func TestRenderOffsetsUserOnlyCommits(t *testing.T) {
+	objects, err := Render(Spec{CustomerID: "acme", Profile: DevProfile, Platform: KindPlatform})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Read group literal *", "Describe group literal *", "Read topic literal *", "Describe topic literal *"}
+	if got := acls(t, kafkaUser(t, objects, OffsetsUser)); !slices.Equal(got, want) {
+		t.Errorf("the offsets user's ACLs are %v, want %v", got, want)
+	}
+}
+
+// Every broker caps its reads from tiered storage at the profile's quota.
+func TestRenderRemoteFetchQuota(t *testing.T) {
+	for _, profile := range sortedValues(Profiles) {
+		objects, err := Render(Spec{CustomerID: "acme", Profile: profile, Platform: KindPlatform})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _, _ := unstructured.NestedFieldNoCopy(objectOfKind(t, objects, "Kafka").Object, "spec", "kafka", "config", "remote.log.manager.fetch.max.bytes.per.second")
+		// YAML gives a number as an integer or a float, by how it is written.
+		var quota float64
+		switch v := got.(type) {
+		case int64:
+			quota = float64(v)
+		case float64:
+			quota = v
+		}
+		if quota != float64(profile.RemoteFetchBytesPerSecond) {
+			t.Errorf("profile %s: remote fetch quota = %v, want %d", profile.Name, got, profile.RemoteFetchBytesPerSecond)
+		}
 	}
 }
 

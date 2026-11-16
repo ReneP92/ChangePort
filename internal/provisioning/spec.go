@@ -47,6 +47,12 @@ const (
 	// describe topics, and nothing else, not even consumer groups, so a tail
 	// never commits offsets or writes.
 	TailUser = "changeport-tail"
+	// OffsetsUser is the KafkaUser the console moves consumer groups'
+	// positions as, when admins reset a group or replay history into a new
+	// one (docs/console.md). Kafka authorizes committing a group's offsets as
+	// reading the group and its topics, so it may read both, though the
+	// console never fetches messages as it.
+	OffsetsUser = "changeport-offsets"
 	// ConsoleNamespace is where the console runs.
 	ConsoleNamespace = "changeport"
 	// EventsURL is the store of the change timeline, VictoriaLogs
@@ -269,7 +275,7 @@ func (s Spec) ClusterCASecret() string { return s.ClusterName() + "-cluster-ca-c
 // listener, and the admin user's credentials and the public listener's CA
 // for the client.properties customers download.
 func (s Spec) ConsoleSecrets() []string {
-	return []string{ConsoleUser, TailUser, s.ClusterCASecret(), AdminUser, ExternalListenerSecret}
+	return []string{ConsoleUser, TailUser, OffsetsUser, s.ClusterCASecret(), AdminUser, ExternalListenerSecret}
 }
 
 // BootstrapAddress is the public bootstrap address customers connect to.
@@ -381,6 +387,11 @@ type Profile struct {
 	ConnectHeap        string
 	RegistryCPURequest string
 	RegistryMemory     string
+	// RemoteFetchBytesPerSecond caps how fast each broker reads history back
+	// from tiered storage, for all clients together, so that replays and
+	// other reads of old messages leave the broker's disk, network and
+	// threads to the consumers of recent ones, which read from local disk.
+	RemoteFetchBytesPerSecond int64
 }
 
 func (p Profile) validate() error {
@@ -404,6 +415,8 @@ func (p Profile) validate() error {
 		return fmt.Errorf("profile %q: dedicated nodes need at least 2 vCPUs", p.Name)
 	case p.ConnectCPURequest == "" || p.ConnectMemory == "" || p.ConnectHeap == "" || p.RegistryCPURequest == "" || p.RegistryMemory == "":
 		return fmt.Errorf("profile %q: the Connect worker's and the schema registry's CPU requests and memory are required", p.Name)
+	case p.RemoteFetchBytesPerSecond <= 0:
+		return fmt.Errorf("profile %q: the tiered storage fetch quota is required", p.Name)
 	}
 	return nil
 }
@@ -426,25 +439,28 @@ var DevProfile = Profile{
 	ConnectHeap:        "512m",
 	RegistryCPURequest: "100m",
 	RegistryMemory:     "512Mi",
+	// A quarter of what production allows, for the smaller brokers.
+	RemoteFetchBytesPerSecond: 2 << 20,
 }
 
 // DevHAProfile is a three-broker cluster across three zones, as durable as
 // production but small enough for kind, to test failover locally.
 var DevHAProfile = Profile{
-	Name:               "dev-ha",
-	Replicas:           3,
-	ReplicationFactor:  3,
-	MinInsyncReplicas:  2,
-	CPURequest:         "250m",
-	Memory:             "1Gi",
-	StorageSize:        "5Gi",
-	Zones:              3,
-	NodeCPUs:           2,
-	ConnectCPURequest:  "250m",
-	ConnectMemory:      "1Gi",
-	ConnectHeap:        "512m",
-	RegistryCPURequest: "100m",
-	RegistryMemory:     "512Mi",
+	Name:                      "dev-ha",
+	Replicas:                  3,
+	ReplicationFactor:         3,
+	MinInsyncReplicas:         2,
+	CPURequest:                "250m",
+	Memory:                    "1Gi",
+	StorageSize:               "5Gi",
+	Zones:                     3,
+	NodeCPUs:                  2,
+	ConnectCPURequest:         "250m",
+	ConnectMemory:             "1Gi",
+	ConnectHeap:               "512m",
+	RegistryCPURequest:        "100m",
+	RegistryMemory:            "512Mi",
+	RemoteFetchBytesPerSecond: 2 << 20,
 }
 
 // ProductionProfile follows the durability decisions in docs/PROJECT_PLAN.md:
@@ -470,6 +486,11 @@ var ProductionProfile = Profile{
 	ConnectHeap:        "1536m",
 	RegistryCPURequest: "250m",
 	RegistryMemory:     "1Gi",
+	// Eight times the design partner's peak and a small share of a gp3
+	// volume's 125 MiB/s: a day of their traffic replays in under two hours
+	// from one broker, while live consumers keep the rest. A first value, to
+	// measure again on EKS.
+	RemoteFetchBytesPerSecond: 8 << 20,
 }
 
 // Profiles lists the known profiles by name.

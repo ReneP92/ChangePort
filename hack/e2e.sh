@@ -83,6 +83,7 @@ core_suite() {
   "$ROOT/hack/console-access-test.sh" "$DEMO_CUSTOMER"
   "$ROOT/hack/console-test.sh"
   "$ROOT/hack/tiered-storage-test.sh" "$DEMO_CUSTOMER"
+  "$ROOT/hack/replay-test.sh" "$DEMO_CUSTOMER"
   "$ROOT/hack/host-access-test.sh" "$DEMO_CUSTOMER"
   "$ROOT/hack/connecting-guide-test.sh" "$DEMO_CUSTOMER"
   "$ROOT/hack/postgres-test.sh"

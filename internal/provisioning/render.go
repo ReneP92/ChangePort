@@ -80,6 +80,7 @@ type templateValues struct {
 	EventsURL              string
 	ConsoleUser            string
 	TailUser               string
+	OffsetsUser            string
 	InternalPort           int
 	// ConsoleNamespace, ConsoleServiceAccount and ConsoleSecrets let the
 	// console read the Secrets it needs, by name.
@@ -234,6 +235,7 @@ func RenderYAML(spec Spec) ([]byte, error) {
 		EventsURL:              EventsURL,
 		ConsoleUser:            ConsoleUser,
 		TailUser:               TailUser,
+		OffsetsUser:            OffsetsUser,
 		InternalPort:           InternalPort,
 
 		ConsoleNamespace:      ConsoleNamespace,

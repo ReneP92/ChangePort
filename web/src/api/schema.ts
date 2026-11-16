@@ -708,6 +708,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/customer/consumer-groups/{group}/position/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What moving a consumer group, or replaying into a new one, would do, for organization admins; nothing changes */
+        post: operations["previewGroupPosition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/consumer-groups/{group}/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Moves a consumer group without members to the earliest message, the latest or a time, for organization admins; every move is audited and recorded on the timeline */
+        put: operations["moveGroup"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/consumer-groups/{group}/replays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Creates a new consumer group at a point in the history of the topics a group reads, so a service can read them again without moving the group, for organization admins; every replay is audited and recorded on the timeline */
+        post: operations["replayGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/trial-requests": {
         parameters: {
             query?: never;
@@ -1376,6 +1427,62 @@ export interface components {
             /** @description The lag in seconds over the last hour, a point a minute. */
             history: components["schemas"]["Point"][];
         };
+        /** @description Where a consumer group goes: the earliest message kept, the latest (skipping what it has not read), or the first message at or after a time */
+        PositionChange: {
+            /** @enum {string} */
+            to: "earliest" | "latest" | "time";
+            /**
+             * Format: date-time
+             * @description Required when to is time; not in the future
+             */
+            time?: string;
+            /** @description The topics to move it on; without them, every topic the group has a position on */
+            topics?: string[];
+            /** @description For a replay, the new group, which must not exist yet; the group in the path stays where it is. Letters, digits, dots, dashes and underscores, at most 200 */
+            into?: string;
+        };
+        PositionPreview: {
+            /** @description The group that moves, or the new one of a replay */
+            group: string;
+            /** @description The client IDs of the group's members; Kafka moves a group only while it has none */
+            members: string[];
+            topics: components["schemas"]["TopicPosition"][];
+            /**
+             * Format: int64
+             * @description At least how long reading the messages kept in tiered storage takes, at the brokers' limit for reading it back; absent when none come from there, or their size is unknown
+             */
+            tieredSeconds?: number;
+        };
+        /** @description What a move does on one topic, in messages: offsets count transaction markers and the messages compaction removed too, so on such topics the numbers are approximate */
+        TopicPosition: {
+            topic: string;
+            partitions: number;
+            /**
+             * Format: int64
+             * @description The messages the group has read and reads again
+             */
+            readAgain: number;
+            /**
+             * Format: int64
+             * @description The messages the group has not read and never will
+             */
+            skipped: number;
+            /**
+             * Format: int64
+             * @description The messages the group has to read after the move, up to now
+             */
+            toRead: number;
+            /**
+             * Format: int64
+             * @description Of those, the ones read back from tiered storage, older than the brokers keep on disk
+             */
+            tieredMessages: number;
+            /**
+             * Format: date-time
+             * @description The time of the first message the group reads next; absent when it reads only new ones
+             */
+            from?: string;
+        };
         Throughput: {
             range: string;
             stepSeconds: number;
@@ -1528,7 +1635,7 @@ export interface components {
             /** Format: date-time */
             time: string;
             /** @enum {string} */
-            kind: "topic.created" | "topic.deleted" | "topic.config" | "topic.partitions" | "acl.added" | "acl.removed" | "group.rebalanced" | "broker.restarted" | "client.throttled" | "client.unthrottled";
+            kind: "topic.created" | "topic.deleted" | "topic.config" | "topic.partitions" | "acl.added" | "acl.removed" | "group.rebalanced" | "group.moved" | "group.replayed" | "broker.restarted" | "client.throttled" | "client.unthrottled";
             /** @description What happened, in plain language */
             message: string;
             topic?: string;
@@ -1812,6 +1919,8 @@ export interface components {
     parameters: {
         /** @description How far back to look, up to now */
         Range: components["schemas"]["TimeRange"];
+        /** @description The consumer group's name */
+        ConsumerGroupName: string;
         /** @description The topic's name */
         TopicName: string;
         /** @description The source's name, which prefixes its topics */
@@ -3199,6 +3308,105 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    previewGroupPosition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The consumer group's name */
+                group: components["parameters"]["ConsumerGroupName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionChange"];
+            };
+        };
+        responses: {
+            /** @description What the change would do */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionPreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    moveGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The consumer group's name */
+                group: components["parameters"]["ConsumerGroupName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionChange"];
+            };
+        };
+        responses: {
+            /** @description What the move did */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionPreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    replayGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The consumer group's name */
+                group: components["parameters"]["ConsumerGroupName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionChange"];
+            };
+        };
+        responses: {
+            /** @description The new group, and what it reads */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PositionPreview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["NotConfigured"];
         };
     };
