@@ -240,7 +240,12 @@ test("messages too large for their topic are diagnosed, with who sent them", asy
         `${topic} refused [\\d.]+ MB sent in batches larger than 1\\.0 MB, the most it accepts`,
       ),
     );
-    await expect(oversized).toContainText(`They came from ${refused}.`);
+    // Who sent them comes from the producers' own metrics, which the brokers'
+    // refusals can reach the diagnoses a minute before.
+    await expect(async () => {
+      await page.goto("/");
+      await expect(oversized).toContainText(`They came from ${refused}.`, { timeout: 5_000 });
+    }).toPass({ timeout: 3 * 60_000, intervals: [15_000] });
     await expect(oversized).toContainText("object storage");
 
     const before = await expectDiagnosis(

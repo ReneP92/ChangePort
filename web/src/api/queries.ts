@@ -86,6 +86,17 @@ export function useCustomer() {
   });
 }
 
+/** The data each customer's cluster processed over the last 30 days, for operators. */
+export function useCustomerUsage() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["operator", "usage", organization],
+    queryFn: async () => unwrap(await api.GET("/api/operator/usage")).customers,
+    refetchInterval: 60_000,
+  });
+}
+
 /**
  * Every customer, for operators, refreshed often while one is being created
  * or deleted, so that lists of them keep up with a customer's own page.
@@ -351,6 +362,31 @@ export function useThroughput(range: ThroughputRange, topic?: string) {
           params: { query: { range, ...(topic === undefined ? {} : { topic }) } },
         }),
       ),
+    refetchInterval: 60_000,
+  });
+}
+
+/**
+ * The data the environment's cluster processed over the last 30 days, per
+ * day and per topic, and what it stores now.
+ */
+export function useUsage() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["customer", "usage", organization],
+    queryFn: async () => unwrap(await api.GET("/api/customer/usage")),
+    refetchInterval: 60_000,
+  });
+}
+
+/** The data each of the organization's environments processed over the last 30 days. */
+export function useEnvironmentUsage() {
+  const api = useApi();
+  const organization = useAuth().orgId ?? "none";
+  return useQuery({
+    queryKey: ["customer", "environment-usage", organization],
+    queryFn: async () => unwrap(await api.GET("/api/customer/usage/environments")).environments,
     refetchInterval: 60_000,
   });
 }

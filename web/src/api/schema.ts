@@ -606,6 +606,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/customer/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The data the environment's cluster processed over the last 30 days, per day and per topic, and what it stores now */
+        get: operations["getUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/customer/usage/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The data each of the organization's environments processed over the last 30 days */
+        get: operations["listEnvironmentUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/customer/topology": {
         parameters: {
             query?: never;
@@ -847,6 +881,23 @@ export interface paths {
          * @description The reason is shown to the requester.
          */
         post: operations["declineTrialRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/operator/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The data each customer's cluster processed over the last 30 days, for operators */
+        get: operations["listCustomerUsage"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1482,6 +1533,60 @@ export interface components {
              * @description The time of the first message the group reads next; absent when it reads only new ones
              */
             from?: string;
+        };
+        /** @description The data a cluster processed over the last 30 days, in bytes: what producers wrote to its topics and consumers read from them, each byte once, without replication or the platform's own topics; and what its topics store now */
+        Usage: {
+            /** Format: int64 */
+            bytesIn: number;
+            /** Format: int64 */
+            bytesOut: number;
+            /** @description The last 30 days in UTC, oldest first; the last is today so far */
+            days: components["schemas"]["UsageDay"][];
+            /** @description The topics, most data processed first, with what they store now */
+            topics: components["schemas"]["TopicUsage"][];
+            /**
+             * Format: int64
+             * @description What the topics keep on the brokers' disks now, one copy
+             */
+            localBytes: number;
+            /**
+             * Format: int64
+             * @description What the topics keep in tiered storage now
+             */
+            remoteBytes: number;
+        };
+        UsageDay: {
+            /** Format: date */
+            date: string;
+            /** Format: int64 */
+            bytesIn: number;
+            /** Format: int64 */
+            bytesOut: number;
+        };
+        TopicUsage: {
+            topic: string;
+            /** Format: int64 */
+            bytesIn: number;
+            /** Format: int64 */
+            bytesOut: number;
+            /** Format: int64 */
+            localBytes: number;
+            /** Format: int64 */
+            remoteBytes: number;
+        };
+        EnvironmentUsageList: {
+            environments: components["schemas"]["EnvironmentUsage"][];
+        };
+        /** @description The data an environment's cluster processed over the last 30 days, in bytes; absent while the metrics store does not answer for it */
+        EnvironmentUsage: {
+            customerID: string;
+            /** Format: int64 */
+            bytesIn?: number;
+            /** Format: int64 */
+            bytesOut?: number;
+        };
+        CustomerUsageList: {
+            customers: components["schemas"]["EnvironmentUsage"][];
         };
         Throughput: {
             range: string;
@@ -3149,6 +3254,53 @@ export interface operations {
             503: components["responses"]["NotConfigured"];
         };
     };
+    getUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The usage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Usage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    listEnvironmentUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Each environment's usage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentUsageList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
     getTopology: {
         parameters: {
             query?: never;
@@ -3548,6 +3700,29 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    listCustomerUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Each customer's usage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerUsageList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             503: components["responses"]["NotConfigured"];
         };
     };

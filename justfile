@@ -291,6 +291,9 @@ tiered-storage-test customer="demo":
 replay-test customer="demo":
     hack/replay-test.sh {{ customer }}
 
+usage-test customer="demo":
+    hack/usage-test.sh {{ customer }}
+
 # Point this machine's DNS for the customers' Kafka names at the host gateway (asks for sudo)
 [group('Local development (kind + Strimzi)')]
 host-dns:

@@ -939,6 +939,11 @@ type CustomerTrial struct {
 	EndsAt time.Time `json:"endsAt"`
 }
 
+// CustomerUsageList defines model for CustomerUsageList.
+type CustomerUsageList struct {
+	Customers []EnvironmentUsage `json:"customers"`
+}
+
 // Diagnosis defines model for Diagnosis.
 type Diagnosis struct {
 	ClientId      *string `json:"clientId,omitempty"`
@@ -1016,6 +1021,18 @@ type EnvironmentChange struct {
 
 // EnvironmentChangeDefault Makes it the environment the console opens by default
 type EnvironmentChangeDefault bool
+
+// EnvironmentUsage The data an environment's cluster processed over the last 30 days, in bytes; absent while the metrics store does not answer for it
+type EnvironmentUsage struct {
+	BytesIn    *int64 `json:"bytesIn,omitempty"`
+	BytesOut   *int64 `json:"bytesOut,omitempty"`
+	CustomerID string `json:"customerID"`
+}
+
+// EnvironmentUsageList defines model for EnvironmentUsageList.
+type EnvironmentUsageList struct {
+	Environments []EnvironmentUsage `json:"environments"`
+}
 
 // Environments defines model for Environments.
 type Environments struct {
@@ -1734,6 +1751,15 @@ type TopicProducers struct {
 	Producers []TopicProducer `json:"producers"`
 }
 
+// TopicUsage defines model for TopicUsage.
+type TopicUsage struct {
+	BytesIn     int64  `json:"bytesIn"`
+	BytesOut    int64  `json:"bytesOut"`
+	LocalBytes  int64  `json:"localBytes"`
+	RemoteBytes int64  `json:"remoteBytes"`
+	Topic       string `json:"topic"`
+}
+
 // Topology defines model for Topology.
 type Topology struct {
 	Groups []TopologyGroup `json:"groups"`
@@ -1886,6 +1912,31 @@ type TrialRetention string
 
 // TrialThroughput Roughly how much they write at peak
 type TrialThroughput string
+
+// Usage The data a cluster processed over the last 30 days, in bytes: what producers wrote to its topics and consumers read from them, each byte once, without replication or the platform's own topics; and what its topics store now
+type Usage struct {
+	BytesIn  int64 `json:"bytesIn"`
+	BytesOut int64 `json:"bytesOut"`
+
+	// Days The last 30 days in UTC, oldest first; the last is today so far
+	Days []UsageDay `json:"days"`
+
+	// LocalBytes What the topics keep on the brokers' disks now, one copy
+	LocalBytes int64 `json:"localBytes"`
+
+	// RemoteBytes What the topics keep in tiered storage now
+	RemoteBytes int64 `json:"remoteBytes"`
+
+	// Topics The topics, most data processed first, with what they store now
+	Topics []TopicUsage `json:"topics"`
+}
+
+// UsageDay defines model for UsageDay.
+type UsageDay struct {
+	BytesIn  int64              `json:"bytesIn"`
+	BytesOut int64              `json:"bytesOut"`
+	Date     openapi_types.Date `json:"date"`
+}
 
 // ConsumerGroupName defines model for ConsumerGroupName.
 type ConsumerGroupName = string
@@ -2206,6 +2257,12 @@ type ServerInterface interface {
 	// GetTopology How data flows through the cluster now, for the topology map: the producers, topics and consumer groups, and the bytes per second between them over the last 5 minutes, with each group's lag
 	// (GET /api/customer/topology)
 	GetTopology(w http.ResponseWriter, r *http.Request)
+	// GetUsage The data the environment's cluster processed over the last 30 days, per day and per topic, and what it stores now
+	// (GET /api/customer/usage)
+	GetUsage(w http.ResponseWriter, r *http.Request)
+	// ListEnvironmentUsage The data each of the organization's environments processed over the last 30 days
+	// (GET /api/customer/usage/environments)
+	ListEnvironmentUsage(w http.ResponseWriter, r *http.Request)
 	// GetMe Who is signed in, and what they may see
 	// (GET /api/me)
 	GetMe(w http.ResponseWriter, r *http.Request)
@@ -2236,6 +2293,9 @@ type ServerInterface interface {
 	// DeclineTrialRequest Decline a pending trial request, for operators
 	// (POST /api/operator/trial-requests/{trialRequestID}/decline)
 	DeclineTrialRequest(w http.ResponseWriter, r *http.Request, trialRequestID TrialRequestID)
+	// ListCustomerUsage The data each customer's cluster processed over the last 30 days, for operators
+	// (GET /api/operator/usage)
+	ListCustomerUsage(w http.ResponseWriter, r *http.Request)
 	// RequestTrial Request a trial
 	// (POST /api/trial-requests)
 	RequestTrial(w http.ResponseWriter, r *http.Request)
@@ -3439,6 +3499,34 @@ func (siw *ServerInterfaceWrapper) GetTopology(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetUsage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetUsage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEnvironmentUsage operation middleware
+func (siw *ServerInterfaceWrapper) ListEnvironmentUsage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEnvironmentUsage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMe operation middleware
 func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request) {
 
@@ -3651,6 +3739,20 @@ func (siw *ServerInterfaceWrapper) DeclineTrialRequest(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListCustomerUsage operation middleware
+func (siw *ServerInterfaceWrapper) ListCustomerUsage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCustomerUsage(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RequestTrial operation middleware
 func (siw *ServerInterfaceWrapper) RequestTrial(w http.ResponseWriter, r *http.Request) {
 
@@ -3843,6 +3945,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.RemoveAlertReceiver)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/api/customer/alert-settings/receivers/{receiver}", wrapper.SetAlertReceiver)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/throughput", wrapper.GetThroughput)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/usage", wrapper.GetUsage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/usage/environments", wrapper.ListEnvironmentUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/topology", wrapper.GetTopology)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/diagnoses", wrapper.ListDiagnoses)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/customer/health-history", wrapper.GetHealthHistory)
@@ -3857,6 +3961,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/trial-requests", wrapper.ListTrialRequests)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/trial-requests/{trialRequestID}/approve", wrapper.ApproveTrialRequest)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/trial-requests/{trialRequestID}/decline", wrapper.DeclineTrialRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/usage", wrapper.ListCustomerUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/customers", wrapper.ListCustomers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/customers", wrapper.ProvisionCustomer)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/customers/{customerID}/environments", wrapper.AddEnvironment)
@@ -8638,6 +8743,146 @@ func (response GetTopology503JSONResponse) VisitGetTopologyResponse(w http.Respo
 	return err
 }
 
+type GetUsageRequestObject struct {
+}
+
+type GetUsageResponseObject interface {
+	VisitGetUsageResponse(w http.ResponseWriter) error
+}
+
+type GetUsage200JSONResponse Usage
+
+func (response GetUsage200JSONResponse) VisitGetUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUsage401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetUsage401JSONResponse) VisitGetUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUsage403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetUsage403JSONResponse) VisitGetUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUsage404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetUsage404JSONResponse) VisitGetUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetUsage503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response GetUsage503JSONResponse) VisitGetUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentUsageRequestObject struct {
+}
+
+type ListEnvironmentUsageResponseObject interface {
+	VisitListEnvironmentUsageResponse(w http.ResponseWriter) error
+}
+
+type ListEnvironmentUsage200JSONResponse EnvironmentUsageList
+
+func (response ListEnvironmentUsage200JSONResponse) VisitListEnvironmentUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentUsage401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListEnvironmentUsage401JSONResponse) VisitListEnvironmentUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentUsage403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListEnvironmentUsage403JSONResponse) VisitListEnvironmentUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentUsage503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ListEnvironmentUsage503JSONResponse) VisitListEnvironmentUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMeRequestObject struct {
 }
 
@@ -9483,6 +9728,69 @@ func (response DeclineTrialRequest503JSONResponse) VisitDeclineTrialRequestRespo
 	return err
 }
 
+type ListCustomerUsageRequestObject struct {
+}
+
+type ListCustomerUsageResponseObject interface {
+	VisitListCustomerUsageResponse(w http.ResponseWriter) error
+}
+
+type ListCustomerUsage200JSONResponse CustomerUsageList
+
+func (response ListCustomerUsage200JSONResponse) VisitListCustomerUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomerUsage401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response ListCustomerUsage401JSONResponse) VisitListCustomerUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomerUsage403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListCustomerUsage403JSONResponse) VisitListCustomerUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCustomerUsage503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response ListCustomerUsage503JSONResponse) VisitListCustomerUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RequestTrialRequestObject struct {
 	Body *RequestTrialJSONRequestBody
 }
@@ -9796,6 +10104,12 @@ type StrictServerInterface interface {
 	// GetTopology How data flows through the cluster now, for the topology map: the producers, topics and consumer groups, and the bytes per second between them over the last 5 minutes, with each group's lag
 	// (GET /api/customer/topology)
 	GetTopology(ctx context.Context, request GetTopologyRequestObject) (GetTopologyResponseObject, error)
+	// GetUsage The data the environment's cluster processed over the last 30 days, per day and per topic, and what it stores now
+	// (GET /api/customer/usage)
+	GetUsage(ctx context.Context, request GetUsageRequestObject) (GetUsageResponseObject, error)
+	// ListEnvironmentUsage The data each of the organization's environments processed over the last 30 days
+	// (GET /api/customer/usage/environments)
+	ListEnvironmentUsage(ctx context.Context, request ListEnvironmentUsageRequestObject) (ListEnvironmentUsageResponseObject, error)
 	// GetMe Who is signed in, and what they may see
 	// (GET /api/me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
@@ -9826,6 +10140,9 @@ type StrictServerInterface interface {
 	// DeclineTrialRequest Decline a pending trial request, for operators
 	// (POST /api/operator/trial-requests/{trialRequestID}/decline)
 	DeclineTrialRequest(ctx context.Context, request DeclineTrialRequestRequestObject) (DeclineTrialRequestResponseObject, error)
+	// ListCustomerUsage The data each customer's cluster processed over the last 30 days, for operators
+	// (GET /api/operator/usage)
+	ListCustomerUsage(ctx context.Context, request ListCustomerUsageRequestObject) (ListCustomerUsageResponseObject, error)
 	// RequestTrial Request a trial
 	// (POST /api/trial-requests)
 	RequestTrial(ctx context.Context, request RequestTrialRequestObject) (RequestTrialResponseObject, error)
@@ -11304,6 +11621,54 @@ func (sh *strictHandler) GetTopology(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetUsage operation middleware
+func (sh *strictHandler) GetUsage(w http.ResponseWriter, r *http.Request) {
+	var request GetUsageRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetUsage(ctx, request.(GetUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetUsageResponseObject); ok {
+		if err := validResponse.VisitGetUsageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEnvironmentUsage operation middleware
+func (sh *strictHandler) ListEnvironmentUsage(w http.ResponseWriter, r *http.Request) {
+	var request ListEnvironmentUsageRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEnvironmentUsage(ctx, request.(ListEnvironmentUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEnvironmentUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEnvironmentUsageResponseObject); ok {
+		if err := validResponse.VisitListEnvironmentUsageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMe operation middleware
 func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	var request GetMeRequestObject
@@ -11584,6 +11949,30 @@ func (sh *strictHandler) DeclineTrialRequest(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeclineTrialRequestResponseObject); ok {
 		if err := validResponse.VisitDeclineTrialRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCustomerUsage operation middleware
+func (sh *strictHandler) ListCustomerUsage(w http.ResponseWriter, r *http.Request) {
+	var request ListCustomerUsageRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCustomerUsage(ctx, request.(ListCustomerUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCustomerUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCustomerUsageResponseObject); ok {
+		if err := validResponse.VisitListCustomerUsageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

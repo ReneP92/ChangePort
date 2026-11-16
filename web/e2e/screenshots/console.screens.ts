@@ -549,6 +549,13 @@ test("every screen of the console", async ({ browser }) => {
   // The settings load on their own, after the active alerts.
   await expect(main.getByRole("heading", { name: "Where alerts go" })).toBeVisible();
   await shot(admin, "30-alerts");
+  await nav.getByRole("link", { name: "Usage" }).click();
+  await expect(
+    card(admin, "Topics")
+      .getByRole("row")
+      .filter({ has: admin.getByRole("link", { name: "orders", exact: true }) }),
+  ).toBeVisible({ timeout: 60_000 });
+  await shot(admin, "59-usage");
   await nav.getByRole("link", { name: "Overview" }).click();
 
   // Deleting a topic names the groups still reading it.

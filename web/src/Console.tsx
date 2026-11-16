@@ -9,6 +9,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { EnvironmentHome, EnvironmentLayout, ToEnvironment } from "@/pages/EnvironmentRoutes";
 import { Home } from "@/pages/Home";
 import { AlertsPage } from "@/pages/alerts/AlertsPage";
+import { UsagePage } from "@/pages/usage/UsagePage";
 import { EnvironmentsPage } from "@/pages/environments/EnvironmentsPage";
 import { TeamPage } from "@/pages/team/TeamPage";
 import { Welcome } from "@/pages/welcome/Welcome";
@@ -96,6 +97,7 @@ function SignedIn() {
                   <Route index element={<EnvironmentHome />} />
                   <Route path="welcome" element={<Welcome />} />
                   <Route path="alerts" element={<AlertsPage />} />
+                  <Route path="usage" element={<UsagePage />} />
                   <Route path="topics/:name" element={<TopicPage />} />
                   <Route path="consumer-groups/:group" element={<ConsumerGroupPage />} />
                   <Route path="sources" element={<Sources />} />

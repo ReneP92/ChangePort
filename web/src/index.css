@@ -70,9 +70,11 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  /* The brand's teal accent and ink (docs/brand), for bytes in and out. */
+  /* The brand's teal accent (docs/brand) and a blue of its ink's hue, for
+     bytes in and out: the ink itself is too dark to read as data. Checked
+     for colorblind separation with the dataviz palette validator. */
   --chart-1: oklch(0.6 0.104 185);
-  --chart-2: oklch(0.24 0.05 250);
+  --chart-2: oklch(0.45 0.12 250);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
@@ -107,9 +109,10 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
-  /* Lighter teal, ink and greys, which show on the dark background. */
-  --chart-1: oklch(0.72 0.12 185);
-  --chart-2: oklch(0.8 0.03 250);
+  /* Teal, blue and greys that show on the dark background, as far apart for
+     colorblind eyes as the light ones. */
+  --chart-1: oklch(0.66 0.115 185);
+  --chart-2: oklch(0.55 0.13 250);
   --chart-3: oklch(0.708 0 0);
   --chart-4: oklch(0.62 0 0);
   --chart-5: oklch(0.556 0 0);

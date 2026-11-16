@@ -124,6 +124,13 @@ const (
 	TopicHealth   Query = "topic_health"
 	GroupHealth   Query = "group_health"
 	HealthChecked Query = "health_checked"
+
+	// UsageIn and UsageOut are the bytes producers wrote and consumers read
+	// over the window, per topic: each byte once, as the brokers count a
+	// topic's bytes out without what replicas fetch from its leader. See
+	// usageIncrease for how each counter's growth is counted.
+	UsageIn  Query = "usage_in"
+	UsageOut Query = "usage_out"
 )
 
 // scope is what a query's series are about, which decides its filters.
@@ -193,6 +200,24 @@ var definitions = map[Query]definition{
 	TopicHealth:   {`max by (topic) (max_over_time(changeport_health_level{%s}[{window}]))`, perTopic},
 	GroupHealth:   {`max by (consumer_group) (max_over_time(changeport_health_level{%s, consumer_group!=""}[{window}]))`, perGroup},
 	HealthChecked: {`max(max_over_time(changeport_health_checked{%s}[{window}]))`, perCluster},
+
+	UsageIn:  {usageIncrease("kafka_server_brokertopicmetrics_bytesinpersec_total"), perTopic},
+	UsageOut: {usageIncrease("kafka_server_brokertopicmetrics_bytesoutpersec_total"), perTopic},
+}
+
+// usageIncrease is how much a byte counter grew over the window, per topic,
+// counting each series from where it was before the window when it has a
+// sample in the 31 days before (increase), and from 0 when it has none, as a
+// series born in the window, such as a new topic's, starts there
+// (increase_pure). increase_pure alone would count a series' whole value
+// whenever the store missed its samples around the window's start, as while
+// it restarts; increase alone would miss what a new topic received before
+// its first sample. What a counter grew while the store had no samples of it
+// at a window's start is left out, rather than guessed. A broker's restart
+// resets its counters, which both see.
+func usageIncrease(counter string) string {
+	series := counter + "{%[1]s}"
+	return `sum by (topic) ((increase_pure(` + series + `[{window}]) unless count_over_time(` + series + `[31d] offset {window})) or increase(` + series + `[{window}]))`
 }
 
 // Queries lists every named query.
@@ -203,7 +228,7 @@ func Queries() []Query {
 		ProducerBytes, ConsumerBytes,
 		MessagesInRecent, ConsumedMessages, LagSecondsEarlier, LostPartitions, OffsetResets, PartitionSize,
 		ProducerSends, ProducerErrors, ProducerRetries, ProducerTopicErrors, ProducerAborts, BytesRejected,
-		TopicHealth, GroupHealth, HealthChecked,
+		TopicHealth, GroupHealth, HealthChecked, UsageIn, UsageOut,
 	}
 }
 

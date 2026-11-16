@@ -378,6 +378,36 @@ cluster then goes.
 
 ![A customer on a trial](screenshots/42-customer-trial-desktop.png)
 
+## Usage
+
+Each environment's **Usage** page shows the data its cluster processed over
+the last 30 days: what producers wrote to its topics (data in) and what
+consumers read from them (data out), each byte once, as the brokers count
+them per topic. Replication does not count, as the brokers count what
+followers fetch to copy a topic apart, nor do the platform's own topics
+(Kafka's, Changeport's, Strimzi's and Kafka Connect's internal ones). A
+Postgres source's topics count like any other: the source writes them.
+Members see it as admins do.
+
+- **Totals:** the 30 days' data in and out, and what the topics store now,
+  on the brokers' disks (one copy) and in tiered storage.
+- **Per day:** data in and out per day, in UTC, today so far last.
+- **Topics:** each topic's data in and out over the 30 days, the most first,
+  with what it stores now.
+
+The organization's Environments page shows what each environment processed
+over the 30 days, linking to its Usage page, and operators see each
+customer's on the operator console's Customers page.
+
+What a cluster processes while the metrics store is down is not recorded,
+and usage leaves it out rather than guess; a topic created meanwhile counts
+from its first byte. Thirty days is as long as the metrics store keeps the
+brokers' counters.
+Billing will add usage by calendar month, kept for longer, with its rates;
+there are no prices yet (docs/PROJECT_PLAN.md).
+
+![Usage](screenshots/59-usage-desktop.png)
+
 ## Alerts
 
 Alerts about Acme's own applications (see [alerts.md](alerts.md)), under
