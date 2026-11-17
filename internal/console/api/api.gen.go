@@ -196,21 +196,51 @@ func (e EnvironmentChangeDefault) Valid() bool {
 	}
 }
 
+// Defines values for FleetClusterState.
+const (
+	FleetClusterStateDegraded FleetClusterState = "degraded"
+	FleetClusterStateDeleting FleetClusterState = "deleting"
+	FleetClusterStateDown     FleetClusterState = "down"
+	FleetClusterStateHealthy  FleetClusterState = "healthy"
+	FleetClusterStateStarting FleetClusterState = "starting"
+	FleetClusterStateUnknown  FleetClusterState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the FleetClusterState enum.
+func (e FleetClusterState) Valid() bool {
+	switch e {
+	case FleetClusterStateDegraded:
+		return true
+	case FleetClusterStateDeleting:
+		return true
+	case FleetClusterStateDown:
+		return true
+	case FleetClusterStateHealthy:
+		return true
+	case FleetClusterStateStarting:
+		return true
+	case FleetClusterStateUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthLevel.
 const (
-	AtRisk         HealthLevel = "atRisk"
-	Healthy        HealthLevel = "healthy"
-	NeedsAttention HealthLevel = "needsAttention"
+	HealthLevelAtRisk         HealthLevel = "atRisk"
+	HealthLevelHealthy        HealthLevel = "healthy"
+	HealthLevelNeedsAttention HealthLevel = "needsAttention"
 )
 
 // Valid indicates whether the value is a known member of the HealthLevel enum.
 func (e HealthLevel) Valid() bool {
 	switch e {
-	case AtRisk:
+	case HealthLevelAtRisk:
 		return true
-	case Healthy:
+	case HealthLevelHealthy:
 		return true
-	case NeedsAttention:
+	case HealthLevelNeedsAttention:
 		return true
 	default:
 		return false
@@ -1060,6 +1090,56 @@ type EventList struct {
 	Truncated bool `json:"truncated"`
 }
 
+// Fleet defines model for Fleet.
+type Fleet struct {
+	CheckedAt time.Time `json:"checkedAt"`
+
+	// Clusters Every customer's cluster, the worst first
+	Clusters []FleetCluster `json:"clusters"`
+
+	// KafkaVersion The Kafka version the platform runs clusters at; a cluster that runs another is behind an upgrade, or ahead of it
+	KafkaVersion string `json:"kafkaVersion"`
+
+	// PlatformAlerts The operators' alerts about the platform itself, rather than a customer
+	PlatformAlerts []OperatorAlert `json:"platformAlerts"`
+}
+
+// FleetCluster defines model for FleetCluster.
+type FleetCluster struct {
+	// ActiveBrokers The brokers the active controller counts as active
+	ActiveBrokers     *int `json:"activeBrokers,omitempty"`
+	ActiveControllers *int `json:"activeControllers,omitempty"`
+
+	// Alerts The operators' alerts firing for it
+	Alerts []OperatorAlert `json:"alerts"`
+
+	// Brokers The brokers its profile runs
+	Brokers  int      `json:"brokers"`
+	Customer Customer `json:"customer"`
+
+	// CustomerAlerts How many of the customer's own alerts, about its applications, fire
+	CustomerAlerts int  `json:"customerAlerts"`
+	FencedBrokers  *int `json:"fencedBrokers,omitempty"`
+
+	// KafkaVersion The Kafka version it runs, as Strimzi reports it
+	KafkaVersion      *string `json:"kafkaVersion,omitempty"`
+	OfflinePartitions *int    `json:"offlinePartitions,omitempty"`
+
+	// Reasons Why it is in its state, in plain words, the worst first
+	Reasons []string `json:"reasons"`
+
+	// State Down: clients cannot use it, or a part of it, or a page about its health fires. Degraded: it works, with less to spare than it should, as while a change rolls through it. Unknown: no broker reports metrics, so it is down or not scraped. Starting and deleting follow its provisioning, unless its alerts say worse.
+	State                     FleetClusterState `json:"state"`
+	UnderMinIsrPartitions     *int              `json:"underMinIsrPartitions,omitempty"`
+	UnderReplicatedPartitions *int              `json:"underReplicatedPartitions,omitempty"`
+
+	// VolumeUsed The share of its volume the fullest broker uses, from 0 to 1, where the platform reports volumes
+	VolumeUsed *float64 `json:"volumeUsed,omitempty"`
+}
+
+// FleetClusterState Down: clients cannot use it, or a part of it, or a page about its health fires. Degraded: it works, with less to spare than it should, as while a change rolls through it. Unknown: no broker reports metrics, so it is down or not scraped. Starting and deleting follow its provisioning, unless its alerts say worse.
+type FleetClusterState string
+
 // Health The brokers, and the partitions' health from the brokers' metrics,
 // which are absent until the metrics store has them
 type Health struct {
@@ -1216,6 +1296,19 @@ type NewTrialRequest struct {
 
 	// UseCase What they want Kafka for
 	UseCase string `json:"useCase"`
+}
+
+// OperatorAlert defines model for OperatorAlert.
+type OperatorAlert struct {
+	Name string `json:"name"`
+
+	// Runbook Its section of the runbook
+	Runbook *string `json:"runbook,omitempty"`
+
+	// Severity page or warn
+	Severity string    `json:"severity"`
+	StartsAt time.Time `json:"startsAt"`
+	Summary  string    `json:"summary"`
 }
 
 // PartitionRange defines model for PartitionRange.
@@ -2293,6 +2386,9 @@ type ServerInterface interface {
 	// ChangeTrial Extend a customer's trial, or convert the customer, for operators
 	// (PATCH /api/operator/customers/{customerID}/trial)
 	ChangeTrial(w http.ResponseWriter, r *http.Request, customerID CustomerID)
+	// GetFleet Every customer cluster's health, for operators
+	// (GET /api/operator/fleet)
+	GetFleet(w http.ResponseWriter, r *http.Request)
 	// ListTrialRequests Every trial request, newest first, for operators
 	// (GET /api/operator/trial-requests)
 	ListTrialRequests(w http.ResponseWriter, r *http.Request)
@@ -3682,6 +3778,20 @@ func (siw *ServerInterfaceWrapper) ChangeTrial(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetFleet operation middleware
+func (siw *ServerInterfaceWrapper) GetFleet(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFleet(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTrialRequests operation middleware
 func (siw *ServerInterfaceWrapper) ListTrialRequests(w http.ResponseWriter, r *http.Request) {
 
@@ -3971,6 +4081,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/trial-requests/{trialRequestID}/approve", wrapper.ApproveTrialRequest)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/trial-requests/{trialRequestID}/decline", wrapper.DeclineTrialRequest)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/usage", wrapper.ListCustomerUsage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/fleet", wrapper.GetFleet)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/api/operator/customers", wrapper.ListCustomers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/customers", wrapper.ProvisionCustomer)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/api/operator/customers/{customerID}/environments", wrapper.AddEnvironment)
@@ -9460,6 +9571,69 @@ func (response ChangeTrial503JSONResponse) VisitChangeTrialResponse(w http.Respo
 	return err
 }
 
+type GetFleetRequestObject struct {
+}
+
+type GetFleetResponseObject interface {
+	VisitGetFleetResponse(w http.ResponseWriter) error
+}
+
+type GetFleet200JSONResponse Fleet
+
+func (response GetFleet200JSONResponse) VisitGetFleetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFleet401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetFleet401JSONResponse) VisitGetFleetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFleet403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetFleet403JSONResponse) VisitGetFleetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetFleet503JSONResponse struct{ NotConfiguredJSONResponse }
+
+func (response GetFleet503JSONResponse) VisitGetFleetResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTrialRequestsRequestObject struct {
 }
 
@@ -10140,6 +10314,9 @@ type StrictServerInterface interface {
 	// ChangeTrial Extend a customer's trial, or convert the customer, for operators
 	// (PATCH /api/operator/customers/{customerID}/trial)
 	ChangeTrial(ctx context.Context, request ChangeTrialRequestObject) (ChangeTrialResponseObject, error)
+	// GetFleet Every customer cluster's health, for operators
+	// (GET /api/operator/fleet)
+	GetFleet(ctx context.Context, request GetFleetRequestObject) (GetFleetResponseObject, error)
 	// ListTrialRequests Every trial request, newest first, for operators
 	// (GET /api/operator/trial-requests)
 	ListTrialRequests(ctx context.Context, request ListTrialRequestsRequestObject) (ListTrialRequestsResponseObject, error)
@@ -11868,6 +12045,30 @@ func (sh *strictHandler) ChangeTrial(w http.ResponseWriter, r *http.Request, cus
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ChangeTrialResponseObject); ok {
 		if err := validResponse.VisitChangeTrialResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetFleet operation middleware
+func (sh *strictHandler) GetFleet(w http.ResponseWriter, r *http.Request) {
+	var request GetFleetRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetFleet(ctx, request.(GetFleetRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetFleet")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetFleetResponseObject); ok {
+		if err := validResponse.VisitGetFleetResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -3,6 +3,9 @@ import type { components, paths } from "@/api/schema";
 import { environmentFromPath, environmentHeader } from "@/lib/environments";
 
 export type Customer = components["schemas"]["Customer"];
+export type Fleet = components["schemas"]["Fleet"];
+export type FleetCluster = components["schemas"]["FleetCluster"];
+export type OperatorAlert = components["schemas"]["OperatorAlert"];
 export type Me = components["schemas"]["Me"];
 export type Problem = components["schemas"]["Problem"];
 export type Connection = components["schemas"]["Connection"];

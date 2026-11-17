@@ -271,6 +271,21 @@ func TestClusterHealthAgainstVictoriaMetrics(t *testing.T) {
 		if !ok {
 			t.Fatalf("%q is no query=value pair", pair)
 		}
+		// A fleet query, as the operators' fleet view sees the cluster.
+		if _, fleet := fleetDefinitions[FleetQuery(name)]; fleet {
+			values, err := c.Fleet(t.Context(), FleetQuery(name), time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := "none"
+			if value, ok := values[tenant]; ok {
+				got = strconv.FormatFloat(value, 'f', -1, 64)
+			}
+			if got != want {
+				t.Errorf("%s of %s = %s, want %s", name, tenant, got, want)
+			}
+			continue
+		}
 		q, err := ParseQuery(name)
 		if err != nil {
 			t.Fatal(err)

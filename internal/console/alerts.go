@@ -29,10 +29,23 @@ import (
 )
 
 // Alerts reads the active alerts about customers' own applications
-// (docs/alerts.md).
+// (docs/alerts.md), and for the operators' fleet view, every alert.
 type Alerts interface {
 	// Active returns a customer's active alerts, newest first.
 	Active(ctx context.Context, customerID string) ([]api.Alert, error)
+	// Fleet returns the active alerts for operators and for customers, of
+	// every customer and the platform, for operators only.
+	Fleet(ctx context.Context) ([]FleetAlert, error)
+}
+
+// FleetAlert is an active alert as the fleet view counts it.
+type FleetAlert struct {
+	Name, Severity, Summary, Runbook string
+	// Audience is operator or customer; Tenant is the customer it is
+	// about, if one; Scope is platform for the operators' alerts about the
+	// platform itself, and cluster for those about a cluster's health.
+	Audience, Tenant, Scope string
+	StartsAt                time.Time
 }
 
 // AlertmanagerAlerts reads the alerts from Alertmanager's API.
@@ -55,26 +68,9 @@ type gettableAlert struct {
 // are not silenced or inhibited: those for customers, of the customer's
 // tenant.
 func (a AlertmanagerAlerts) Active(ctx context.Context, customerID string) ([]api.Alert, error) {
-	query := url.Values{
-		"active": {"true"}, "silenced": {"false"}, "inhibited": {"false"},
-		"filter": {`audience="customer"`, fmt.Sprintf("tenant=%q", customerID)},
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(a.URL, "/")+"/api/v2/alerts?"+query.Encode(), http.NoBody)
+	alerts, err := a.get(ctx, "of customer "+customerID, `audience="customer"`, fmt.Sprintf("tenant=%q", customerID))
 	if err != nil {
 		return nil, err
-	}
-	response, err := cmp.Or(a.HTTP, http.DefaultClient).Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("ask Alertmanager for the alerts of customer %s: %w", customerID, err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
-		return nil, fmt.Errorf("ask Alertmanager for the alerts of customer %s: %s: %s", customerID, response.Status, body)
-	}
-	var alerts []gettableAlert
-	if err := json.NewDecoder(response.Body).Decode(&alerts); err != nil {
-		return nil, fmt.Errorf("read the alerts of customer %s: %w", customerID, err)
 	}
 	out := make([]api.Alert, 0, len(alerts))
 	for _, alert := range alerts {
@@ -87,6 +83,50 @@ func (a AlertmanagerAlerts) Active(ctx context.Context, customerID string) ([]ap
 	}
 	sortAlerts(out)
 	return out, nil
+}
+
+// Fleet implements Alerts: the active alerts for operators and customers,
+// not silenced or inhibited. The timeline's alerts mark changes rather than
+// problems, and the Watchdog always fires, so neither counts.
+func (a AlertmanagerAlerts) Fleet(ctx context.Context) ([]FleetAlert, error) {
+	alerts, err := a.get(ctx, "of the fleet", `audience=~"operator|customer"`, `alertname!="Watchdog"`)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]FleetAlert, 0, len(alerts))
+	for _, alert := range alerts {
+		out = append(out, FleetAlert{
+			Name: alert.Labels["alertname"], Severity: alert.Labels["severity"],
+			Summary: alert.Annotations["summary"], Runbook: alert.Annotations["runbook"],
+			Audience: alert.Labels["audience"], Tenant: alert.Labels["tenant"], Scope: alert.Labels["scope"],
+			StartsAt: alert.StartsAt.UTC(),
+		})
+	}
+	return out, nil
+}
+
+// get returns Alertmanager's active alerts that match the filters and are
+// neither silenced nor inhibited; which names them in errors.
+func (a AlertmanagerAlerts) get(ctx context.Context, which string, filters ...string) ([]gettableAlert, error) {
+	query := url.Values{"active": {"true"}, "silenced": {"false"}, "inhibited": {"false"}, "filter": filters}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSuffix(a.URL, "/")+"/api/v2/alerts?"+query.Encode(), http.NoBody)
+	if err != nil {
+		return nil, err
+	}
+	response, err := cmp.Or(a.HTTP, http.DefaultClient).Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("ask Alertmanager for the alerts %s: %w", which, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
+		return nil, fmt.Errorf("ask Alertmanager for the alerts %s: %s: %s", which, response.Status, body)
+	}
+	var alerts []gettableAlert
+	if err := json.NewDecoder(response.Body).Decode(&alerts); err != nil {
+		return nil, fmt.Errorf("read the alerts %s: %w", which, err)
+	}
+	return alerts, nil
 }
 
 func toAPIAlert(a gettableAlert) api.Alert {

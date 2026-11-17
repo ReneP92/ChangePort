@@ -26,9 +26,9 @@ It leads to the getting started guide of the environment shown, to support
 by email when the console has an address for it (`CHANGEPORT_SUPPORT_EMAIL`,
 see the runbook), and to the keyboard shortcuts. As in Linear, G then a
 page's key goes to it: O the overview, S sources, A alerts, E environments
-and T the team, or for operators C customers and R trial requests. Cmd-/
-(ctrl-/) lists them. Keys typed into a field, or while a dialog or menu is
-open, are left alone.
+and T the team, or for operators F the fleet, C customers and R trial
+requests. Cmd-/ (ctrl-/) lists them. Keys typed into a field, or while a
+dialog or menu is open, are left alone.
 
 The help menu also switches **dark mode** on and off; the console is light
 unless it is on. The browser keeps the choice, for every tab, and applies it
@@ -371,6 +371,25 @@ Deleting a source takes its name typed, and shows the SQL that removes
 Changeport's role and publication once it is gone. Its topics stay.
 
 ## Operators
+
+Operators land on the **Fleet**: every customer's cluster on one page, the
+worst first, with how many are down, degraded and healthy at the top. Each
+cluster shows its state and why, in plain words: its brokers by the active
+controller's count, its partitions out of sync, its fullest volume, the
+Kafka version it runs, with a note when the platform runs another, and the
+operators' alerts firing for it with their runbook links, and how many of
+the customer's own alerts fire. The operators' alerts about the platform
+itself show above the clusters. The page asks again every 30 seconds.
+
+The console reads the fleet at once: the metrics with fleet-wide queries by
+tenant (`metrics.FleetQuery`), which are kept apart from the queries scoped
+to one customer so that no customer's request can reach them, every active
+alert from Alertmanager, and each cluster's Kafka version from its Kafka
+resource, which the template lets the console read. It keeps the view for
+15 seconds; a source that does not answer leaves its part out. The
+runbook says what each state means
+([runbook.md](runbook.md#where-to-look)). A customer's page shows the same
+health for its cluster.
 
 **Customers** lists every customer with a dot per part of its cluster, its
 profile, its trial and what it processed over the last 30 days. Provisioning

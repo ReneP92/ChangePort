@@ -10,11 +10,12 @@ import { formatDay, trialLeft } from "@/lib/trials";
 import { DeprovisionDialog } from "@/pages/operator/DeprovisionDialog";
 import { EnvironmentsCard } from "@/pages/operator/EnvironmentsCard";
 import { OperatorsOnly } from "@/pages/operator/OperatorCustomers";
+import { ClusterHealthCard } from "@/pages/operator/OperatorFleet";
 import { ConvertTrialDialog, ExtendTrialDialog } from "@/pages/operator/TrialChangeDialogs";
 
 /**
- * One customer, for operators: its cluster's progress, its trial if it is
- * on one, and deprovisioning.
+ * One customer, for operators: its cluster's progress and health, its trial
+ * if it is on one, and deprovisioning.
  */
 export function OperatorCustomer() {
   return (
@@ -55,6 +56,7 @@ function CustomerPage() {
       description={customerLine(c)}
     >
       <CustomerSummary customer={c} named={false} />
+      {!c.deleting && <ClusterHealthCard customerID={c.id} />}
       {c.trial && !c.deleting && (
         <Card>
           <CardHeader>

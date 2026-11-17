@@ -76,7 +76,7 @@ func TestLevelsUnknown(t *testing.T) {
 		t.Errorf("unknown levels = %+v, want none", got)
 	}
 	known := levels{known: true}
-	if got := known.group("billing"); got == nil || got.Level != api.Healthy || len(got.Diagnoses) != 0 {
+	if got := known.group("billing"); got == nil || got.Level != api.HealthLevelHealthy || len(got.Diagnoses) != 0 {
 		t.Errorf("a group without findings = %+v, want healthy", got)
 	}
 }
@@ -117,8 +117,8 @@ func TestListsCarryHealth(t *testing.T) {
 // healthy.
 func TestAPILevel(t *testing.T) {
 	for level, want := range map[diagnosis.Level]api.HealthLevel{
-		diagnosis.Healthy: api.Healthy, diagnosis.NeedsAttention: api.NeedsAttention,
-		diagnosis.AtRisk: api.AtRisk, 10: api.AtRisk,
+		diagnosis.Healthy: api.HealthLevelHealthy, diagnosis.NeedsAttention: api.HealthLevelNeedsAttention,
+		diagnosis.AtRisk: api.HealthLevelAtRisk, 10: api.HealthLevelAtRisk,
 	} {
 		if got := apiLevel(level); got != want {
 			t.Errorf("apiLevel(%d) = %s, want %s", level, got, want)

@@ -25,6 +25,8 @@ import (
 type fakeAlerts struct {
 	mu     sync.Mutex
 	alerts map[string][]api.Alert
+	// fleet are the alerts the fleet view sees.
+	fleet []FleetAlert
 }
 
 func newFakeAlerts() *fakeAlerts {
@@ -41,6 +43,12 @@ func (f *fakeAlerts) Active(_ context.Context, customerID string) ([]api.Alert, 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]api.Alert{}, f.alerts[customerID]...), nil
+}
+
+func (f *fakeAlerts) Fleet(context.Context) ([]FleetAlert, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]FleetAlert{}, f.fleet...), nil
 }
 
 func (f *fakeAlerts) set(customerID string, alerts ...api.Alert) {

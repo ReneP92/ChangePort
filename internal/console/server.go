@@ -155,6 +155,8 @@ type Server struct {
 	// health the levels WatchHealth last recorded.
 	diagnoses diagnosisCache
 	health    *healthMonitor
+	// fleet keeps the operators' last fleet view for a moment.
+	fleet fleetCache
 }
 
 // Options holds what New needs besides the configuration.

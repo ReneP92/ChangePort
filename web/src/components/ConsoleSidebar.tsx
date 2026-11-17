@@ -1,5 +1,6 @@
 import { useClerk, useOrganization, useUser } from "@clerk/react";
 import {
+  Activity,
   Bell,
   BookOpen,
   Building2,
@@ -427,6 +428,12 @@ function OperatorMenu() {
       <SidebarGroupLabel>Operator console</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
+          <Item
+            to="/operator/fleet"
+            icon={Activity}
+            label="Fleet"
+            active={pathname === "/operator/fleet"}
+          />
           <Item
             to="/operator"
             icon={Building2}

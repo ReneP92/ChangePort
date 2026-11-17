@@ -105,6 +105,11 @@ func TestRules(t *testing.T) {
 		if rule.Labels["audience"] == "operator" && rule.Labels["scope"] != "platform" && !strings.Contains(summary, "$labels.tenant") {
 			t.Errorf("%s's summary does not name the tenant: %q", rule.Alert, summary)
 		}
+		// The alerts about a cluster's health, and only those, say so: the
+		// fleet view counts them in its state (internal/console/fleet.go).
+		if (rule.Group == "kafka") != (rule.Labels["scope"] == "cluster") {
+			t.Errorf("%s is in group %s with scope %q; the kafka group's alerts, and only those, have scope cluster", rule.Alert, rule.Group, rule.Labels["scope"])
+		}
 		// Customers' alerts about their applications leave out the
 		// platform's own consumer groups, topics and clients, as the console
 		// does.

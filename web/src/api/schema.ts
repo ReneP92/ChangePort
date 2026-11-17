@@ -904,6 +904,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/operator/fleet": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every customer cluster's health, for operators
+         * @description The fleet view (docs/console.md): each customer's cluster with its state and why, its brokers and partitions from the metrics store, its fullest volume, the Kafka version it runs and the alerts firing for it, the worst first; and the operators' alerts about the platform itself, with those about customers that no longer exist. The console keeps it for 15 seconds, and looks for at most 20: what a source has not answered by then is left out.
+         */
+        get: operations["getFleet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operator/customers": {
         parameters: {
             query?: never;
@@ -1010,6 +1030,56 @@ export interface components {
              * @description Where the customer docs are, such as https://changeport.io/docs; the console links each diagnosis, alert and warning to its page there, and without it to none
              */
             docsUrl?: string;
+        };
+        Fleet: {
+            /** @description The Kafka version the platform runs clusters at; a cluster that runs another is behind an upgrade, or ahead of it */
+            kafkaVersion: string;
+            /** @description Every customer's cluster, the worst first */
+            clusters: components["schemas"]["FleetCluster"][];
+            /** @description The operators' alerts about the platform itself, rather than a customer */
+            platformAlerts: components["schemas"]["OperatorAlert"][];
+            /** Format: date-time */
+            checkedAt: string;
+        };
+        FleetCluster: {
+            customer: components["schemas"]["Customer"];
+            /**
+             * @description Down: clients cannot use it, or a part of it, or a page about its health fires. Degraded: it works, with less to spare than it should, as while a change rolls through it. Unknown: no broker reports metrics, so it is down or not scraped. Starting and deleting follow its provisioning, unless its alerts say worse.
+             * @enum {string}
+             */
+            state: "down" | "degraded" | "unknown" | "starting" | "deleting" | "healthy";
+            /** @description Why it is in its state, in plain words, the worst first */
+            reasons: string[];
+            /** @description The brokers its profile runs */
+            brokers: number;
+            /** @description The brokers the active controller counts as active */
+            activeBrokers?: number;
+            fencedBrokers?: number;
+            activeControllers?: number;
+            offlinePartitions?: number;
+            underMinIsrPartitions?: number;
+            underReplicatedPartitions?: number;
+            /**
+             * Format: double
+             * @description The share of its volume the fullest broker uses, from 0 to 1, where the platform reports volumes
+             */
+            volumeUsed?: number;
+            /** @description The Kafka version it runs, as Strimzi reports it */
+            kafkaVersion?: string;
+            /** @description The operators' alerts firing for it */
+            alerts: components["schemas"]["OperatorAlert"][];
+            /** @description How many of the customer's own alerts, about its applications, fire */
+            customerAlerts: number;
+        };
+        OperatorAlert: {
+            name: string;
+            /** @description page or warn */
+            severity: string;
+            summary: string;
+            /** @description Its section of the runbook */
+            runbook?: string;
+            /** Format: date-time */
+            startsAt: string;
         };
         Me: {
             userID: string;
@@ -3728,6 +3798,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerUsageList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["NotConfigured"];
+        };
+    };
+    getFleet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The fleet */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Fleet"];
                 };
             };
             401: components["responses"]["Unauthorized"];

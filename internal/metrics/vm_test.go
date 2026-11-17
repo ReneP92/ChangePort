@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -166,5 +167,85 @@ func TestControllerCountsAgainstVictoriaMetrics(t *testing.T) {
 		if got[""] != want {
 			t.Errorf("%s = %v, want %v, the active controller's", q, got[""], want)
 		}
+	}
+}
+
+// TestFleetAgainstVictoriaMetrics: each fleet query gives every tenant what
+// its per-cluster query gives that tenant alone, here two clusters, one with
+// a broker cut off as above and partitions behind, and the fullest volume
+// of each.
+func TestFleetAgainstVictoriaMetrics(t *testing.T) {
+	at := time.Now().Truncate(time.Minute)
+	gauge := func(name string, value float64, labels ...string) imported {
+		metric := map[string]string{"__name__": name}
+		for i := 0; i+1 < len(labels); i += 2 {
+			metric[labels[i]] = labels[i+1]
+		}
+		return imported{Metric: metric, Values: []float64{value, value}, Timestamps: []int64{at.Add(-time.Minute).UnixMilli(), at.UnixMilli()}}
+	}
+	// node: active controller, active brokers, fenced brokers, under-
+	// replicated, under min ISR, offline.
+	cluster := func(nodes [][6]float64, volumes ...float64) []imported {
+		var series []imported
+		for i, n := range nodes {
+			id := strconv.Itoa(i)
+			series = append(series,
+				gauge("kafka_controller_kafkacontroller_activecontrollercount", n[0], "node_id", id),
+				gauge("kafka_controller_kafkacontroller_activebrokercount", n[1], "node_id", id),
+				gauge("kafka_controller_kafkacontroller_fencedbrokercount", n[2], "node_id", id),
+				gauge("kafka_server_replicamanager_underreplicatedpartitions", n[3], "node_id", id),
+				gauge("kafka_server_replicamanager_underminisrpartitioncount", n[4], "node_id", id),
+				gauge("kafka_controller_kafkacontroller_offlinepartitionscount", n[5], "node_id", id),
+			)
+		}
+		for i, used := range volumes {
+			claim := "data-" + strconv.Itoa(i)
+			series = append(series,
+				gauge("kubelet_volume_stats_used_bytes", used, "persistentvolumeclaim", claim),
+				gauge("kubelet_volume_stats_capacity_bytes", 100, "persistentvolumeclaim", claim))
+		}
+		return series
+	}
+	client, cut := importSeries(t, "fleet-test", cluster([][6]float64{{1, 2, 1, 3, 1, 0}, {0, 3, 2, 2, 0, 0}, {0, 2, 1, 0, 0, 0}}, 40, 85, 60)...)
+	_, healthy := importSeries(t, "fleet-test", cluster([][6]float64{{0, 3, 0, 0, 0, 0}, {1, 3, 0, 0, 0, 0}, {0, 3, 0, 0, 0, 0}})...)
+
+	// fleet waits until q has tenant's series, as imports take a moment to
+	// be searchable.
+	fleet := func(q FleetQuery, tenant string) (float64, bool) {
+		for attempt := 0; attempt < 30; attempt++ {
+			values, err := client.Fleet(t.Context(), q, at)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if value, ok := values[tenant]; ok {
+				return value, true
+			}
+			time.Sleep(time.Second)
+		}
+		return 0, false
+	}
+	twins := map[FleetQuery]Query{
+		FleetUnderReplicated: UnderReplicated, FleetUnderMinISR: UnderMinISR, FleetOfflinePartitions: OfflinePartitions,
+		FleetActiveControllers: ActiveControllers, FleetActiveBrokers: ActiveBrokers, FleetFencedBrokers: FencedBrokers,
+	}
+	for q, twin := range twins {
+		for _, tenant := range []string{cut, healthy} {
+			want := eventually(t, client, tenant, twin, Filter{}, at, "", 1)[""]
+			if value, ok := fleet(q, tenant); !ok || value != want {
+				t.Errorf("%s for %s = %v (%v), want %v, as %s gives", q, tenant, value, ok, want, twin)
+			}
+		}
+	}
+	// The cut-off cluster counts its active controller's view: 2 active, 1
+	// fenced; its fullest volume is 85% full, and the other reports none.
+	if used, _ := fleet(FleetVolumeUsed, cut); used != 0.85 {
+		t.Errorf("the fullest volume of %s is %v full, want 0.85", cut, used)
+	}
+	volumes, err := client.Fleet(t.Context(), FleetVolumeUsed, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := volumes[healthy]; ok {
+		t.Errorf("%s reports no volumes, but has %v", healthy, volumes[healthy])
 	}
 }

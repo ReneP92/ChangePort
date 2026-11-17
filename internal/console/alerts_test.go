@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -61,6 +62,38 @@ func TestAlertmanagerAlertsAreTheCustomersOwn(t *testing.T) {
 	defer broken.Close()
 	if _, err := (AlertmanagerAlerts{URL: broken.URL}).Active(t.Context(), "acme"); err == nil || !strings.Contains(err.Error(), "503") {
 		t.Errorf("Active() from a failing Alertmanager = %v, want its status", err)
+	}
+}
+
+// The fleet view asks for the operators' and the customers' alerts, of every
+// customer and the platform, without the Watchdog.
+func TestAlertmanagerFleetAlerts(t *testing.T) {
+	var query string
+	alertmanager := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.RawQuery
+		_, _ = w.Write([]byte(`[
+		  {"labels":{"alertname":"KafkaBrokersDown","audience":"operator","tenant":"acme","severity":"page"},
+		   "annotations":{"summary":"acme has fewer brokers","runbook":"https://runbook#a-broker-is-down"},"startsAt":"2026-10-31T10:00:00Z"},
+		  {"labels":{"alertname":"ScrapeTargetDown","audience":"operator","scope":"platform","severity":"warn"},
+		   "annotations":{"summary":"VictoriaLogs is down"},"startsAt":"2026-10-31T11:00:00Z"}
+		]`))
+	}))
+	defer alertmanager.Close()
+	alerts, err := AlertmanagerAlerts{URL: alertmanager.URL}.Fleet(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"active=true", "silenced=false", "inhibited=false", "filter=audience%3D~%22operator%7Ccustomer%22", "filter=alertname%21%3D%22Watchdog%22"} {
+		if !strings.Contains(query, want) {
+			t.Errorf("asked Alertmanager for %s, want %s in it", query, want)
+		}
+	}
+	want := []FleetAlert{
+		{Name: "KafkaBrokersDown", Severity: "page", Summary: "acme has fewer brokers", Runbook: "https://runbook#a-broker-is-down", Audience: "operator", Tenant: "acme", StartsAt: time.Date(2026, 10, 31, 10, 0, 0, 0, time.UTC)},
+		{Name: "ScrapeTargetDown", Severity: "warn", Summary: "VictoriaLogs is down", Audience: "operator", Scope: "platform", StartsAt: time.Date(2026, 10, 31, 11, 0, 0, 0, time.UTC)},
+	}
+	if !slices.Equal(alerts, want) {
+		t.Errorf("Fleet() = %+v, want %+v", alerts, want)
 	}
 }
 

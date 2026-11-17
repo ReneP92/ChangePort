@@ -58,11 +58,11 @@ func (l levels) of(subjects map[string]diagnosis.Health, name string) *api.Healt
 func apiLevel(level diagnosis.Level) api.HealthLevel {
 	switch {
 	case level >= diagnosis.AtRisk:
-		return api.AtRisk
+		return api.HealthLevelAtRisk
 	case level >= diagnosis.NeedsAttention:
-		return api.NeedsAttention
+		return api.HealthLevelNeedsAttention
 	default:
-		return api.Healthy
+		return api.HealthLevelHealthy
 	}
 }
 

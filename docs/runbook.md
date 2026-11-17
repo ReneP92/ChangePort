@@ -42,7 +42,36 @@ it and runs in the namespace `customer-c-7f3k2q`, with brokers
 
 ## Where to look
 
-**Alerts** come first. vmalert evaluates the rules of
+**The fleet view** first: the operator console opens on it
+(`/operator/fleet`), with every customer's cluster, the worst first, and
+why (see [console.md](console.md#operators)):
+
+- **Down:** clients cannot use the cluster or a part of it. The metrics
+  show no active controller or broker, partitions offline, or partitions
+  under their minimum in-sync replicas, which refuse `acks=all` writes; or
+  a page about its health fires (`scope: cluster`), as the rules keep pages
+  for what hurts customers now.
+- **Degraded:** it works with less to spare than it should. It is not
+  ready, as while Strimzi rolls a change through its brokers, which clients
+  ride out (`CustomerNotReady` pages after 15 minutes); brokers are not all
+  active, or some are fenced; two controllers are active at once;
+  partitions are under-replicated; the fullest volume is 80% full; or a
+  warning about its health fires.
+- **Unknown:** no broker reports metrics. Its brokers are down, or not
+  scraped ([A scrape target is down](#a-scrape-target-is-down)); its pages
+  tell the two apart once they fire, and make it down.
+- **Starting** and **being removed** follow its provisioning, unless the
+  alerts about its health say worse, as for a cluster stuck being created.
+
+Each cluster shows its brokers by the active controller's count, its
+partitions, its fullest volume (not on kind, whose volumes report none),
+the Kafka version Strimzi says it runs, the operators' alerts for it with
+their runbook links, and how many of the customer's own alerts fire. The
+platform's own alerts (`scope: platform`) show above the clusters. The
+console reads it all at once for the whole fleet, and keeps it for 15
+seconds.
+
+**Alerts** come next. vmalert evaluates the rules of
 `deploy/base/alerting/rules` and Alertmanager sends pages to PagerDuty and
 Slack, and warnings to Slack ([Alerting](#alerting)). Each alert names the
 customer (`tenant`), its cluster and the environment, and links its section:
@@ -558,7 +587,10 @@ vmalert (`deploy/base/alerting`) evaluates the rules of
 writes their state back to it, so that a restart resumes the alerts that
 were pending. Every alert says whom it is for: `audience: operator`, or
 `audience: customer` for the alerts about customers' own applications
-([alerts.md](alerts.md)). Alertmanager routes what fires:
+([alerts.md](alerts.md)). The operators' alerts about a cluster's health
+say `scope: cluster`, which the fleet view counts in the cluster's state,
+and those about the platform itself `scope: platform`; `internal/alerts`
+checks both. Alertmanager routes what fires:
 
 - **Pages** (`audience: operator`, `severity: page`), for what hurts
   customers now, go to PagerDuty and to Slack.
@@ -865,7 +897,8 @@ The metadata version can never go back down, so upgrade in two steps:
 1. **The Kafka version alone.** Change `KafkaVersion` and the Kafka image,
    keep `MetadataVersion`, run `just dev-up e2e`, merge, and merge the image
    pull request. Once the new provisioner runs on EKS, every cluster rolls
-   onto the new version; wait until all are `Ready`. Until the next step,
+   onto the new version; wait until all are `Ready`, and the fleet view
+   shows none running another version than the platform's. Until the next step,
    this can be undone by changing the version back.
 2. **The metadata version**, once the new version has run for a while:
    change `MetadataVersion`, test, merge and deploy the same way. From now

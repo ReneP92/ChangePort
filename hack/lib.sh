@@ -710,25 +710,34 @@ stringData:
 SECRET
 }
 
+# Port-forwards to a Service of the metrics namespace, such as
+# victoria-metrics, in the background, and sets FORWARD_PORT to the local port
+# and FORWARD_PID to the process, which the caller kills.
+# Usage: port_forward <service> <port>
+port_forward() {
+  local service=$1 port=$2 output
+  output=$(mktemp)
+  kubectl -n metrics port-forward "svc/$service" ":$port" >"$output" 2>&1 &
+  FORWARD_PID=$!
+  FORWARD_PORT=""
+  for _ in $(seq 50); do
+    FORWARD_PORT=$(sed -nE 's/^Forwarding from 127\.0\.0\.1:([0-9]+) .*/\1/p' "$output")
+    [[ -n $FORWARD_PORT ]] && break
+    sleep 0.2
+  done
+  if [[ -z $FORWARD_PORT ]]; then
+    kill "$FORWARD_PID" 2>/dev/null || true
+    die "could not port-forward to $service:"$'\n'"$(cat "$output")"
+  fi
+  rm -f "$output"
+}
+
 # Port-forwards to the local VictoriaMetrics in the background, and sets
 # METRICS_PORT to the local port and METRICS_FORWARD to the process, which the
 # caller kills.
 metrics_port_forward() {
-  local output
-  output=$(mktemp)
-  kubectl -n metrics port-forward svc/victoria-metrics :8428 >"$output" 2>&1 &
-  METRICS_FORWARD=$!
-  METRICS_PORT=""
-  for _ in $(seq 50); do
-    METRICS_PORT=$(sed -nE 's/^Forwarding from 127\.0\.0\.1:([0-9]+) .*/\1/p' "$output")
-    [[ -n $METRICS_PORT ]] && break
-    sleep 0.2
-  done
-  if [[ -z $METRICS_PORT ]]; then
-    kill "$METRICS_FORWARD" 2>/dev/null || true
-    die "could not port-forward to VictoriaMetrics:"$'\n'"$(cat "$output")"
-  fi
-  rm -f "$output"
+  port_forward victoria-metrics 8428
+  METRICS_PORT=$FORWARD_PORT METRICS_FORWARD=$FORWARD_PID
 }
 
 # Runs the console's named metrics queries (internal/metrics) against the

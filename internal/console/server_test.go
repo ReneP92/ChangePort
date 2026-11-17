@@ -478,6 +478,11 @@ func TestAuthorizationMatrix(t *testing.T) {
 			"acme admin": {403, "Operators only"}, "globex member": {403, "Operators only"}, "organization without": {403, "Operators only"},
 			"staff": {200, `{"customers":[{`},
 		},
+		"/api/operator/fleet": {
+			"anonymous": {401, "Sign in first"}, "no organization": {403, "Operators only"}, "acme member": {403, "Operators only"},
+			"acme admin": {403, "Operators only"}, "globex member": {403, "Operators only"}, "organization without": {403, "Operators only"},
+			"staff": {200, `"clusters":[{`},
+		},
 		"/api/trial-requests/mine": {
 			"anonymous": {401, "Sign in first"}, "no organization": {200, `{"trialRequests":[]}`}, "acme member": {200, `{"trialRequests":[]}`},
 			"acme admin": {200, `{"trialRequests":[]}`}, "globex member": {200, `{"trialRequests":[]}`}, "organization without": {200, `{"trialRequests":[]}`},
@@ -897,6 +902,13 @@ func (f *fakeClusters) Brokers(_ context.Context, id string) ([]Broker, error) {
 	return []Broker{{Name: id + "-dual-role-0", Ready: true, Zone: "zone-a"}}, nil
 }
 
+func (f *fakeClusters) KafkaVersion(_ context.Context, id string) (string, error) {
+	if f.notReady[id] {
+		return "", nil
+	}
+	return "4.3.1", nil
+}
+
 func (f *fakeClusters) Topics(_ context.Context, id string) ([]TopicSettings, error) {
 	if f.notReady[id] {
 		return nil, fmt.Errorf("no certificate yet: %w", clusters.ErrNotReady)
@@ -978,6 +990,20 @@ func (fakeMetrics) Instant(_ context.Context, tenant string, q metrics.Query, fi
 		labels, value = map[string]string{}, 0
 	}
 	return []metrics.Series{{Labels: labels, Points: []metrics.Point{{Time: at, Value: value}}}}, nil
+}
+
+// Fleet: acme's one broker is healthy; globex has 2 partitions offline and
+// reports a volume 85% full.
+func (fakeMetrics) Fleet(_ context.Context, q metrics.FleetQuery, _ time.Time) (map[string]float64, error) {
+	switch q {
+	case metrics.FleetActiveControllers, metrics.FleetActiveBrokers:
+		return map[string]float64{"acme": 1, "globex": 1}, nil
+	case metrics.FleetOfflinePartitions:
+		return map[string]float64{"acme": 0, "globex": 2}, nil
+	case metrics.FleetVolumeUsed:
+		return map[string]float64{"globex": 0.85}, nil
+	}
+	return map[string]float64{"acme": 0, "globex": 0}, nil
 }
 
 func (fakeMetrics) Range(_ context.Context, tenant string, q metrics.Query, filter metrics.Filter, start, end time.Time, step time.Duration) ([]metrics.Series, error) {

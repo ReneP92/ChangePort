@@ -1524,6 +1524,31 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "503":
           $ref: "#/components/responses/NotConfigured"
+  /api/operator/fleet:
+    get:
+      operationId: getFleet
+      summary: Every customer cluster's health, for operators
+      description: >-
+        The fleet view (docs/console.md): each customer's cluster with its
+        state and why, its brokers and partitions from the metrics store, its
+        fullest volume, the Kafka version it runs and the alerts firing for
+        it, the worst first; and the operators' alerts about the platform
+        itself, with those about customers that no longer exist. The console
+        keeps it for 15 seconds, and looks for at most 20: what a source has
+        not answered by then is left out.
+      responses:
+        "200":
+          description: The fleet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Fleet"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          $ref: "#/components/responses/NotConfigured"
   /api/operator/customers:
     get:
       operationId: listCustomers
@@ -1819,6 +1844,94 @@ components:
           type: string
           format: uri
           description: Where the customer docs are, such as https://changeport.io/docs; the console links each diagnosis, alert and warning to its page there, and without it to none
+    Fleet:
+      type: object
+      required: [clusters, platformAlerts, kafkaVersion, checkedAt]
+      properties:
+        kafkaVersion:
+          type: string
+          description: The Kafka version the platform runs clusters at; a cluster that runs another is behind an upgrade, or ahead of it
+        clusters:
+          type: array
+          description: Every customer's cluster, the worst first
+          items:
+            $ref: "#/components/schemas/FleetCluster"
+        platformAlerts:
+          type: array
+          description: The operators' alerts about the platform itself, rather than a customer
+          items:
+            $ref: "#/components/schemas/OperatorAlert"
+        checkedAt:
+          type: string
+          format: date-time
+    FleetCluster:
+      type: object
+      required: [customer, state, reasons, brokers, alerts, customerAlerts]
+      properties:
+        customer:
+          $ref: "#/components/schemas/Customer"
+        state:
+          type: string
+          enum: [down, degraded, unknown, starting, deleting, healthy]
+          description: >-
+            Down: clients cannot use it, or a part of it, or a page about its
+            health fires. Degraded: it works, with less to spare than it
+            should, as while a change rolls through it. Unknown: no broker
+            reports metrics, so it is down or not scraped. Starting and
+            deleting follow its provisioning, unless its alerts say worse.
+        reasons:
+          type: array
+          description: Why it is in its state, in plain words, the worst first
+          items:
+            type: string
+        brokers:
+          type: integer
+          description: The brokers its profile runs
+        activeBrokers:
+          type: integer
+          description: The brokers the active controller counts as active
+        fencedBrokers:
+          type: integer
+        activeControllers:
+          type: integer
+        offlinePartitions:
+          type: integer
+        underMinIsrPartitions:
+          type: integer
+        underReplicatedPartitions:
+          type: integer
+        volumeUsed:
+          type: number
+          format: double
+          description: The share of its volume the fullest broker uses, from 0 to 1, where the platform reports volumes
+        kafkaVersion:
+          type: string
+          description: The Kafka version it runs, as Strimzi reports it
+        alerts:
+          type: array
+          description: The operators' alerts firing for it
+          items:
+            $ref: "#/components/schemas/OperatorAlert"
+        customerAlerts:
+          type: integer
+          description: How many of the customer's own alerts, about its applications, fire
+    OperatorAlert:
+      type: object
+      required: [name, severity, summary, startsAt]
+      properties:
+        name:
+          type: string
+        severity:
+          type: string
+          description: page or warn
+        summary:
+          type: string
+        runbook:
+          type: string
+          description: Its section of the runbook
+        startsAt:
+          type: string
+          format: date-time
     Me:
       type: object
       required: [userID, access]

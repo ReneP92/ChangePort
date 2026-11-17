@@ -407,7 +407,8 @@ spec:
         operations: [Read, Describe]
 ---
 # Lets the console's service account read the Secrets it needs in this
-# namespace, by name, and the pods, to show the brokers' health.
+# namespace, by name, the pods, to show the brokers' health, and the Kafka
+# cluster, for the version it runs in the operators' fleet view.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -430,6 +431,10 @@ rules:
   - apiGroups: [""]
     resources: [pods]
     verbs: [get, list]
+  - apiGroups: [kafka.strimzi.io]
+    resources: [kafkas]
+    resourceNames: ["acme"]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

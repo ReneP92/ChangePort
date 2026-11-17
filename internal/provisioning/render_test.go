@@ -235,7 +235,8 @@ func TestRenderPlatformUsersCannotTouchMessages(t *testing.T) {
 	}
 }
 
-// The console may read exactly the Secrets it needs, by name, and the pods.
+// The console may read exactly the Secrets it needs, by name, the pods, and
+// its customer's Kafka cluster, by name, for the version it runs.
 func TestRenderConsoleSecretAccess(t *testing.T) {
 	spec := Spec{CustomerID: "acme", Profile: DevProfile, Platform: KindPlatform}
 	objects, err := Render(spec)
@@ -246,8 +247,8 @@ func TestRenderConsoleSecretAccess(t *testing.T) {
 		switch obj.GetKind() {
 		case "Role":
 			rules, _, _ := unstructured.NestedSlice(obj.Object, "rules")
-			if len(rules) != 2 {
-				t.Fatalf("Role %s has %d rules, want 2", obj.GetName(), len(rules))
+			if len(rules) != 3 {
+				t.Fatalf("Role %s has %d rules, want 3", obj.GetName(), len(rules))
 			}
 			rule := func(i int) (resources, names, verbs string) {
 				r, _ := rules[i].(map[string]any)
@@ -261,6 +262,9 @@ func TestRenderConsoleSecretAccess(t *testing.T) {
 			}
 			if res, names, verbs := rule(1); res != "pods" || verbs != "get,list" || names != "" {
 				t.Errorf("Role %s allows %s on %s named %q, want get and list on pods", obj.GetName(), verbs, res, names)
+			}
+			if res, names, verbs := rule(2); res != "kafkas" || verbs != "get" || names != "acme" {
+				t.Errorf("Role %s allows %s on %s named %q, want get on the customer's Kafka cluster", obj.GetName(), verbs, res, names)
 			}
 		case "RoleBinding":
 			subjects, _, _ := unstructured.NestedSlice(obj.Object, "subjects")
