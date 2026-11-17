@@ -89,7 +89,7 @@ site-install:
 site-dev: site-install
     BUN_DIR=site hack/bun.sh run dev
 
-# Build the landing site into site/dist, with the console's screenshots from docs/screenshots
+# Build the landing site into site/dist
 [group('Site (site/, run by the pinned Bun in bin/)')]
 site-build: site-install
     BUN_DIR=site hack/bun.sh run build
@@ -172,11 +172,6 @@ console-test:
 [group('Images')]
 ui-e2e *args:
     hack/ui-e2e.sh {{ args }}
-
-# Capture every screen of the console on kind into docs/screenshots (needs .env)
-[group('Images')]
-ui-screenshots:
-    hack/ui-screenshots.sh
 
 # Rebuild the provisioner and roll it out on kind
 [group('Images')]
@@ -408,4 +403,4 @@ tf-apply account:
 clean:
     @# setup-envtest leaves its binaries read-only.
     @if [ -d bin/envtest ]; then chmod -R u+w bin/envtest; fi
-    rm -rf bin deploy/base/*/upstream web/dist web/node_modules site/dist site/node_modules site/public/screens site/lighthouse site/playwright-report site/test-results
+    rm -rf bin deploy/base/*/upstream web/dist web/node_modules site/dist site/node_modules site/lighthouse site/playwright-report site/test-results

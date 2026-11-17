@@ -66,7 +66,7 @@ More on the data plane:
 - [docs/timeline.md](docs/timeline.md): the change timeline over the console's graphs, and how changes are recorded.
 - [docs/diagnosis.md](docs/diagnosis.md): the common Kafka problems the console diagnoses, and how.
 - [docs/runbook.md](docs/runbook.md): the operators' procedures, from provisioning to upgrades.
-- [docs/site.md](docs/site.md): the landing site and the customer docs on it, its screenshots, its tests and its Lighthouse check.
+- [docs/site.md](docs/site.md): the landing site and the customer docs on it, its tests and its Lighthouse check.
 
 ## Roadmap
 
@@ -350,8 +350,7 @@ machine with them:
   warns about. For memory, 11 GB on an 18 GB Mac keeps the rest for macOS:
   more makes macOS swap, which lags worse than a busy processor. That is
   enough for the demo customer and its sources, and for the console's
-  signed-in tests and screenshots (`just ui-e2e`, `just ui-screenshots`)
-  without the demo, which they need 16 GB next to. The full end-to-end
+  signed-in tests (`just ui-e2e`) without the demo, which they need 16 GB next to. The full end-to-end
   suite (`just e2e`) needs 12 GB, as its customers' brokers come and go next
   to the demo's: give Docker that while it runs, or leave it to CI.
 - **Lean JVMs:** on kind every JVM, the brokers, the entity operators, the
@@ -568,15 +567,6 @@ run removes what a crashed run left behind after an hour:
 
 ```bash
 just ui-e2e
-```
-
-The same setup also runs a tour of every screen on a desktop and a phone,
-which provisions Acme Corp through the operator console, fills its charts
-with a few minutes of traffic, and deprovisions it again. It writes the
-screenshots that [docs/console.md](docs/console.md) shows:
-
-```bash
-just ui-screenshots
 ```
 
 ## Checks

@@ -7,7 +7,7 @@ import { connect, expectNoSidewaysScroll, kafka } from "./helpers";
 // first message, which shows as it arrives, then the consumer group that
 // read it back. Customer A's cluster may have topics from other tests, so
 // these open the page directly; where a newcomer lands is in the unit tests
-// (web/src/lib/onboarding.test.ts) and the screenshot tour.
+// (web/src/lib/onboarding.test.ts).
 
 let fixtures: ReturnType<typeof readFixtures>;
 test.beforeAll(() => {
