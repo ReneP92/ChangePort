@@ -122,17 +122,16 @@ On wide screens the hero fills the screen under the announcement and the
 header, so the next section starts exactly at the fold, whatever the
 screen's height, instead of peeking in cut off.
 
-## Screenshots
+## Console screens
 
-The console screenshots are crops of `docs/screenshots`, which
-`just ui-screenshots` captures from the real console on kind at twice the
-pixels. `site/scripts/screens.ts` crops them into `site/public/screens` on
-every build, at the widths the pages' `srcset` attributes name, so they are
-not committed twice and new screenshots reach the site on the next build.
-Phones get crops of the console's phone layout, through a `<picture>`
-`<source>`, since the desktop's would be too small to read. When a capture
-changes its layout, check the crop regions in `screens.ts` against
-`docs/screenshots`; they are in the console's CSS pixels.
+The console screens the site shows are WebP images in
+`site/public/screens`, committed: four screens, the overview, lag, the
+timeline and the topology map, each at its full size and at the widths the
+pages' `srcset` attributes name. They were cropped from the real console on
+kind at twice the pixels. Phones get crops of the console's phone layout,
+through a `<picture>` `<source>`, since the desktop's would be too small to
+read. When the console changes enough that a screen looks dated, capture it
+again by hand and replace its files at the same sizes.
 
 ## Lighthouse
 

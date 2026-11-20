@@ -1,25 +1,13 @@
 # The console
 
-Every screen of the first console, as `just ui-screenshots` captures it on
-kind: an operator provisions Acme Corp and Globex through the operator
-console, Acme's admin Ada creates topics and adds a Postgres source,
-producers and consumer groups run for a few minutes, and Acme is
-deprovisioned again. Each screen also has a
-phone version, under the same name ending in `-phone.png`, and both are
-captured at twice the pixels, as a retina screen shows them, so that they
-stay sharp here and on the landing site ([site.md](site.md)). To capture them
-again after changing the console, run `just dev-up` with `.env` filled in,
-then:
-
-```bash
-just ui-screenshots
-```
+What the console does for customers and for Changeport's operators, page by
+page: the customer console at the domain's `console.` address, and the
+operator console under `/operator` for Changeport's staff. The console's
+end-to-end tests (`web/e2e`, `just ui-e2e`) exercise every page on kind.
 
 ## Customers
 
-Signing in, through Clerk.
-
-![Sign-in](screenshots/01-sign-in-desktop.png)
+Customers sign in through Clerk.
 
 The console is laid out as Linear is: a sidebar on a grey frame, and the
 page on a panel beside it, headed by a bar with where the page sits, its
@@ -42,15 +30,11 @@ and T the team, or for operators C customers and R trial requests. Cmd-/
 (ctrl-/) lists them. Keys typed into a field, or while a dialog or menu is
 open, are left alone.
 
-![Keyboard shortcuts](screenshots/55-keyboard-shortcuts-desktop.png)
-
 The help menu also switches **dark mode** on and off; the console is light
 unless it is on. The browser keeps the choice, for every tab, and applies it
 before the page draws (a script in `web/index.html`, which the console's
 Content-Security-Policy allows by its hash), so a dark console never flashes
 white. Clerk's sign-in and profile take the same colors (its shadcn theme).
-
-![The overview, dark](screenshots/56-dark-overview-desktop.png)
 
 ### Getting started
 
@@ -65,12 +49,8 @@ brings it back.
    plain words, and the cluster's progress, part by part, while it is being
    created.
 
-   ![The welcome page while the cluster is created](screenshots/02-customer-starting-desktop.png)
-
 2. **A topic**, created in the usual form with its guardrails, or one the
    customer has.
-
-   ![Creating a topic](screenshots/47-welcome-topic-desktop.png)
 
 3. **Connect.** The download saves `client.properties` under the name the
    examples read it by. Then come the variables the examples read, with the
@@ -79,14 +59,10 @@ brings it back.
    [connection guide](../site/content/docs/connecting.md) in Python, Go and JavaScript (Node.js),
    which `hack/connecting-guide-test.sh` runs against kind.
 
-   ![Connecting an app](screenshots/48-welcome-connect-desktop.png)
-
 4. **First message.** The customer runs their example, and the page shows
    their message as it arrives, from the topic's live messages, then the
    consumer group that read it back. Members, who cannot read messages,
    see it arrive by the topic's traffic.
-
-   ![The first message arriving](screenshots/49-welcome-first-message-desktop.png)
 
 The overview of a ready cluster: its active alerts; what needs attention;
 how to connect, with `client.properties` for admins; the brokers' health,
@@ -96,15 +72,12 @@ to consumer groups; the topics with their retention, tiering, size and
 traffic; and how far behind each consumer group is, in plain language, with
 its lag over the last hour.
 
-![The overview](screenshots/03-overview-desktop.png)
-
 **What needs attention** lists the common Kafka problems the console found
 in the cluster's topics, consumer groups and producers over the last 15
 minutes, the most pressing first, each with the numbers that show it and
 what to do: a group that can't keep up with its topic, one nobody consumes,
 one about to lose messages to retention, a partition that takes more than
-its share, producers whose records fail. Here `search-indexer` has no
-consumers running while `orders` keeps receiving. A topic's and a group's
+its share, producers whose records fail. A topic's and a group's
 pages show what is about them, and the data flow map marks them. Each
 finding's **Learn more** opens its page of the customer docs in a new tab,
 as an alert's **What to do** and a topic change's warnings do
@@ -145,10 +118,6 @@ group's lag on each topic it reads. Every graph marks what changed meanwhile, nu
 with the changes listed under it in plain words: topics created or
 reconfigured, rebalances, broker restarts, throttling (see
 [timeline.md](timeline.md)).
-
-![A topic](screenshots/17-topic-desktop.png)
-
-![A consumer group](screenshots/18-consumer-group-desktop.png)
 
 ### Delivery guarantees
 
@@ -213,11 +182,7 @@ consumers reading the topic:
   `auto.offset.reset=latest` skip what reaches them before they do.
 
 Every change is audited (`topic changed`, with the partitions and retention
-before and after), and shows on the topic's timeline with who made it. Here
-Ada is about to double the partitions of `payments` and keep its messages
-for 7 days rather than 30.
-
-![Changing a topic](screenshots/57-edit-topic-desktop.png)
+before and after), and shows on the topic's timeline with who made it.
 
 ### A topic's messages
 
@@ -226,10 +191,7 @@ they arrive, at most 20 a second, with how many more were skipped. Each
 shows its partition, offset, time, key and value; opened, the whole of it
 and its headers. Values show as indented JSON, as text, or as hex when
 binary, up to 8 KiB each. A Postgres source's topics hold Avro, which shows
-as JSON, decoded with the schemas of the source's registry. Here Ada reads
-the orders of the source `shop`.
-
-![A topic's messages](screenshots/19-topic-messages-desktop.png)
+as JSON, decoded with the schemas of the source's registry.
 
 The console reads the messages as a Kafka user of their own,
 `changeport-tail`, which may read topics and nothing else: it neither
@@ -284,37 +246,19 @@ Reading history back from tiered storage is capped per broker
 production profile, 2 MiB/s on the dev profiles) and runs on the remote
 log reader's own threads, for every client, so a replay or any read of old
 messages leaves the brokers to the consumers of recent ones, which read
-from local disk. Here Ada replays what `search-indexer` reads into a new
-group while its consumers keep running.
+from local disk.
 
-![Replaying into a new group](screenshots/58-replay-group-desktop.png)
+Creating a topic applies the guardrails as the admin types. Deleting a
+topic names the consumer groups still reading it and takes the topic's
+name typed.
 
-Creating a topic within the guardrails, which the dialog applies as Ada
-types.
-
-![Creating a topic](screenshots/04-create-topic-desktop.png)
-
-![The guardrails](screenshots/05-create-topic-guardrails-desktop.png)
-
-Deleting a topic names the consumer groups still reading it and takes the
-topic's name typed.
-
-![Deleting a topic](screenshots/06-delete-topic-desktop.png)
-
-What customers see outside their overview: the operator console is closed
-to them, an unknown page, and an organization without a cluster.
-
-![Operators only](screenshots/07-operators-only-desktop.png)
-
-![No such page](screenshots/08-not-found-desktop.png)
-
-![No cluster](screenshots/09-no-cluster-desktop.png)
+Outside their overview, customers find the operator console closed to them,
+a page for an unknown address, and, in an organization without a cluster,
+what to do next.
 
 ### Environments
 
 An organization has a cluster per environment, such as production, staging and dev. The console shows one at a time, under `/e/<environment>/` in its URL, so a link opens the environment it was copied in. The sidebar lists each environment with its pages, so moving to another one is a click on its section, then on the page. Everything on a cluster's pages is the environment's own: its connection and credentials, topics, consumer groups, sources and alerts. The team and trials belong to the whole organization. A page from before environments, such as `/topics/orders`, opens in the default environment.
-
-![Switching environments](screenshots/51-environments-desktop.png)
 
 The Environments page, from the sidebar's Environments link, the settings button beside "Your environments", or the workspace menu, lists them. Each shows its profile, whether its cluster is ready, starting or being removed, which one is the default, and which are protected. Members can see the page; admins change it:
 
@@ -323,12 +267,6 @@ The Environments page, from the sidebar's Environments link, the settings button
 - **Make it the default** sets the environment the console opens first. A browser that used another environment last opens that one instead.
 - **Protect** turns deletion protection on. Turning it off takes the environment's name typed.
 - **Remove** takes the environment's name typed, and deletes its cluster with its data. It is refused while deletion protection is on, and for the organization's last environment: closing an account goes through Changeport.
-
-![The environments page](screenshots/52-environments-page-desktop.png)
-
-![Adding an environment](screenshots/53-add-environment-desktop.png)
-
-![Removing an environment](screenshots/54-remove-environment-desktop.png)
 
 ### Team
 
@@ -343,43 +281,27 @@ and remove members; the organization keeps at least one admin. Members
 see the team and ask an admin to change it. Someone who ends up in several
 organizations anyway sees only that they do, until support sorts it out.
 
-![The team](screenshots/50-team-desktop.png)
-
 ## Trials
 
 Someone new signs up at `/trial`, which shows Clerk's sign-up; sign-in links
 to it.
 
-![Signing up for a trial](screenshots/32-trial-sign-up-desktop.png)
-
 Signed in without an organization, or in one without a cluster, home points
 to the trial.
-
-![No organization](screenshots/33-no-organization-desktop.png)
 
 The request: the company, which names the cluster's organization, the
 requester's role, what they want Kafka for, rough peak throughput and
 retention, and when they would like to start. The form checks what the
 console's API checks before sending.
 
-![Requesting a trial](screenshots/34-trial-request-desktop.png)
-
-![What is missing](screenshots/35-trial-request-problems-desktop.png)
-
 The request waits for an operator, and the page moves on by itself once
 they decide. Approved, it switches the requester to their new organization,
 whose admin they are, and opens its cluster as it gets ready. Declined, it
 shows the operator's reason and when they may ask again, a week later.
 
-![A pending request](screenshots/36-trial-pending-desktop.png)
-
-![A declined request](screenshots/41-trial-declined-desktop.png)
-
 An approved customer is on a 14-day trial, which every page of its console
 counts down at its top; in the last three days it warns that the
 cluster then goes.
-
-![A customer on a trial](screenshots/42-customer-trial-desktop.png)
 
 ## Usage
 
@@ -409,103 +331,54 @@ brokers' counters.
 Billing will add usage by calendar month, kept for longer, with its rates;
 there are no prices yet (docs/PROJECT_PLAN.md).
 
-![Usage](screenshots/59-usage-desktop.png)
-
 ## Alerts
 
-Alerts about Acme's own applications (see [alerts.md](alerts.md)), under
-Alerts in the sidebar, which counts the active ones. Ada wants to know
-within a minute when a consumer group falls behind, and sends alerts to a
-webhook of hers too: on kind, the alert receiver. The secret she enters is
-never shown again, only a hint.
+Alerts about the customer's own applications (see [alerts.md](alerts.md)),
+under Alerts in the sidebar, which counts the active ones. Admins set each
+alert's threshold and where alerts go: Slack, PagerDuty or a webhook. A
+receiver's secret is never shown again once entered, only a hint.
 
-![A webhook for alerts](screenshots/31-alert-webhook-desktop.png)
-
-Once `search-indexer` has been more than a minute behind on `orders`, the
-alert shows at the top of the overview and as a badge on the group, as it
-fires and without a reload, and goes once it clears. The Alerts page lists
-the active alerts, the thresholds, and where alerts go; members see them,
-and only admins change them.
-
-![The alerts](screenshots/30-alerts-desktop.png)
+An alert shows at the top of the overview and as a badge on the topic or
+group it is about, as it fires and without a reload, and goes once it
+clears. The Alerts page lists the active alerts, the thresholds, and where
+alerts go; members see them, and only admins change them.
 
 ## Postgres sources
 
 A customer's Postgres sources, under Sources in the sidebar (see
-[cdc.md](cdc.md)). Ada adds one through the wizard, against the Postgres on
-kind that stands in for a customer's database, and runs its SQL as the
-database's owner would. Members of the organization see everything, and
-change nothing.
+[cdc.md](cdc.md)). Admins add one through the wizard, and run its SQL as
+the database's owner; on kind, a Postgres stands in for a customer's
+database. Members of the organization see everything, and change nothing.
 
-![No sources yet](screenshots/20-sources-empty-desktop.png)
+The wizard takes six steps:
 
-The wizard's six steps. First, where the database is, with the addresses to
-allow in and how to check its certificate; Changeport checks that it can
-reach it.
-
-![Connecting](screenshots/21-source-connect-desktop.png)
-
-Then the role Changeport logs in as, with the password the console chose,
-shown only here.
-
-![The role](screenshots/22-source-role-desktop.png)
-
-The tables, each with its topic. Those without a primary key Changeport can
-use are listed, disabled, with the reason.
-
-![Choosing tables](screenshots/23-source-tables-desktop.png)
-
-After the SQL that grants and publishes the tables, every check, each with
-what it found or what to do. The last step starts the source.
-
-![Verifying](screenshots/24-source-verify-desktop.png)
-
-The source copies each table's existing rows, then streams every change.
-
-![A source starting](screenshots/25-source-starting-desktop.png)
-
-![A source streaming](screenshots/26-source-desktop.png)
+1. **Where the database is,** with the addresses to allow in and how to
+   check its certificate; Changeport checks that it can reach it.
+2. **The role** Changeport logs in as, with the password the console chose,
+   shown only here.
+3. **The tables,** each with its topic. Those without a primary key
+   Changeport can use are listed, disabled, with the reason.
+4. **The SQL** that grants and publishes the tables.
+5. **Every check,** each with what it found or what to do.
+6. **Starting the source,** which copies each table's existing rows, then
+   streams every change.
 
 Adding tables: Changeport's source controller lists the database's tables,
 as the console cannot log in to it, and the new tables' rows are copied once
 their SQL has run.
 
-![Adding tables](screenshots/27-source-add-tables-desktop.png)
-
 Deleting a source takes its name typed, and shows the SQL that removes
 Changeport's role and publication once it is gone. Its topics stay.
 
-![Deleting a source](screenshots/28-source-delete-desktop.png)
-
-![The sources](screenshots/29-sources-desktop.png)
-
 ## Operators
 
-Provisioning a customer: its name, which also names its Clerk organization,
-its profile, deletion protection and an optional invitation for its first
-admin.
-
-![Provisioning a customer](screenshots/10-operator-provision-desktop.png)
-
-The new customer's page follows its cluster as it gets ready.
-
-![A customer starting](screenshots/11-operator-customer-starting-desktop.png)
-
-Every customer, with a dot per part of its cluster.
-
-![Every customer](screenshots/12-operator-customers-desktop.png)
-
-![A customer ready](screenshots/13-operator-customer-ready-desktop.png)
-
-A protected customer cannot be deprovisioned.
-
-![A protected customer](screenshots/14-operator-customer-protected-desktop.png)
-
-Deprovisioning takes the customer ID typed; the Clerk organization is kept.
-
-![Deprovisioning](screenshots/15-operator-deprovision-desktop.png)
-
-![A customer being deleted](screenshots/16-operator-customer-deleting-desktop.png)
+**Customers** lists every customer with a dot per part of its cluster, its
+profile, its trial and what it processed over the last 30 days. Provisioning
+one takes its name, which also names its Clerk organization, its profile,
+deletion protection and an optional invitation for its first admin; the new
+customer's page then follows its cluster as it gets ready. Deprovisioning
+takes the customer ID typed, and keeps the Clerk organization; a protected
+customer cannot be deprovisioned.
 
 Trial requests, the pending ones first, with a count of them in the
 navigation. Approving creates the organization, makes the requester its
@@ -513,23 +386,8 @@ admin and provisions the cluster, on dev unless the operator picks another
 profile and without deletion protection; declining needs a reason, which the
 requester sees.
 
-![Trial requests](screenshots/37-operator-trial-requests-desktop.png)
-
-![Approving a trial](screenshots/38-operator-trial-approve-desktop.png)
-
-![Declining a trial](screenshots/39-operator-trial-decline-desktop.png)
-
-![Decided requests](screenshots/40-operator-trial-decided-desktop.png)
-
 The customers table shows when each trial ends. On a customer's page,
 operators extend its trial, to a new end at most 90 days away, or convert
 the customer, which ends its trial so that its cluster stays. At its end, a
 trial's customer is deprovisioned.
 
-![Customers on trials](screenshots/43-operator-customers-trial-desktop.png)
-
-![A customer's trial](screenshots/44-operator-customer-trial-desktop.png)
-
-![Extending a trial](screenshots/45-operator-trial-extend-desktop.png)
-
-![Converting a customer](screenshots/46-operator-trial-convert-desktop.png)

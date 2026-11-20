@@ -609,7 +609,7 @@ of this design with the Connect image, Apicurio 3.3.3 and Postgres 17:
   suite) run the wizard against the same database as an admin, running the
   SQL it shows, then pause and resume the source, add and remove a table,
   give it a new password, change its retention, show it to a member, and
-  delete it. The screenshot tour adds a source too ([console.md](console.md)).
+  delete it.
 
 ## Steps
 
