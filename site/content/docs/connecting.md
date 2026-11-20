@@ -130,9 +130,10 @@ transaction commits its input's offsets and its output together, or neither
 with the help of the consumers downstream:
 
 - They read with `isolation.level=read_committed`, so that they never see
-  what an aborted transaction wrote. The Java client reads uncommitted
-  messages unless told otherwise; librdkafka-based clients read committed
-  ones by default.
+  what an aborted transaction wrote. The Java client and franz-go read
+  uncommitted messages unless told otherwise, so their examples below say
+  it; librdkafka-based clients read committed ones by default. Postgres
+  sources write in transactions too ([Postgres sources](postgres.md)).
 - What processing does outside Kafka, such as writing to a database or
   sending an email, is not part of the transaction: a transaction aborted
   and tried again does it twice. Make such writes safe to repeat, for
@@ -193,6 +194,8 @@ public class Example {
         consumerConfig.put("auto.offset.reset", "earliest");
         // Commit after processing, not on a timer.
         consumerConfig.put("enable.auto.commit", "false");
+        // Never what an aborted transaction wrote.
+        consumerConfig.put("isolation.level", "read_committed");
         // The availability zone ID your application runs in, such as use1-az1.
         consumerConfig.put("client.rack", System.getenv("KAFKA_CLIENT_RACK"));
         consumerConfig.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
@@ -323,6 +326,8 @@ func main() {
 		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
 		// Commit after processing, not on a timer.
 		kgo.DisableAutoCommit(),
+		// Never what an aborted transaction wrote.
+		kgo.FetchIsolationLevel(kgo.ReadCommitted()),
 		// The availability zone ID your application runs in, such as use1-az1.
 		kgo.Rack(os.Getenv("KAFKA_CLIENT_RACK")),
 	)...)

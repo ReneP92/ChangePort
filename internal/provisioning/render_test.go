@@ -213,6 +213,13 @@ func TestRenderPlatformUsersCannotTouchMessages(t *testing.T) {
 				switch operation {
 				case "Read", "Write", "All", "IdempotentWrite", "Alter", "AlterConfigs":
 					resource, _, _ := unstructured.NestedString(acl, "resource", "type")
+					if operation == "Read" && obj.GetName() == AgentUser && resource == "topic" {
+						// The agent fetches the few offsets at a partition's
+						// end that a caught-up consumer group stops short of,
+						// to tell transaction markers from messages, and reads
+						// the batches' headers only (internal/agent/markers.go).
+						continue
+					}
 					if operation == "AlterConfigs" && obj.GetName() == AgentUser && (resource == "topic" || resource == "cluster") {
 						// The agent turns on tiered storage, a topic setting,
 						// and keeps the client metrics subscription in place,

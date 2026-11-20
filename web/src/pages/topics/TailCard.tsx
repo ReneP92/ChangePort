@@ -24,7 +24,7 @@ export function TailCard({ topic, admin }: { topic: string; admin: boolean }) {
           </CardTitle>
           <CardDescription>
             {admin
-              ? "The topic's last 50 messages, then new ones as they arrive, at most 20 a second. Changeport reads them only to show them here, and keeps none."
+              ? "Up to the topic's last 50 messages, then new ones as they arrive, at most 20 a second. Changeport reads them only to show them here, and keeps none."
               : "Only your organization's admins can read the topic's messages, as they may hold what only admins should see."}
           </CardDescription>
         </div>

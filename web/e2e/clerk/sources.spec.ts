@@ -158,6 +158,16 @@ test("an admin adds a Postgres source, changes it and deletes it", async ({ page
   await expect(record).toContainText(/Avro, schema \d+/);
   await expect(record.locator("pre").nth(1)).toContainText('"after"');
   await messages.getByRole("button", { name: "Stop" }).click();
+  // The source's connector writes the topic in transactions, exactly once,
+  // and shows as the source among its producers.
+  const producers = main
+    .locator('[data-slot="card"]')
+    .filter({ has: page.getByRole("heading", { name: "Producers" }) });
+  const connector = producers
+    .getByRole("list", { name: "Producers" })
+    .getByRole("listitem")
+    .filter({ hasText: `Postgres source ${name}` });
+  await expect(connector).toContainText("Transactional", { timeout: 30_000 });
   await page.goBack();
   await topic.getByRole("link", { name: `Source ${name}` }).click();
   await expect(main.getByRole("heading", { name })).toBeVisible();

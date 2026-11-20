@@ -57,7 +57,7 @@ var _ Messages = KubeMessages{}
 
 // Open implements Messages.
 func (k KubeMessages) Open(ctx context.Context, customerID, topic string, start TailStart) (MessageReader, error) {
-	client, err := k.Kafka.Reader(ctx, customerID)
+	client, err := k.Kafka.Reader(ctx, customerID, kgo.FetchIsolationLevel(kgo.ReadCommitted()))
 	if err != nil {
 		return nil, err
 	}
@@ -72,9 +72,11 @@ func (k KubeMessages) Open(ctx context.Context, customerID, topic string, start 
 
 // startOffsets returns where the tail starts in each partition of topic:
 // where start resumes, else the last messages spread over the partitions,
-// else the end.
+// else the end. The tail reads committed messages only, as read_committed
+// consumers do, so the end is the last stable offset: a transaction open
+// past it shows once it commits, and never if it aborts.
 func startOffsets(ctx context.Context, admin *kadm.Client, topic string, start TailStart) (map[int32]kgo.Offset, error) {
-	ends, err := admin.ListEndOffsets(ctx, topic)
+	ends, err := admin.ListCommittedOffsets(ctx, topic)
 	if err != nil {
 		return nil, fmt.Errorf("list the end offsets of %s: %w", topic, err)
 	}

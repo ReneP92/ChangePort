@@ -97,23 +97,47 @@ func (k *KafkaSnapshots) Signal(ctx context.Context, source *v1alpha1.PostgresSo
 
 // Notifications implements SnapshotChannel.
 func (k *KafkaSnapshots) Notifications(ctx context.Context, source *v1alpha1.PostgresSource, names cdc.Names, from int64) ([]Notification, int64, error) {
-	kafka, err := k.kafka(ctx, source, kgo.ConsumePartitions(map[string]map[int32]kgo.Offset{
+	kafka, err := k.kafka(ctx, source, append(committedOnly(), kgo.ConsumePartitions(map[string]map[int32]kgo.Offset{
 		names.NotificationTopic: {0: kgo.NewOffset().At(from)},
-	}))
+	}))...)
 	if err != nil {
 		return nil, from, err
 	}
 	defer kafka.Close()
-	ends, err := kadm.NewClient(kafka).ListEndOffsets(ctx, names.NotificationTopic)
+	notifications, next, err := readNotifications(ctx, kafka, names.NotificationTopic, from, func(value []byte) (*Notification, error) {
+		return k.decode(ctx, source, value)
+	})
 	if err != nil {
-		return nil, from, fmt.Errorf("read the end of source %s's notifications: %w", source.Name, err)
+		return notifications, next, fmt.Errorf("read source %s's notifications: %w", source.Name, err)
 	}
-	end, ok := ends.Lookup(names.NotificationTopic, 0)
+	return notifications, next, nil
+}
+
+// committedOnly are the options of a client that reads the notification
+// topic from its one partition. The connector writes it in transactions
+// (docs/cdc.md), so the client skips aborted records, and keeps the markers
+// that end each transaction, which readNotifications steps over: else it
+// could not tell when it has read up to the last stable offset.
+func committedOnly() []kgo.Opt {
+	return []kgo.Opt{kgo.FetchIsolationLevel(kgo.ReadCommitted()), kgo.KeepControlRecords()}
+}
+
+// readNotifications decodes the committed notifications of topic's
+// partition 0 from offset from up to its last stable offset, with a client
+// of committedOnly consuming the partition from there. It returns the offset
+// to go on from: past the last notification read, or at the one that failed
+// to decode.
+func readNotifications(ctx context.Context, kafka *kgo.Client, topic string, from int64, decode func([]byte) (*Notification, error)) ([]Notification, int64, error) {
+	ends, err := kadm.NewClient(kafka).ListCommittedOffsets(ctx, topic)
+	if err != nil {
+		return nil, from, fmt.Errorf("read the end: %w", err)
+	}
+	end, ok := ends.Lookup(topic, 0)
 	if !ok {
-		return nil, from, fmt.Errorf("source %s's notification topic %s has no partition 0", source.Name, names.NotificationTopic)
+		return nil, from, fmt.Errorf("topic %s has no partition 0", topic)
 	}
 	if end.Err != nil {
-		return nil, from, fmt.Errorf("read the end of source %s's notifications: %w", source.Name, end.Err)
+		return nil, from, fmt.Errorf("read the end: %w", end.Err)
 	}
 	var notifications []Notification
 	next := from
@@ -123,14 +147,18 @@ func (k *KafkaSnapshots) Notifications(ctx context.Context, source *v1alpha1.Pos
 			return notifications, next, err
 		}
 		if errs := fetches.Errors(); len(errs) > 0 {
-			return notifications, next, fmt.Errorf("read source %s's notifications: %w", source.Name, errs[0].Err)
+			return notifications, next, errs[0].Err
 		}
 		for _, record := range fetches.Records() {
-			next = record.Offset + 1
-			notification, err := k.decode(ctx, source, record.Value)
+			if record.Attrs.IsControl() {
+				next = record.Offset + 1
+				continue
+			}
+			notification, err := decode(record.Value)
 			if err != nil {
 				return notifications, record.Offset, err
 			}
+			next = record.Offset + 1
 			if notification != nil {
 				notifications = append(notifications, *notification)
 			}

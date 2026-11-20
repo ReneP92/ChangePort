@@ -135,6 +135,36 @@ include, so `Ready` keeps meaning that clients can connect.
       API server. The provisioner looks up the server's addresses in the
       `kubernetes` Service's EndpointSlice, and allows only those.
     - On kind it may also reach the namespace `source-postgres`.
+- **Exactly once:** the worker runs with Kafka Connect's exactly-once
+  support for source connectors (KIP-618,
+  `exactly.once.source.support: enabled`), and each connector requires it
+  (`exactly.once.support: required`, `transaction.boundary: poll`).
+  - Each task writes the records of a poll and their offsets, the
+    position in the database's log, in one Kafka transaction, so a task
+    that crashes and restarts goes on from the last poll it committed,
+    and no change is repeated or skipped. The notifications of a
+    snapshot's progress are records of the task too, in the same
+    transactions.
+  - Each task's transactional ID is `changeport.connect-<connector>-<task>`,
+    and the leader's `connect-cluster-changeport.connect`, as Kafka Connect
+    names them after the worker's group. The worker's user may write those
+    transactional IDs and no others, and the leader fences a task's older
+    instances through them.
+  - Consumers must read `read_committed`: the source controller reads the
+    notifications so, up to the last stable offset, stepping over the
+    transactions' markers, and the console's topic tail too.
+  - The console shows the task, on a topic's Producers card, as the
+    Postgres source it belongs to (`cdc.SourceOfTransactionalID`), and
+    names its source in the diagnoses of open and hanging transactions.
+  - Each transaction ends with a marker at the end of the topic, which
+    consumers committing the offset after their last message stop short
+    of. The agent tells those markers from messages, so such consumers
+    show no lag ([metrics-labels.md](metrics-labels.md)).
+  - The customer's user may use any transactional ID but the worker's,
+    which would fence it.
+  - New workers start with it enabled, without KIP-618's `preparing` step:
+    no worker ran without it outside kind. A kind worker gets it once the
+    provisioner re-renders it, which restarts the worker.
 - **The image:** `images/connect`, Strimzi's Kafka image with the Debezium
   Postgres connector and Apicurio's Avro converter, pinned and checksummed.
 - **Replication:** with `pgoutput`.
@@ -185,10 +215,11 @@ include, so `Ready` keeps meaning that clients can connect.
       Failed, and the rows copied of its rows when the snapshot started.
     - Each notification sets a state rather than adding to one, so reading
       notifications again changes nothing.
-  - Rows arrive at least once. While transactions commit during a
-    read-only snapshot, Debezium reads the current chunk again, so a row may
-    arrive twice. Consumers that upsert by key, as a warehouse sink does,
-    see each row once; the status counts the table's rows, not reads.
+  - Snapshot rows arrive at least once, unlike changes. While transactions
+    commit during a read-only snapshot, Debezium reads the current chunk
+    again, so a row may arrive twice. Consumers that upsert by key, as a
+    warehouse sink does, see each row once; the status counts the table's
+    rows, not reads.
   - While a table is being copied, the source is `Snapshotting`. Changes
     stream meanwhile, so `Ready` stays True.
   - **Adding a table:** the connector restarts with it, and only the new
@@ -585,7 +616,11 @@ of this design with the Connect image, Apicurio 3.3.3 and Postgres 17:
   - The slot's health is reported in the source's status.
   - A stopped source lets go of its slot, and catches up once it runs again.
   - Deleting the source drops its slot and its credentials.
-  - Before any change, each table's existing rows arrive exactly once.
+  - Before any change, each table's existing rows arrive at least once.
+  - The test counts committed messages, read `read_committed`: a topic's
+    offsets count the transactions' markers too.
+  - A worker killed while 200 inserts stream (its pod force-deleted)
+    repeats and skips none: each arrives exactly once.
   - An added table, a partitioned one, arrives in full, and no other table
     is copied again.
   - A removed table's changes no longer reach its topic.

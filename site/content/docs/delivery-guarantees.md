@@ -106,7 +106,16 @@ The console watches for this:
 
 ## Postgres sources
 
-A Postgres source delivers each change at least once. While a table is
-copied, a row that changes at the same time may arrive twice. Consumers
+A Postgres source delivers each change exactly once. Its connector writes
+each batch of changes and its position in your database's log in one
+transaction, as an application reading from topic to topic does: after a
+restart it goes on from the last batch it committed, so no change arrives
+twice and none goes missing. Read its topics with
+`isolation.level=read_committed`, or a consumer may see a batch that was
+aborted and written again.
+
+Copying a table's existing rows is at least once. The copy reads a table
+in chunks while changes stream, without locks, and reads a chunk again
+when transactions commit during it, so a row may arrive twice. Consumers
 that upsert by the message's key, the row's primary key, see each row
 once. See [Postgres sources](postgres.md).

@@ -44,6 +44,31 @@ describe("ProducerList", () => {
     expect(screen.getByText(/Producers that are not idempotent never show here/)).toBeDefined();
   });
 
+  test("names a Postgres source's connector by its source", () => {
+    render(
+      <ProducerList
+        now={now}
+        producers={{
+          idempotent: 0,
+          producers: [
+            {
+              producerId: 12,
+              transactionalId: "changeport.connect-app-x1y2z3-0",
+              source: "app",
+              partitions: 1,
+              lastWrite: ago(60),
+              inTransaction: false,
+            },
+          ],
+        }}
+      />,
+    );
+    const rows = within(screen.getByRole("list", { name: "Producers" })).getAllByRole("listitem");
+    expect(rows.map((row) => row.textContent)).toEqual([
+      "Postgres source appTransactional1 partition, latest message timestamped 1 minute ago",
+    ]);
+  });
+
   test("a moment's held-back messages are no warning", () => {
     render(
       <ProducerList

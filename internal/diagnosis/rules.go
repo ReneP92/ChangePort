@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/ReneP92/changeport/internal/cdc"
 )
 
 // Thresholds of the rules (docs/diagnosis.md).
@@ -465,7 +467,9 @@ func hangingTransaction(s Snapshot) []Finding {
 		var where, offsets []string
 		for _, h := range t.Hanging {
 			by := fmt.Sprintf("a producer with ID %d", h.ProducerID)
-			if h.TransactionalID != "" {
+			if source, ok := cdc.SourceOfTransactionalID(h.TransactionalID); ok {
+				by = "the connector of Postgres source " + source
+			} else if h.TransactionalID != "" {
 				by = "transactional producer " + h.TransactionalID
 			}
 			where = append(where, fmt.Sprintf("partition %d has had a transaction of %s open from offset %d for at least %s", h.Partition, by, h.From, duration(h.Open.Seconds())))
@@ -544,18 +548,29 @@ func openTransaction(s Snapshot) []Finding {
 			if total := topicPartitions(s, topic); total > h.partitions {
 				partitions = fmt.Sprintf("%s of the %s of %s", plural(h.partitions, "partition"), plural(total, "partition"), topic)
 			}
+			name := "Transaction " + t.ID
+			source, ok := cdc.SourceOfTransactionalID(t.ID)
+			if ok {
+				name = "A transaction of Postgres source " + source + "'s connector"
+			}
 			f := Finding{
 				Severity: Warning,
 				Subject:  Subject{Topic: topic, TransactionalID: t.ID},
 				Title:    "A transaction holds back the consumers of " + topic,
 				Explanation: fmt.Sprintf(
-					"Transaction %s has been %s for %s. Until it finishes, read_committed consumers cannot read past its start on %s: about %s wait behind it.",
-					t.ID, state, duration(t.Open.Seconds()), partitions, plural(int(h.offsets), "message")),
+					"%s has been %s for %s. Until it finishes, read_committed consumers cannot read past its start on %s: about %s wait behind it.",
+					name, state, duration(t.Open.Seconds()), partitions, plural(int(h.offsets), "message")),
 			}
-			if state == "open" {
+			switch {
+			case ok && state == "open":
+				// Changeport runs the connector, so the customer has
+				// nothing to change.
+				f.Explanation += fmt.Sprintf(" The connector commits each batch of changes at once, so its task most likely stopped in the middle of one: Kafka aborts it once it has been open for %s, and the task, restarted, writes the batch again.", duration(t.Timeout.Seconds()))
+				f.Suggestion = "Nothing to change on your side. If it lasts, the source's page says whether its connector runs; write to Changeport support if it does not recover."
+			case state == "open":
 				f.Explanation += fmt.Sprintf(" Kafka aborts it once it has been open for %s.", duration(t.Timeout.Seconds()))
 				f.Suggestion = "Keep transactions short: commit every few seconds, or every few hundred messages. A producer that stops in the middle of one holds consumers back until `transaction.timeout.ms` passes, so keep that short too: a minute by default in Java and librdkafka-based clients, 40 seconds in franz-go."
-			} else {
+			default:
 				f.Explanation += " Its coordinator writes the markers that finish it to every partition it wrote to, and keeps trying while one cannot take them."
 				f.Suggestion = "Check that every partition it wrote to has a leader and enough replicas in sync (the cluster's health on the overview): markers wait for them."
 			}

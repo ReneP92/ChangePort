@@ -16,7 +16,7 @@ import (
 
 // LagAdmin is the part of the Kafka Admin API the lag collector uses;
 // *kadm.Client implements it. It needs Describe on groups and topics, and
-// never reads a message.
+// never reads a message: only the collector's Markers fetch.
 type LagAdmin interface {
 	ListGroupsByType(ctx context.Context, types []string, filterStates ...string) (kadm.ListedGroups, error)
 	FetchManyOffsets(ctx context.Context, groups ...string) kadm.FetchOffsetsResponses
@@ -100,6 +100,10 @@ type lagValue struct {
 // and topics that disappear stop being reported at the next measurement.
 type LagCollector struct {
 	Admin LagAdmin
+	// Markers, when set, looks at the few offsets a group is behind on a
+	// partition: when they are transaction markers only, the group has read
+	// every message.
+	Markers Markers
 	// MaxSeries caps the group and topic pairs reported; the rest are
 	// dropped and counted.
 	MaxSeries int
@@ -255,9 +259,16 @@ func (c *LagCollector) measure(ctx context.Context, previous map[lagKey]lagValue
 		starts = nil
 	}
 
+	// Where each group has read up to: past the end's markers, when they
+	// are all it has left.
+	read, err := c.read(ctx, committed, ends)
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	// Look up the anchors only for topics with a lagging partition.
 	lagging := map[string]bool{}
-	for key, partitions := range committed {
+	for key, partitions := range read {
 		for partition, offset := range partitions {
 			if end, ok := ends.Lookup(key.topic, partition); ok && end.Err == nil && offset < end.Offset {
 				lagging[key.topic] = true
@@ -288,11 +299,11 @@ func (c *LagCollector) measure(ctx context.Context, previous map[lagKey]lagValue
 			c.dropped.Inc()
 			continue
 		}
-		value, ok, err := lagOf(key.topic, committed[key], ends, anchors, now)
+		value, ok, err := lagOf(key.topic, read[key], ends, anchors, now)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("group %s: %w", key.group, err))
 			if last, found := previous[key]; found {
-				snapshot[key] = carried(last, key.topic, committed[key], ends, now)
+				snapshot[key] = carried(last, key.topic, read[key], ends, now)
 			}
 			continue
 		}
@@ -309,6 +320,47 @@ func (c *LagCollector) measure(ctx context.Context, previous map[lagKey]lagValue
 		}
 	}
 	return snapshot, errors.Join(errs...)
+}
+
+// read returns each group's committed offsets, with those that only
+// transaction markers keep from the partition's end moved to the end. Each
+// partition's markers are looked at once, however many groups stop before
+// them. A failed look leaves the committed offset, and the lag it shows.
+func (c *LagCollector) read(ctx context.Context, committed map[lagKey]map[int32]int64, ends kadm.ListedOffsets) (map[lagKey]map[int32]int64, error) {
+	if c.Markers == nil {
+		return committed, nil
+	}
+	type at struct {
+		topic     string
+		partition int32
+		offset    int64
+	}
+	looked := map[at]bool{}
+	var errs []error
+	read := make(map[lagKey]map[int32]int64, len(committed))
+	for key, partitions := range committed {
+		read[key] = maps.Clone(partitions)
+		for partition, offset := range partitions {
+			end, ok := ends.Lookup(key.topic, partition)
+			if !ok || end.Err != nil || offset >= end.Offset || end.Offset-offset > markerGap {
+				continue
+			}
+			where := at{key.topic, partition, offset}
+			only, seen := looked[where]
+			if !seen {
+				var err error
+				only, err = c.Markers.OnlyMarkers(ctx, key.topic, partition, offset, end.Offset)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("look at the end of %s-%d: %w", key.topic, partition, err))
+				}
+				looked[where] = only
+			}
+			if only {
+				read[key][partition] = end.Offset
+			}
+		}
+	}
+	return read, errors.Join(errs...)
 }
 
 // lagOf combines a group's partitions of one topic: the highest age and the

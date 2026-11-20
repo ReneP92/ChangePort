@@ -63,3 +63,39 @@ func TestStartOffsets(t *testing.T) {
 		t.Errorf("start offsets of a missing topic: %v, want ErrNoSuchTopic", err)
 	}
 }
+
+// The tail starts at the last stable offset, not past a transaction still
+// open: its messages show once it commits.
+func TestStartOffsetsBeforeAnOpenTransaction(t *testing.T) {
+	cluster, err := kfake.NewCluster(kfake.NumBrokers(1), kfake.SeedTopics(1, "orders"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cluster.Close()
+	client, err := kgo.NewClient(kgo.SeedBrokers(cluster.ListenAddrs()...), kgo.TransactionalID("orders"), kgo.DefaultProduceTopic("orders"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	// A committed message at 0, its marker at 1, and an open one at 2.
+	for _, commit := range []bool{true, false} {
+		if err := client.BeginTransaction(); err != nil {
+			t.Fatal(err)
+		}
+		if err := client.ProduceSync(t.Context(), kgo.StringRecord("x")).FirstErr(); err != nil {
+			t.Fatal(err)
+		}
+		if commit {
+			if err := client.EndTransaction(t.Context(), kgo.TryCommit); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	offsets, err := startOffsets(t.Context(), kadm.NewClient(client), "orders", TailStart{Resume: map[int32]int64{0: 99}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if at := offsets[0].EpochOffset().Offset; at != 2 {
+		t.Errorf("a tail resumed past the end starts at %d, want the last stable offset 2", at)
+	}
+}
