@@ -2,11 +2,13 @@
 /bin/
 # What go build ./cmd/<name> leaves in the repository root
 /agent
+/cdcsql
 /console
 /devuser
 /eksimages
 /hostgateway
 /provisioner
+/registry-gateway
 
 # Downloaded and checksum-verified from deploy/upstream-files.txt
 /deploy/base/*/upstream/
