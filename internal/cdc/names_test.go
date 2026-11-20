@@ -191,3 +191,21 @@ func TestTableIncludeList(t *testing.T) {
 		t.Errorf("Connector = %q", names.Connector)
 	}
 }
+
+func TestSourceOfTransactionalID(t *testing.T) {
+	for id, want := range map[string]string{
+		"changeport.connect-app-x1y2z3-0":        "app",
+		"changeport.connect-orders-db-abc123-12": "orders-db",
+		"changeport.connect-app-x1y2z3":          "",
+		"changeport.connect-app-x1y2z3-":         "",
+		"changeport.connect-app-X1Y2Z3-0":        "",
+		"changeport.connect-x1y2z3-0":            "",
+		"connect-cluster-changeport.connect":     "",
+		"orders-x1y2z3-0":                        "",
+	} {
+		got, ok := SourceOfTransactionalID(id)
+		if got != want || ok != (want != "") {
+			t.Errorf("SourceOfTransactionalID(%q) = %q, %v, want %q", id, got, ok, want)
+		}
+	}
+}

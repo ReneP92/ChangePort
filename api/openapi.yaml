@@ -2052,6 +2052,11 @@ components:
           format: int64
         transactionalId:
           type: string
+        source:
+          type: string
+          description: |
+            The Postgres source whose connector it is, writing the changes of the
+            source's tables exactly once, in transactions
         partitions:
           type: integer
           description: The topic's partitions it wrote to

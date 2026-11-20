@@ -94,8 +94,39 @@ check "$kip848" 50
 # The console's lag queries see the groups while they exist.
 check_named_queries "$customer" lag_seconds,lag_messages,lag_capped
 
+# A topic written in transactions, as a Postgres source's is, ends with a
+# transaction's marker: a group that read every message and committed the
+# offset after the last one, as librdkafka-based clients and franz-go do,
+# stops at the marker, and has no lag.
+log "A group that stops at a transaction's marker has no lag, and one a message short does"
+transactional="lag-txn-$run_id" at_marker="lag-at-marker-$run_id" short="lag-short-$run_id"
+kafka kafka-topics.sh --bootstrap-server "$bootstrap" --command-config /config/client.properties \
+  --create --topic "$transactional" --partitions 1 >/dev/null
+# Offsets 0 and 2 hold the messages, 1 and 3 their transactions' markers.
+for value in first second; do
+  "$ROOT/hack/kafka-with.sh" "$customer" "$work/client.properties" Transaction.java "$transactional" "$value" commit
+done
+for group in "$at_marker:3" "$short:2"; do
+  kafka kafka-consumer-groups.sh --bootstrap-server "$bootstrap" --command-config /config/client.properties \
+    --group "${group%:*}" --topic "$transactional" --reset-offsets --to-offset "${group#*:}" --execute >/dev/null
+done
+# Prints the group's lag on the transactional topic, as "<seconds> <messages>".
+transactional_lag() {
+  local selector="tenant=\"$customer\", consumer_group=\"$1\", topic=\"$transactional\""
+  echo "$(metrics_query "changeport_consumergroup_lag_seconds{$selector}") $(metrics_query "changeport_consumergroup_lag_messages{$selector}")"
+}
+for _ in $(seq 36); do
+  [[ $(transactional_lag "$at_marker") == "0 0" && $(transactional_lag "$short" | cut -d' ' -f2) == 2 ]] && break
+  sleep 5
+done
+[[ $(transactional_lag "$at_marker") == "0 0" ]] ||
+  die "group $at_marker, at the last transaction's marker, reports lag as seconds and messages: $(transactional_lag "$at_marker")"
+[[ $(transactional_lag "$short" | cut -d' ' -f2) == 2 ]] ||
+  die "group $short, before the last message, reports $(transactional_lag "$short" | cut -d' ' -f2) offsets of lag, want 2: the message and its marker"
+
 kafka kafka-topics.sh --bootstrap-server "$bootstrap" --command-config /config/client.properties --delete --topic "$topic"
-for group in "$classic" "$kip848"; do
+kafka kafka-topics.sh --bootstrap-server "$bootstrap" --command-config /config/client.properties --delete --topic "$transactional"
+for group in "$classic" "$kip848" "$at_marker" "$short"; do
   kafka kafka-consumer-groups.sh --bootstrap-server "$bootstrap" --command-config /config/client.properties \
     --delete --group "$group" >/dev/null
 done

@@ -14,6 +14,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kadm"
 	"k8s.io/utils/ptr"
 
+	"github.com/ReneP92/changeport/internal/cdc"
 	"github.com/ReneP92/changeport/internal/clusters"
 	"github.com/ReneP92/changeport/internal/console/api"
 	"github.com/ReneP92/changeport/internal/topics"
@@ -302,6 +303,9 @@ func (s *Server) ListTopicProducers(ctx context.Context, request api.ListTopicPr
 			producer = &api.TopicProducer{ProducerId: p.ProducerID, LastWrite: p.LastWrite.UTC()}
 			if p.TransactionalID != "" {
 				producer.TransactionalId = ptr.To(p.TransactionalID)
+			}
+			if source, ok := cdc.SourceOfTransactionalID(p.TransactionalID); ok {
+				producer.Source = ptr.To(source)
 			}
 			byID[p.ProducerID] = producer
 		}

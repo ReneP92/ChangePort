@@ -60,9 +60,16 @@ your cluster. Point your Avro deserializer's `schema.registry.url` at it.
 A source's topics keep its retention, 7 days unless you chose another when
 adding it. You can't delete them while the source keeps them.
 
-Each change arrives at least once: while a table is copied, a row that
-changes meanwhile may arrive twice. Consumers that upsert by key see each
-row once. See [Delivery guarantees](delivery-guarantees.md).
+Each change arrives exactly once. The connector writes each batch of
+changes together with its position in your database's log, in one
+transaction, so a restart neither repeats a change nor skips one. Read the
+source's topics with `isolation.level=read_committed`, as the
+[connection guide](connecting.md#delivery-guarantees) says, so that you
+never see a batch that was aborted and written again.
+
+Copying a table's existing rows is the one exception: a row that changes
+while its table is copied may arrive twice. Consumers that upsert by key
+see each row once. See [Delivery guarantees](delivery-guarantees.md#postgres-sources).
 
 ## Adding and removing tables
 

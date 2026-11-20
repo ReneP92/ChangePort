@@ -97,6 +97,7 @@ func run(ctx context.Context, args []string, stderr io.Writer) error {
 	admin := kadm.NewClient(client)
 	reconciler := &agent.Reconciler{Admin: admin, Logger: logger, Metrics: agent.NewMetrics(registry)}
 	lag := agent.NewLagCollector(admin, registry)
+	lag.Markers = agent.KafkaMarkers{Client: client}
 	telemetry := agent.NewTelemetry(client, o.clientMetricsInterval, logger, registry)
 	health := &health{started: time.Now(), stale: 10 * o.interval}
 	server := &http.Server{Addr: o.listen, Handler: health.routes(registry), ReadHeaderTimeout: 5 * time.Second}

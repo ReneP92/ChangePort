@@ -61,6 +61,7 @@ cleanup() {
   kubectl -n "$namespace" delete postgressource "$source_name" --ignore-not-found --timeout=3m >/dev/null 2>&1 || true
   cdcsql -step cleanup -tables "$all_tables" | pg >/dev/null 2>&1 || true
   pg -c "DROP TABLE IF EXISTS $invoices" >/dev/null 2>&1 || true
+  pg -c "DELETE FROM customers WHERE id >= 910001" >/dev/null 2>&1 || true
   local topic
   for topic in "$source_name.public.customers" "$source_name.public.orders" "$source_name.public.$invoices" "changeport.cdc.heartbeat.$source_name"; do
     kafka kafka-topics.sh --command-config /config/client.properties --delete --if-exists --topic "$topic" >/dev/null 2>&1 || true
@@ -120,17 +121,20 @@ for _ in $(seq 24); do
 done
 [[ $connected == 1 && $running == 1 ]] || die "VictoriaMetrics has no Debezium or Connect metrics of source $source_name: connected '$connected', task running '$running'"
 
-# Prints the topic's messages as key|value, a null value for a tombstone,
-# with the bytes of Avro as they are. It reads the one partition directly,
-# which leaves no consumer group behind.
+# Prints the topic's committed messages as key|value, a null value for a
+# tombstone, with the bytes of Avro as they are. It reads the one partition
+# directly, which leaves no consumer group behind.
 messages() {
   kafka kafka-console-consumer.sh --command-config /config/client.properties --topic "$1" --partition 0 --offset earliest \
-    --timeout-ms 15000 --formatter-property print.key=true --formatter-property key.separator='|' 2>/dev/null |
+    --isolation-level read_committed --timeout-ms 15000 --formatter-property print.key=true --formatter-property key.separator='|' 2>/dev/null |
     LC_ALL=C tr -d '\000' || true
 }
-# Prints how many messages the topic has.
+# Prints how many committed messages the topic has. Its offsets would count
+# the markers of the connector's transactions too, and Avro's bytes may hold
+# newlines, so it takes the count the console consumer reports.
 message_count() {
-  kafka kafka-get-offsets.sh --command-config /config/client.properties --topic "$1" 2>/dev/null | cut -d: -f3
+  kafka kafka-console-consumer.sh --command-config /config/client.properties --topic "$1" --partition 0 --offset earliest \
+    --isolation-level read_committed --timeout-ms 15000 2>&1 >/dev/null | sed -n 's/^Processed a total of \([0-9]*\) messages$/\1/p'
 }
 # A read-only snapshot reads a chunk again while transactions commit during
 # it, so a row may arrive twice: at least once.
@@ -171,6 +175,37 @@ if ! grep -q "PartitionCount: 1" <<<"$partitions" || ! grep -q "retention.ms=360
   die "$customers_topic is not one partition with the source's retention: $partitions"
 fi
 
+# The connector writes each poll's changes and their offsets in one
+# transaction (docs/cdc.md), so a worker killed mid-stream neither repeats
+# a change nor skips one. At least once, it would repeat those since its
+# last offset commit.
+log "A Connect worker killed while changes stream repeats and skips none: each arrives exactly once"
+crash_rows=200 crash_first=910001
+customers_before=$(message_count "$customers_topic")
+for row in $(seq "$crash_first" $((crash_first + crash_rows - 1))); do
+  echo "INSERT INTO customers (id, name, email) VALUES ($row, '$marker-crash-$row', '$marker-$row@example.com'); SELECT pg_sleep(0.05);"
+done | pg >/dev/null &
+inserts=$!
+sleep 4
+kubectl -n "$namespace" delete pod changeport-connect-connect-0 --grace-period=0 --force >/dev/null 2>&1 || {
+  kill "$inserts" 2>/dev/null || true
+  die "could not kill the Connect worker's pod changeport-connect-connect-0"
+}
+wait "$inserts" || die "the inserts into customers failed"
+want=$((customers_before + crash_rows))
+for _ in $(seq 60); do
+  count=$(message_count "$customers_topic")
+  [[ $count -ge $want ]] && break
+  sleep 5
+done
+# A repeat would come with the restarted task's first poll, so it waits a
+# little longer before it counts again.
+sleep 20
+count=$(message_count "$customers_topic")
+[[ $count == "$want" ]] ||
+  die "$customers_topic has $count messages after the worker was killed, want $want: the snapshot's and the changes before, and each of the $crash_rows inserts once"
+pg -c "DELETE FROM customers WHERE id >= $crash_first"
+
 log "A client decodes the messages through the registry gateway, with the customer's credentials"
 registry_host="registry.$customer.kafka.changeport.test"
 for _ in $(seq 60); do
@@ -196,7 +231,7 @@ cat >"$work/decode.py" <<'PYTHON'
 # Reads a topic as a customer's consumer would, decoding its Avro through the
 # registry gateway, then checks what the gateway refuses.
 import json, os, sys, urllib.error, urllib.request, base64, ssl
-from confluent_kafka import Consumer, TopicPartition
+from confluent_kafka import OFFSET_BEGINNING, Consumer, KafkaError, TopicPartition
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroDeserializer
 from confluent_kafka.serialization import MessageField, SerializationContext
@@ -209,14 +244,19 @@ consumer = Consumer({
     "bootstrap.servers": os.environ["KAFKA_BOOTSTRAP"], "security.protocol": "SASL_SSL", "sasl.mechanisms": "SCRAM-SHA-512",
     "sasl.username": user, "sasl.password": password, "ssl.ca.location": "/config/ca.crt",
     "group.id": "cdc-test-unused", "enable.auto.commit": False,
+    # The connector writes in transactions: the consumer reads committed
+    # messages, librdkafka's default, and says when it reaches the last
+    # stable offset, as the offsets count the transactions' markers too.
+    "isolation.level": "read_committed", "enable.partition.eof": True,
 })
-low, high = consumer.get_watermark_offsets(TopicPartition(topic, 0), timeout=30)
-consumer.assign([TopicPartition(topic, 0, low)])
+consumer.assign([TopicPartition(topic, 0, OFFSET_BEGINNING)])
 read = 0
-while read < high - low:
+while True:
     message = consumer.poll(30)
     if message is None:
-        sys.exit(f"read {read} of {high - low} messages")
+        sys.exit(f"read {read} messages, then nothing for 30 seconds")
+    if message.error() and message.error().code() == KafkaError._PARTITION_EOF:
+        break
     if message.error():
         sys.exit(str(message.error()))
     read += 1

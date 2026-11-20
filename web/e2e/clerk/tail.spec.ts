@@ -97,6 +97,16 @@ test("an admin sees a topic's messages as they arrive, decoded", async ({ page }
   await expect(first.locator("pre").nth(2)).toHaveText("checkout");
   await expectNoSidewaysScroll(page);
 
+  // A message whose transaction aborted never shows, as for a read_committed
+  // consumer; the next committed one does, past the abort's offsets.
+  kafka(a.id, properties, "Transaction.java", [topic, "aborted, never shown", "abort"]);
+  produce("source:checkout\torder-3\tthird, after an abort\n");
+  await expect(messages.getByRole("listitem").first()).toContainText("third, after an abort", {
+    timeout: 30_000,
+  });
+  await expect(messages.getByRole("listitem")).toHaveCount(3);
+  await expect(messages).not.toContainText("aborted, never shown");
+
   await card.getByRole("button", { name: "Stop" }).click();
   await expect(card.getByRole("status")).toHaveText("Stopped.");
 

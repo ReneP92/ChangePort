@@ -74,7 +74,9 @@ export function ProducerList({ producers, now }: { producers: TopicProducers; no
             >
               <span className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="font-medium [overflow-wrap:anywhere]">
-                  {producer.transactionalId ?? `Producer ${String(producer.producerId)}`}
+                  {producer.source !== undefined
+                    ? `Postgres source ${producer.source}`
+                    : (producer.transactionalId ?? `Producer ${String(producer.producerId)}`)}
                 </span>
                 <Badge variant="outline">
                   {producer.transactionalId ? "Transactional" : "Idempotent"}

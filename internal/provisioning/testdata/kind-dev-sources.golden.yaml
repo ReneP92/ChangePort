@@ -260,13 +260,31 @@ spec:
           name: "*"
           patternType: literal
         operations: [All]
+      # Save the transactional IDs of the Postgres sources' Kafka Connect
+      # worker (docs/cdc.md): a client using one would fence the worker's
+      # leader or a source's task.
+      - type: deny
+        resource:
+          type: transactionalId
+          name: changeport.connect-
+          patternType: prefix
+        operations: [All]
+      - type: deny
+        resource:
+          type: transactionalId
+          name: connect-cluster-changeport.connect
+          patternType: literal
+        operations: [All]
       - resource:
           type: cluster
         operations: [Describe, DescribeConfigs, IdempotentWrite]
 ---
 # The Kafka agent's user on the internal listener: it reads the cluster,
 # keeps topic settings such as tiered storage in place, and reads consumer
-# groups' committed offsets to measure their lag. It cannot read messages.
+# groups' committed offsets to measure their lag. It may fetch from topics
+# only to tell transaction markers at a partition's end from messages
+# (internal/agent/markers.go), and reads the headers of what it fetches,
+# never a message's contents.
 # It also keeps client telemetry in place, a client metrics subscription and
 # a dynamic broker config, both of which Kafka authorizes as cluster configs.
 apiVersion: kafka.strimzi.io/v1
@@ -288,7 +306,7 @@ spec:
           type: topic
           name: "*"
           patternType: literal
-        operations: [Describe, DescribeConfigs, AlterConfigs]
+        operations: [Describe, DescribeConfigs, AlterConfigs, Read]
       - resource:
           type: group
           name: "*"
@@ -548,6 +566,21 @@ spec:
           name: changeport.connect
           patternType: literal
         operations: [Describe, Read]
+      # Exactly-once delivery (KIP-618): the leader writes connector
+      # configurations in transactions of its own, and each task writes its
+      # records and their offsets in one transaction, as
+      # changeport.connect-<connector>-<task>. The leader fences a task's
+      # older instances through the same transactional IDs.
+      - resource:
+          type: transactionalId
+          name: connect-cluster-changeport.connect
+          patternType: literal
+        operations: [Describe, Write]
+      - resource:
+          type: transactionalId
+          name: changeport.connect-
+          patternType: prefix
+        operations: [Describe, Write]
       # The sources' snapshot signals, progress notifications and heartbeats.
       - resource:
           type: topic
@@ -699,6 +732,9 @@ spec:
     config.storage.replication.factor: 1
     offset.storage.replication.factor: 1
     status.storage.replication.factor: 1
+    # Each task writes its records and its offsets in one transaction, so a
+    # restarted task neither repeats nor skips a change (docs/cdc.md).
+    exactly.once.source.support: enabled
     # Connector configurations name the files of the mounted Secrets rather
     # than holding passwords: ${directory:/mnt/sources:<source>}.
     config.providers: directory
@@ -822,6 +858,11 @@ spec:
   autoRestart:
     enabled: true
   config:
+    # Fails the connector rather than run it at least once, should Debezium
+    # stop supporting exactly-once delivery; a transaction per poll, as
+    # Debezium defines no boundaries of its own.
+    exactly.once.support: required
+    transaction.boundary: poll
     database.hostname: "app.abc123.us-east-1.rds.amazonaws.com"
     database.port: 5432
     database.dbname: "app"

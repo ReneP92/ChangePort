@@ -60,8 +60,9 @@ consumer group's lag with `consumer_group` and `topic` added:
 | `changeport_events_write_failures_total` | Failed writes to the timeline's store, which are retried |
 | `changeport_events_dropped_total` | Changes dropped because too many waited for the store |
 
-The agent measures lag every 30 seconds without reading any message. It
-reads each group's committed offsets and the partitions' end offsets, looks
+The agent measures lag every 30 seconds without reading a message's
+contents. It reads each group's committed offsets and the partitions' end
+offsets, looks
 up the offsets at fixed times in Kafka's time index (15 seconds to 23 hours
 ago), and interpolates the age of the oldest unconsumed message between the
 two times around it. The estimate is exact under steady traffic and off by
@@ -74,6 +75,18 @@ switches to tiered storage, a group that consumed nothing since the last
 measurement still waits on the same message, so its lag carries forward
 older by the time since, and its messages behind are counted again; a group
 that did consume keeps its last value instead of reporting a wrong one.
+
+A transaction ends with a marker that takes an offset but is no message,
+and consumers that commit the offset after their last message, as
+librdkafka-based clients and franz-go do, stop short of a partition's end
+by it. On a topic written in transactions, such as a Postgres source's,
+such a group would seem a message behind, ever older, and page as
+`ConsumerGroupLagHigh` while its table is idle. So when a group is at most
+16 offsets short of a partition's end, the agent fetches those offsets,
+with `read_committed`, and reads the record batches' headers: transaction
+markers, and batches of aborted transactions, which `read_committed`
+consumers never see, are no lag. It keeps nothing of what it fetched, and
+when the fetch fails it reports the offsets as lag, as before.
 
 ## Health
 

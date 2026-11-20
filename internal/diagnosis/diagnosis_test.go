@@ -480,6 +480,29 @@ func TestHangingTransaction(t *testing.T) {
 	}
 }
 
+// A Postgres source's connector runs on Changeport: its transactions are
+// named by their source, and the customer is not told to change it.
+func TestTransactionsOfAConnectorNameItsSource(t *testing.T) {
+	connector := "changeport.connect-shop-x1y2z3-0"
+	s := Snapshot{
+		Topics: []Topic{{Name: "shop.public.orders", Partitions: 1, Source: true, Hanging: []HangingTransaction{
+			{Partition: 0, ProducerID: 7, TransactionalID: connector, From: 3, Open: time.Hour},
+		}}},
+		Transactions: []Transaction{{ID: connector, State: "Ongoing", Open: 2 * time.Minute, Timeout: time.Minute, Partitions: []TransactionPartition{
+			{Topic: "shop.public.orders", Partition: 0, HeldBack: 12},
+		}}},
+	}
+	open := only(t, "open-transaction", s)
+	if len(open) != 1 || !strings.HasPrefix(open[0].Explanation, "A transaction of Postgres source shop's connector has been open for 2 minutes.") ||
+		!strings.HasPrefix(open[0].Suggestion, "Nothing to change on your side.") {
+		t.Errorf("open = %+v, want it named by its source, with nothing for the customer to change", open)
+	}
+	hanging := only(t, "hanging-transaction", s)
+	if len(hanging) != 1 || !strings.Contains(hanging[0].Explanation, "a transaction of the connector of Postgres source shop open from offset 3") {
+		t.Errorf("hanging = %+v, want it named by its source", hanging)
+	}
+}
+
 // Every finding has an ID of its own, which the console keys its list on.
 func TestDiagnoseGivesEachFindingItsOwnID(t *testing.T) {
 	s := Snapshot{

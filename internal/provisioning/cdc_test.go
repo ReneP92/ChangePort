@@ -120,6 +120,8 @@ func TestRenderCDCUsersCannotReadCustomerTopics(t *testing.T) {
 		"Create topic prefix changeport.connect.", "Describe topic prefix changeport.connect.", "DescribeConfigs topic prefix changeport.connect.",
 		"Read topic prefix changeport.connect.", "Write topic prefix changeport.connect.",
 		"Describe group literal changeport.connect", "Read group literal changeport.connect",
+		"Describe transactionalId literal connect-cluster-changeport.connect", "Write transactionalId literal connect-cluster-changeport.connect",
+		"Describe transactionalId prefix changeport.connect-", "Write transactionalId prefix changeport.connect-",
 		"Create topic prefix changeport.cdc.", "Describe topic prefix changeport.cdc.", "DescribeConfigs topic prefix changeport.cdc.",
 		"Read topic prefix changeport.cdc.", "Write topic prefix changeport.cdc.",
 		"Describe group prefix changeport.cdc.", "Read group prefix changeport.cdc.",
@@ -139,12 +141,14 @@ func TestRenderCDCUsersCannotReadCustomerTopics(t *testing.T) {
 	}
 
 	// Of all users but the customer's own, the console's tail, which shows
-	// admins messages (TestRenderTailUserOnlyReads), and the offsets user,
+	// admins messages (TestRenderTailUserOnlyReads), the offsets user,
 	// which Kafka lets commit offsets only as a reader
-	// (TestRenderOffsetsUserOnlyCommits), only these read topics, all of
-	// them the platform's.
+	// (TestRenderOffsetsUserOnlyCommits), and the agent, which looks at the
+	// transaction markers at partitions' ends
+	// (TestRenderPlatformUsersCannotTouchMessages), only these read topics,
+	// all of them the platform's.
 	for _, obj := range objects {
-		if obj.GetKind() != "KafkaUser" || obj.GetName() == AdminUser || obj.GetName() == TailUser || obj.GetName() == OffsetsUser {
+		if obj.GetKind() != "KafkaUser" || obj.GetName() == AdminUser || obj.GetName() == TailUser || obj.GetName() == OffsetsUser || obj.GetName() == AgentUser {
 			continue
 		}
 		for _, acl := range acls(t, obj) {
@@ -467,6 +471,7 @@ func TestRenderConnector(t *testing.T) {
 		"table.include.list": `public\.orders,Sales\.Order\ Lines`, "topic.prefix": "app", "tombstones.on.delete": "true",
 		"topic.creation.default.retention.ms": "3600000", "topic.creation.default.local.retention.ms": "3600000",
 		"message.prefix.exclude.list": "changeport-heartbeat",
+		"exactly.once.support":        "required", "transaction.boundary": "poll",
 	} {
 		if config[key] != want {
 			t.Errorf("%s = %q, want %q", key, config[key], want)
@@ -474,6 +479,11 @@ func TestRenderConnector(t *testing.T) {
 	}
 	if state, _, _ := unstructured.NestedString(connector.Object, "spec", "state"); state != "running" {
 		t.Errorf("state = %q", state)
+	}
+	// The worker writes each task's records and offsets in one transaction.
+	worker, _, _ := unstructured.NestedStringMap(stringify(objectOfKind(t, renderSpec(t, spec), "KafkaConnect").Object), "spec", "config")
+	if worker["exactly.once.source.support"] != "enabled" {
+		t.Errorf("exactly.once.source.support = %q, want enabled", worker["exactly.once.source.support"])
 	}
 
 	// A week's retention keeps the brokers' local day, and a source without
@@ -591,5 +601,30 @@ func TestRenderRegistryGateway(t *testing.T) {
 		if obj.GetName() == RegistryGateway {
 			t.Errorf("a platform without the gateway's image renders %s %s", obj.GetKind(), obj.GetName())
 		}
+	}
+}
+
+// The customer's user may use every transactional ID but the Connect
+// worker's: one of those would fence the worker's leader or a source's task.
+func TestRenderCustomerCannotUseConnectTransactionalIDs(t *testing.T) {
+	list, _, err := unstructured.NestedSlice(kafkaUser(t, renderSpec(t, acme), AdminUser).Object, "spec", "authorization", "acls")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var denied []string
+	for _, a := range list {
+		acl, _ := a.(map[string]any)
+		if acl["type"] != "deny" {
+			continue
+		}
+		resource, _, _ := unstructured.NestedString(acl, "resource", "type")
+		name, _, _ := unstructured.NestedString(acl, "resource", "name")
+		pattern, _, _ := unstructured.NestedString(acl, "resource", "patternType")
+		operations, _, _ := unstructured.NestedStringSlice(acl, "operations")
+		denied = append(denied, strings.Join(append(operations, resource, pattern, name), " "))
+	}
+	want := []string{"All transactionalId prefix changeport.connect-", "All transactionalId literal connect-cluster-changeport.connect"}
+	if !slices.Equal(denied, want) {
+		t.Errorf("the customer's user is denied %v, want %v", denied, want)
 	}
 }

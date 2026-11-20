@@ -36,6 +36,14 @@ func TestTopicProducers(t *testing.T) {
 	if status != 200 || strings.TrimSpace(body) != want {
 		t.Errorf("GET the producers of acme-orders = %d %s\nwant %s", status, body, want)
 	}
+	// A Postgres source's connector writes in transactions of its own, and
+	// shows as the source.
+	f.clusters.producers["acme"] = append(f.clusters.producers["acme"],
+		PartitionProducer{Topic: "app.public.orders", ProducerID: 12, TransactionalID: "changeport.connect-app-x1y2z3-0", LastWrite: now, OpenFrom: -1})
+	_, body = send(t, f.handler, http.MethodGet, "/api/customer/topics/app.public.orders/producers", member, "")
+	if list := decode[api.TopicProducers](t, body); len(list.Producers) != 1 || list.Producers[0].Source == nil || *list.Producers[0].Source != "app" {
+		t.Errorf("GET the producers of a source's topic = %s, want its connector as source app", body)
+	}
 	if status, body := send(t, f.handler, http.MethodGet, "/api/customer/topics/__consumer_offsets/producers", member, ""); status != 404 {
 		t.Errorf("GET the producers of an internal topic = %d %s, want 404", status, body)
 	}

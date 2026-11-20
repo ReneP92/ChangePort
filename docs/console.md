@@ -124,8 +124,8 @@ reconfigured, rebalances, broker restarts, throttling (see
 A topic's **Producers** are those Kafka keeps state for on its partitions:
 the ones that write idempotently or in transactions, over the last day
 (`producer.id.expiration.ms`). Kafka knows them by an ID it gives each, not
-by client ID, so a transactional producer shows by its `transactional.id`
-and the others by that ID; each says whether it has a transaction open on
+by client ID, so a transactional producer shows by its `transactional.id`,
+a Postgres source's connector as its source, and the others by that ID; each says whether it has a transaction open on
 the topic, how many partitions it wrote to, and the timestamp of its latest
 message, which is the producer's own clock: a replay's or a stream
 processor's may be old. Every transactional producer shows, and the 10
@@ -186,12 +186,17 @@ before and after), and shows on the topic's timeline with who made it.
 
 ### A topic's messages
 
-Admins read a topic's messages on its page: its last 50, then new ones as
+Admins read a topic's messages on its page: up to its last 50, then new ones as
 they arrive, at most 20 a second, with how many more were skipped. Each
 shows its partition, offset, time, key and value; opened, the whole of it
 and its headers. Values show as indented JSON, as text, or as hex when
 binary, up to 8 KiB each. A Postgres source's topics hold Avro, which shows
-as JSON, decoded with the schemas of the source's registry.
+as JSON, decoded with the schemas of the source's registry. Like a
+`read_committed` consumer, the tail shows committed messages only: never
+what an aborted transaction wrote, and a transaction's messages once it
+commits. Transactions' markers take offsets of their own, so the offsets
+it shows skip them, and the last 50 offsets of a topic written in
+transactions, such as a Postgres source's, hold fewer than 50 messages.
 
 The console reads the messages as a Kafka user of their own,
 `changeport-tail`, which may read topics and nothing else: it neither

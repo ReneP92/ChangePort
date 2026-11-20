@@ -1164,6 +1164,11 @@ export interface components {
             /** Format: int64 */
             producerId: number;
             transactionalId?: string;
+            /**
+             * @description The Postgres source whose connector it is, writing the changes of the
+             *     source's tables exactly once, in transactions
+             */
+            source?: string;
             /** @description The topic's partitions it wrote to */
             partitions: number;
             /**

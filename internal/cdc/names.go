@@ -128,6 +128,32 @@ func NamesFor(name, id string) (Names, error) {
 	}, nil
 }
 
+// connectTransactions starts the transactional IDs of the Kafka Connect
+// worker's tasks, changeport.connect-<connector>-<task>, as Kafka Connect
+// names them after the worker's group (KIP-618): each task writes its
+// records and their offsets in one transaction.
+const connectTransactions = "changeport.connect-"
+
+// SourceOfTransactionalID returns the name of the source whose connector's
+// task writes in transactions with the given ID, or false if a source's
+// connector does not.
+func SourceOfTransactionalID(id string) (string, bool) {
+	connector, ok := strings.CutPrefix(id, connectTransactions)
+	if !ok {
+		return "", false
+	}
+	dash := strings.LastIndexByte(connector, '-')
+	if dash < 0 || strings.Trim(connector[dash+1:], "0123456789") != "" || dash == len(connector)-1 {
+		return "", false
+	}
+	connector = connector[:dash]
+	dash = strings.LastIndexByte(connector, '-')
+	if dash < 0 || ValidateID(connector[dash+1:]) != nil || ValidateName(connector[:dash]) != nil {
+		return "", false
+	}
+	return connector[:dash], true
+}
+
 // Table is a table in the customer's database.
 type Table struct {
 	Schema string `json:"schema"`

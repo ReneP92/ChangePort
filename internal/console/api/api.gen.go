@@ -1828,8 +1828,12 @@ type TopicProducer struct {
 	LastWrite time.Time `json:"lastWrite"`
 
 	// Partitions The topic's partitions it wrote to
-	Partitions      int     `json:"partitions"`
-	ProducerId      int64   `json:"producerId"`
+	Partitions int   `json:"partitions"`
+	ProducerId int64 `json:"producerId"`
+
+	// Source The Postgres source whose connector it is, writing the changes of the
+	// source's tables exactly once, in transactions
+	Source          *string `json:"source,omitempty"`
 	TransactionalId *string `json:"transactionalId,omitempty"`
 }
 

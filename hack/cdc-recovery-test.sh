@@ -120,7 +120,7 @@ pg -c "UPDATE customers SET name = '$marker' WHERE id = 1"
 seen=""
 for _ in $(seq 20); do
   seen=$(kafka kafka-console-consumer.sh --command-config /config/client.properties --topic "$source_name.public.customers" \
-    --partition 0 --offset earliest --timeout-ms 10000 2>/dev/null | LC_ALL=C tr -d '\000' || true)
+    --partition 0 --offset earliest --isolation-level read_committed --timeout-ms 10000 2>/dev/null | LC_ALL=C tr -d '\000' || true)
   LC_ALL=C grep -qF "$marker" <<<"$seen" && break
   sleep 3
 done
