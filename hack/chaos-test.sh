@@ -103,14 +103,30 @@ never_fired() {
   [[ -z $fired ]] || die "$alert fired for customer $customer"
 }
 
-# Whether the console's cluster health queries say what $1 says, such as
-# active_brokers=2,fenced_brokers=1 (internal/metrics).
+# Whether the console's cluster health queries, and the operators' fleet
+# queries, say what $1 says, such as active_brokers=2,fleet_fenced_brokers=1
+# (internal/metrics).
 console_says() {
   metrics_port_forward
   local ok=0
   CHANGEPORT_METRICS_URL="http://127.0.0.1:$METRICS_PORT" CHANGEPORT_METRICS_TENANT="$customer" CHANGEPORT_HEALTH_EXPECT="$1" \
     go -C "$ROOT" test -count=1 -run TestClusterHealthAgainstVictoriaMetrics ./internal/metrics/ >"$work/health" 2>&1 || ok=$?
   kill "$METRICS_FORWARD" 2>/dev/null || true
+  return "$ok"
+}
+
+# Whether the operators' fleet view judges the customer's cluster as $1 says,
+# such as state=degraded;reason=1 broker fenced, from the metrics store,
+# Alertmanager and the customer as they are now (internal/console).
+fleet_says() {
+  local ok=0
+  kubectl get customer "$customer" -o json >"$work/customer.json"
+  metrics_port_forward
+  port_forward alertmanager 9093
+  CHANGEPORT_METRICS_URL="http://127.0.0.1:$METRICS_PORT" CHANGEPORT_ALERTMANAGER_URL="http://127.0.0.1:$FORWARD_PORT" \
+    CHANGEPORT_FLEET_CUSTOMER="$work/customer.json" CHANGEPORT_FLEET_EXPECT="$1" \
+    go -C "$ROOT" test -count=1 -run TestFleetAgainstThePlatform ./internal/console/ >"$work/fleet" 2>&1 || ok=$?
+  kill "$METRICS_FORWARD" "$FORWARD_PID" 2>/dev/null || true
   return "$ok"
 }
 
@@ -177,14 +193,15 @@ before=$(consumed "partition-$run")
 # ones the cut-off broker reports.
 told=""
 while (($(date +%s) - cut_off < 80)); do
-  if console_says active_brokers=2,fenced_brokers=1; then
+  if console_says active_brokers=2,fenced_brokers=1,fleet_active_brokers=2,fleet_fenced_brokers=1 &&
+    fleet_says "state=degraded;reason=2 of 3 brokers active;reason=1 broker fenced"; then
     told=1
     break
   fi
   sleep 5
 done
-[[ -n $told ]] || die "the console did not count the cut-off broker as fenced: $(cat "$work/health")"
-log "The console counts 2 active brokers and 1 fenced"
+[[ -n $told ]] || die "the console did not count the cut-off broker as fenced: $(cat "$work/health" "$work/fleet" 2>/dev/null)"
+log "The console counts 2 active brokers and 1 fenced, and the fleet view says the cluster is degraded"
 sleep $((cut_off + 90 - $(date +%s) > 0 ? cut_off + 90 - $(date +%s) : 0))
 log "While the broker was cut off, clients consumed $(($(consumed "partition-$run") - before)) messages in $(($(date +%s) - cut_off)) seconds"
 for rule in "${partition_rules[@]}"; do

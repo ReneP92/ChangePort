@@ -133,6 +133,7 @@ function useGoTo(): GoTo[] {
   }
   if (access === "operator") {
     return [
+      { key: "f", label: "the fleet", path: "/operator/fleet" },
       { key: "c", label: "customers", path: "/operator" },
       { key: "r", label: "trial requests", path: "/operator/trials" },
     ];

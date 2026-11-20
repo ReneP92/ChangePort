@@ -105,11 +105,22 @@ test("a customer cannot open the operator console", async ({ page }) => {
   await expect(cluster(page, b)).toHaveCount(0);
 });
 
-test("an operator sees every customer", async ({ page }) => {
+test("an operator lands on the fleet, and sees every customer", async ({ page }) => {
   await signIn(page, fixtures.users.staff);
-  await expect(page.getByRole("heading", { name: "Customers" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Fleet", level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/operator\/fleet$/);
   // By ID: environments.spec.ts may add an environment to A meanwhile, a
   // customer of the same name.
+  for (const customer of [a, b]) {
+    await expect(
+      page.getByRole("main").getByRole("row").filter({ hasText: customer.id }),
+    ).toContainText(customer.displayName);
+  }
+  await page
+    .getByRole("navigation", { name: "Operator console" })
+    .getByRole("link", { name: "Customers" })
+    .click();
+  await expect(page.getByRole("heading", { name: "Customers", level: 1 })).toBeVisible();
   for (const customer of [a, b]) {
     await expect(
       page.getByRole("main").getByRole("row").filter({ hasText: customer.id }),

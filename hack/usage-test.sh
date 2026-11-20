@@ -7,8 +7,9 @@
 # series imported into the metrics store for what is hard to stage: usage on
 # counters whose samples the store missed around midnight, as while it
 # restarts, which must count what each grew by rather than its whole value;
-# and the active brokers while one is cut off from the others, which must be
-# the active controller's count.
+# the active brokers while one is cut off from the others, which must be
+# the active controller's count; and the operators' fleet queries, which
+# must give each cluster what its own queries give it.
 # Usage: hack/usage-test.sh [customer-id] (default demo)
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
@@ -70,6 +71,6 @@ kafka kafka-topics.sh --bootstrap-server "$bootstrap" --command-config /config/c
 log "The console's queries on series imported into the metrics store"
 metrics_port_forward
 CHANGEPORT_VICTORIA_METRICS_URL="http://127.0.0.1:$METRICS_PORT" go -C "$ROOT" test -count=1 \
-  -run 'TestUsageAgainstVictoriaMetrics|TestControllerCountsAgainstVictoriaMetrics' ./internal/metrics/ ||
+  -run 'TestUsageAgainstVictoriaMetrics|TestControllerCountsAgainstVictoriaMetrics|TestFleetAgainstVictoriaMetrics' ./internal/metrics/ ||
   die "the console's queries got the imported series wrong"
 log "Usage test passed for customer $customer: each byte counted once, of $replicas copies"

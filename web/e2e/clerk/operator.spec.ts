@@ -58,6 +58,21 @@ test("an operator provisions a customer, watches it get ready, and deprovisions 
   await expect(page).toHaveURL(/\/operator\/customers\/c-[a-km-z2-9]{6}$/, { timeout: 30_000 });
   const id = new URL(page.url()).pathname.split("/").at(-1) ?? "";
   const main = page.getByRole("main");
+  const customerPage = page.url();
+
+  // The fleet shows it starting.
+  await page
+    .getByRole("navigation", { name: "Operator console" })
+    .getByRole("link", { name: "Fleet" })
+    .click();
+  // The console keeps the fleet view for 15 seconds, so a new customer
+  // shows within them.
+  const fleetRow = main.getByRole("row", { name: displayName });
+  await expect(async () => {
+    await page.reload();
+    await expect(fleetRow).toContainText("Starting", { timeout: 5_000 });
+  }).toPass({ timeout: 60_000, intervals: [5_000] });
+  await page.goto(customerPage);
   await expect(main.getByText(displayName, { exact: true })).toBeVisible();
   await expect(
     main.getByText(`Customer ${id}, the production environment on a dev cluster`),
@@ -78,6 +93,31 @@ test("an operator provisions a customer, watches it get ready, and deprovisions 
   expect(invitations.data.map((i) => [i.emailAddress, i.role, i.status])).toEqual([
     [invited, "org:admin", "pending"],
   ]);
+
+  // Its page shows its health, as the fleet does, once the metrics store
+  // has its brokers.
+  const health = main
+    .locator('[data-slot="card"]')
+    .filter({ has: page.getByRole("heading", { name: "Health" }) });
+  await expect(async () => {
+    await page.reload();
+    await expect(health).toContainText("Healthy", { timeout: 5_000 });
+  }).toPass({ timeout: 3 * 60_000, intervals: [10_000] });
+  await expect(health).toContainText("1 of 1");
+  await expect(health).toContainText("All in sync");
+  await expect(health).not.toContainText("The platform runs");
+
+  // The fleet says so too. A broker taken away here is back within seconds,
+  // sooner than the fleet looks, so hack/chaos-test.sh checks how the fleet
+  // sees a broker cut off from the others.
+  await page
+    .getByRole("navigation", { name: "Operator console" })
+    .getByRole("link", { name: "Fleet" })
+    .click();
+  await expect(fleetRow).toContainText("Healthy");
+  await expect(fleetRow).toContainText("1 of 1");
+  await expectNoSidewaysScroll(page);
+  await page.goto(customerPage);
 
   // The list shows it with every part ready.
   await page

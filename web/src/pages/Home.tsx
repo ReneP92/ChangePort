@@ -15,7 +15,7 @@ export function Home() {
   }
   switch (me.data.access) {
     case "operator":
-      return <Navigate to="/operator" replace />;
+      return <Navigate to="/operator/fleet" replace />;
     case "customer":
       return <ToEnvironment />;
     case "several":

@@ -56,6 +56,10 @@ func (m *usageMetrics) Instant(_ context.Context, _ string, q metrics.Query, fil
 	return nil, nil
 }
 
+func (m *usageMetrics) Fleet(context.Context, metrics.FleetQuery, time.Time) (map[string]float64, error) {
+	return nil, nil
+}
+
 func (m *usageMetrics) Range(_ context.Context, _ string, q metrics.Query, filter metrics.Filter, start, end time.Time, step time.Duration) ([]metrics.Series, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

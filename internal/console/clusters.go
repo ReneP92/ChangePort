@@ -15,6 +15,8 @@ import (
 	"github.com/twmb/franz-go/pkg/kerr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,6 +31,9 @@ import (
 type Clusters interface {
 	// Brokers returns the cluster's broker pods.
 	Brokers(ctx context.Context, customerID string) ([]Broker, error)
+	// KafkaVersion returns the Kafka version the cluster runs, as Strimzi
+	// reports it, or "" before it does.
+	KafkaVersion(ctx context.Context, customerID string) (string, error)
 	// Topics returns the customer's topics and their settings, by name, or
 	// an error satisfying errors.Is(err, clusters.ErrNotReady).
 	Topics(ctx context.Context, customerID string) ([]TopicSettings, error)
@@ -114,6 +119,9 @@ var ErrTopicChanged = errors.New("the topic changed meanwhile")
 type Metrics interface {
 	Instant(ctx context.Context, tenant string, q metrics.Query, filter metrics.Filter, at time.Time) ([]metrics.Series, error)
 	Range(ctx context.Context, tenant string, q metrics.Query, filter metrics.Filter, start, end time.Time, step time.Duration) ([]metrics.Series, error)
+	// Fleet returns a query over every customer's cluster, by tenant, for
+	// the operators' fleet view only.
+	Fleet(ctx context.Context, q metrics.FleetQuery, at time.Time) (map[string]float64, error)
 }
 
 // Broker is one broker pod.
@@ -175,6 +183,22 @@ func (k KubeClusters) Brokers(ctx context.Context, customerID string) ([]Broker,
 	}
 	slices.SortFunc(brokers, func(a, b Broker) int { return strings.Compare(a.Name, b.Name) })
 	return brokers, nil
+}
+
+// KafkaVersion implements Clusters, from the Kafka resource's status.
+func (k KubeClusters) KafkaVersion(ctx context.Context, customerID string) (string, error) {
+	spec := provisioning.Spec{CustomerID: customerID}
+	kafka := &unstructured.Unstructured{}
+	kafka.SetGroupVersionKind(schema.GroupVersionKind{Group: "kafka.strimzi.io", Version: "v1", Kind: "Kafka"})
+	err := k.Client.Get(ctx, client.ObjectKey{Namespace: spec.Namespace(), Name: spec.ClusterName()}, kafka)
+	if apierrors.IsNotFound(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read the Kafka cluster of customer %s: %w", customerID, err)
+	}
+	version, _, err := unstructured.NestedString(kafka.Object, "status", "kafkaVersion")
+	return version, err
 }
 
 // Topics implements Clusters. Internal topics, whose names start with two

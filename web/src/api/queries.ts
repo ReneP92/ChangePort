@@ -98,6 +98,21 @@ export function useCustomerUsage() {
 }
 
 /**
+ * Every customer cluster's health, the worst first, for operators. The
+ * console keeps it for 15 seconds, and the metrics behind it are scraped
+ * every 30.
+ */
+export function useFleet() {
+  const api = useApi();
+  const organization = useOrganizationKey();
+  return useQuery({
+    queryKey: ["operator", "fleet", organization],
+    queryFn: async () => unwrap(await api.GET("/api/operator/fleet")),
+    refetchInterval: 30_000,
+  });
+}
+
+/**
  * Every customer, for operators, refreshed often while one is being created
  * or deleted, so that lists of them keep up with a customer's own page.
  */

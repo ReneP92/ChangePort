@@ -16,6 +16,7 @@ import { Welcome } from "@/pages/welcome/Welcome";
 import { ConsumerGroupPage } from "@/pages/consumer-groups/ConsumerGroupPage";
 import { OperatorCustomer } from "@/pages/operator/OperatorCustomer";
 import { OperatorCustomers } from "@/pages/operator/OperatorCustomers";
+import { OperatorFleet } from "@/pages/operator/OperatorFleet";
 import { OperatorTrialRequests } from "@/pages/operator/OperatorTrialRequests";
 import { NewSource } from "@/pages/sources/NewSource";
 import { SourcePage } from "@/pages/sources/SourcePage";
@@ -120,6 +121,7 @@ function SignedIn() {
                 ))}
                 <Route path="/trial" element={<TrialPage />} />
                 <Route path="/operator" element={<OperatorCustomers />} />
+                <Route path="/operator/fleet" element={<OperatorFleet />} />
                 <Route path="/operator/trials" element={<OperatorTrialRequests />} />
                 <Route path="/operator/customers/:customerID" element={<OperatorCustomer />} />
                 <Route path="*" element={<Notice title="There is no such page" />} />
