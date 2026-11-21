@@ -58,7 +58,9 @@ address the console shows, which takes the same user name and password as
 your cluster. Point your Avro deserializer's `schema.registry.url` at it.
 
 A source's topics keep its retention, 7 days unless you chose another when
-adding it. You can't delete them while the source keeps them.
+adding it. While the source keeps them, they are its own: you and your
+applications read them, but can't write to them, change their settings or
+delete them, in the console or with Kafka's own tools.
 
 Each change arrives exactly once. The connector writes each batch of
 changes together with its position in your database's log, in one

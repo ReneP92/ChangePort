@@ -275,6 +275,49 @@ spec:
           name: connect-cluster-changeport.connect
           patternType: literal
         operations: [All]
+      # The platform's topics and groups: Kafka Connect's, the schema
+      # registry's, and the Postgres sources' signals, notifications and
+      # heartbeats. Customers reach what they need of them through the
+      # console and the registry gateway.
+      - type: deny
+        resource:
+          type: topic
+          name: changeport.
+          patternType: prefix
+        operations: [All]
+      - type: deny
+        resource:
+          type: group
+          name: changeport.
+          patternType: prefix
+        operations: [All]
+      # Kafka's own topics, such as the consumer groups' offsets and tiered
+      # storage's metadata (__remote_log_metadata): monitoring tools of the
+      # customer's may read them, but nothing of theirs may change them.
+      - type: deny
+        resource:
+          type: topic
+          name: __
+          patternType: prefix
+        operations: [Write, Create, Delete, Alter, AlterConfigs]
+      # Source app's topics, under the prefix it reserves: the
+      # customer reads them, and only the source writes, creates, deletes or
+      # reconfigures them while it keeps them.
+      - type: deny
+        resource:
+          type: topic
+          name: "app."
+          patternType: prefix
+        operations: [Write, Create, Delete, Alter, AlterConfigs]
+      # Source billing's topics, under the prefix it reserves: the
+      # customer reads them, and only the source writes, creates, deletes or
+      # reconfigures them while it keeps them.
+      - type: deny
+        resource:
+          type: topic
+          name: "billing."
+          patternType: prefix
+        operations: [Write, Create, Delete, Alter, AlterConfigs]
       - resource:
           type: cluster
         operations: [Describe, DescribeConfigs, IdempotentWrite]
@@ -837,6 +880,31 @@ spec:
     # the Topic Operator from trying to undo it.
     remote.storage.enable: "true"
 ---
+# Source app's heartbeats, a message a minute that lets its slot
+# advance while its tables are idle. Connect would create the topic by
+# itself and leave it behind; declared here, it goes with the source.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: changeport.cdc.heartbeat.app
+  namespace: customer-acme
+  labels:
+    strimzi.io/cluster: "acme"
+    changeport.io/source: app
+    changeport.io/part: cdc
+    app.kubernetes.io/managed-by: changeport-provisioner
+    changeport.io/tenant: "acme"
+spec:
+  topicName: changeport.cdc.heartbeat.app
+  partitions: 1
+  replicas: 1
+  config:
+    cleanup.policy: delete
+    retention.ms: "86400000"
+    # The Kafka agent tiers every topic that can be; saying so here keeps
+    # the Topic Operator from trying to undo it.
+    remote.storage.enable: "true"
+---
 # Source app's Debezium connector: it streams the changes of the
 # source's tables from the customer's database, through its publication and
 # its own replication slot, into a topic per table, as Avro.
@@ -967,6 +1035,31 @@ spec:
   config:
     cleanup.policy: delete
     retention.ms: "604800000"
+    # The Kafka agent tiers every topic that can be; saying so here keeps
+    # the Topic Operator from trying to undo it.
+    remote.storage.enable: "true"
+---
+# Source billing's heartbeats, a message a minute that lets its slot
+# advance while its tables are idle. Connect would create the topic by
+# itself and leave it behind; declared here, it goes with the source.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: changeport.cdc.heartbeat.billing
+  namespace: customer-acme
+  labels:
+    strimzi.io/cluster: "acme"
+    changeport.io/source: billing
+    changeport.io/part: cdc
+    app.kubernetes.io/managed-by: changeport-provisioner
+    changeport.io/tenant: "acme"
+spec:
+  topicName: changeport.cdc.heartbeat.billing
+  partitions: 1
+  replicas: 1
+  config:
+    cleanup.policy: delete
+    retention.ms: "86400000"
     # The Kafka agent tiers every topic that can be; saying so here keeps
     # the Topic Operator from trying to undo it.
     remote.storage.enable: "true"

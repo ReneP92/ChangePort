@@ -53,8 +53,13 @@ cleanup() {
   kubectl -n "$namespace" delete postgressource "$source_name" --ignore-not-found --timeout=3m >/dev/null 2>&1 || true
   cdcsql -step cleanup -tables "$tables" | pg >/dev/null 2>&1 || true
   pg -c "SELECT pg_drop_replication_slot('$slot') FROM pg_replication_slots WHERE slot_name = '$slot' AND NOT active" >/dev/null 2>&1 || true
-  kafka kafka-topics.sh --command-config /config/client.properties --delete --if-exists --topic "$source_name.public.customers" >/dev/null 2>&1 || true
-  kafka kafka-topics.sh --command-config /config/client.properties --delete --if-exists --topic "changeport.cdc.heartbeat.$source_name" >/dev/null 2>&1 || true
+  # The source's topic stays, as the customer's, once it is gone: the
+  # customer's user may delete it as soon as Strimzi lifts the source's deny
+  # rule. Its signals, notifications and heartbeats go with it.
+  for _ in $(seq 20); do
+    kafka kafka-topics.sh --command-config /config/client.properties --delete --if-exists --topic "$source_name.public.customers" >/dev/null 2>&1 && break
+    sleep 3
+  done
   rm -rf "$work"
 }
 trap cleanup EXIT
