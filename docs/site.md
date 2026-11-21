@@ -10,7 +10,8 @@ review before launch.
 It is plain HTML with Tailwind's CSS in the console's brand
 ([docs/brand](brand)), and one small script with no framework,
 `site/src/main.ts`, for its animations and interactive parts: the hero's
-data streaming through Changeport, the Postgres change data capture demo,
+model of data streaming through Changeport (a column of labels on phones,
+whose text keeps its size), which also tells the same in plain words, the Postgres change data capture demo,
 the lag simulator and the console tour. There are no cookies, no analytics and no
 third-party requests. Vite builds it into `site/dist`, a folder of static
 files, which CloudFront serves from a private bucket in the prod account
@@ -101,8 +102,9 @@ links work while `just site-dev` runs.
 a desktop and a phone: that the lag simulator alerts past a minute behind
 and resolves, that the tour switches screens by click, arrow keys and by
 itself, that the questions open, that phones get a menu and nothing scrolls
-sideways, that reduced motion keeps the hero still, that without the
-script every section and console screen shows, and that the docs lead from
+sideways, that the hero tells its streams in plain words and back, that
+reduced motion keeps the hero still, that without the script every section
+and console screen shows, and that the docs lead from
 page to page with nothing scrolling sideways. axe checks every page, and a
 page of each kind of the docs, for accessibility violations, such as text
 or code without enough contrast, with

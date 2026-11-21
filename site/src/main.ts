@@ -108,26 +108,73 @@ function words(): void {
 
 /** The hero's diagrams keep still for reduced motion; its rate wanders. */
 function hero(): void {
-  const diagrams = document.querySelectorAll<SVGSVGElement>("svg[data-flow]");
+  const figure = document.querySelector<HTMLElement>("[data-streams]");
+  if (!figure) {
+    return;
+  }
+  views(figure);
+  const clock = figure.querySelector<HTMLElement>("[data-clock]");
+  const time = new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const tick = () => {
+    if (clock) {
+      clock.textContent = time.format(new Date());
+    }
+  };
+  clock?.classList.remove("hidden");
+  tick();
+
+  const diagrams = figure.querySelectorAll<SVGSVGElement>("svg[data-flow]");
   if (reducedMotion) {
     for (const diagram of diagrams) {
       diagram.pauseAnimations();
     }
-    return;
   }
-  const rate = document.querySelector("[data-rate]");
-  if (!rate) {
-    return;
-  }
+  const rates = figure.querySelectorAll("[data-rate]");
   let value = 1284;
   let running = true;
-  watch(rate, (on) => (running = on));
+  watch(figure, (on) => (running = on));
   setInterval(() => {
-    if (running) {
+    if (!running) {
+      return;
+    }
+    tick();
+    if (!reducedMotion) {
       value = Math.round(Math.min(1500, Math.max(1100, value + (Math.random() - 0.5) * 90)));
-      rate.textContent = `${numbers.format(value)} changes/s`;
+      for (const rate of rates) {
+        rate.textContent = `${numbers.format(value)} changes/s`;
+      }
     }
   }, 1000);
+}
+
+/**
+ * The hero's choice between its model of the streams and the same in
+ * sentences. Both share one place, so that the hero keeps its height.
+ */
+function views(figure: HTMLElement): void {
+  const scene = figure.querySelector<HTMLElement>("[data-scene]");
+  const plain = figure.querySelector<HTMLElement>("[data-plain]");
+  const buttons = figure.querySelectorAll<HTMLButtonElement>("[data-view]");
+  for (const button of buttons) {
+    button.addEventListener("click", () => {
+      for (const other of buttons) {
+        other.setAttribute("aria-pressed", String(other === button));
+      }
+      const words = button.dataset.view === "words";
+      for (const [view, shown] of [
+        [scene, !words],
+        [plain, words],
+      ] as const) {
+        view?.classList.toggle("invisible", !shown);
+        view?.toggleAttribute("inert", !shown);
+      }
+    });
+  }
 }
 
 /**
