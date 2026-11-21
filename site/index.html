@@ -1126,7 +1126,7 @@
         </div>
       </section>
 
-      <!-- The promise, then the three guarantees behind every stream. -->
+      <!-- The promise, then the four guarantees behind every stream. -->
       <section
         id="promises"
         aria-labelledby="promises-title"
@@ -1141,7 +1141,7 @@
         <h2 id="promises-title" class="mt-20 text-sm font-medium text-neutral-600">
           The promises behind every stream
         </h2>
-        <div class="mt-6 grid gap-12 lg:grid-cols-3 lg:gap-10">
+        <div class="mt-6 grid gap-12 sm:grid-cols-2 sm:gap-x-10">
           <article data-reveal class="border-t border-neutral-300 pt-6">
             <!-- The rows there when the source starts, and every change after. -->
             <svg
@@ -1190,6 +1190,81 @@
             </p>
           </article>
           <article data-reveal style="--delay: 120ms" class="border-t border-neutral-300 pt-6">
+            <!-- A batch aborted at a crash is written again, and the topic holds each change once. -->
+            <svg
+              viewBox="0 0 320 132"
+              class="flow promise h-auto w-full max-w-sm"
+              role="img"
+              aria-labelledby="promise-once-title"
+            >
+              <title id="promise-once-title">
+                Changes 41 to 46 written to Kafka in transactions. 41 to 43 are committed; a crash
+                aborts 44 and 45, which are written again with 46. An application reading committed
+                messages finds 41 to 46 in the topic, once each.
+              </title>
+              <text class="meta" x="0" y="14">Written to Kafka, in transactions</text>
+              <g class="segment-kept">
+                <rect x="0.5" y="26.5" width="27" height="27" rx="5" />
+                <rect x="32.5" y="26.5" width="27" height="27" rx="5" />
+                <rect x="64.5" y="26.5" width="27" height="27" rx="5" />
+                <rect x="208.5" y="26.5" width="27" height="27" rx="5" />
+                <rect x="240.5" y="26.5" width="27" height="27" rx="5" />
+                <rect x="272.5" y="26.5" width="27" height="27" rx="5" />
+              </g>
+              <g class="segment-aborted">
+                <rect x="112.5" y="26.5" width="27" height="27" rx="5" />
+                <rect x="144.5" y="26.5" width="27" height="27" rx="5" />
+              </g>
+              <g class="block-number" text-anchor="middle">
+                <text x="14" y="45">41</text>
+                <text x="46" y="45">42</text>
+                <text x="78" y="45">43</text>
+                <text class="block-number-aborted" x="126" y="45">44</text>
+                <text class="block-number-aborted" x="158" y="45">45</text>
+                <text x="222" y="45">44</text>
+                <text x="254" y="45">45</text>
+                <text x="286" y="45">46</text>
+              </g>
+              <path class="bracket" d="M1 60 V 64 H 91 V 60 M209 60 V 64 H 299 V 60" />
+              <path class="bracket bracket-muted" d="M113 60 V 64 H 171 V 60" />
+              <text class="meta" x="46" y="82" text-anchor="middle">Committed</text>
+              <text class="meta" x="142" y="82" text-anchor="middle">Crash: aborted</text>
+              <text class="meta" x="254" y="82" text-anchor="middle">Written again</text>
+              <g class="block-change block-change-dark">
+                <rect x="0" y="98" width="22" height="27" rx="5" />
+                <rect x="26" y="98" width="22" height="27" rx="5" />
+                <rect x="52" y="98" width="22" height="27" rx="5" />
+                <rect x="78" y="98" width="22" height="27" rx="5" />
+                <rect x="104" y="98" width="22" height="27" rx="5" />
+                <rect x="130" y="98" width="22" height="27" rx="5" />
+              </g>
+              <g class="change-number" text-anchor="middle">
+                <text x="11" y="116.5">41</text>
+                <text x="37" y="116.5">42</text>
+                <text x="63" y="116.5">43</text>
+                <text x="89" y="116.5">44</text>
+                <text x="115" y="116.5">45</text>
+                <text x="141" y="116.5">46</text>
+              </g>
+              <text class="meta meta-teal" x="314" y="116.5" text-anchor="end">
+                In the topic, once each
+              </text>
+            </svg>
+            <h3 class="mt-6 text-xl font-semibold">Each change, exactly once</h3>
+            <p class="mt-3 leading-relaxed text-neutral-600">
+              Changeport writes each batch of changes to Kafka together with its place in your
+              database's log, in one transaction. When it crashes or restarts, it neither repeats a
+              change nor skips one in your topics, for applications that read committed messages. A
+              row copied while it changes may arrive twice, which upserting by its key makes
+              harmless.
+              <a
+                href="/docs/delivery-guarantees.html#postgres-sources"
+                class="font-medium text-ink underline decoration-neutral-300 underline-offset-4 transition-colors hover:decoration-ink"
+                >How delivery works</a
+              >
+            </p>
+          </article>
+          <article data-reveal style="--delay: 240ms" class="border-t border-neutral-300 pt-6">
             <!-- The slot marks how far the log is read; the log after it is kept for it. -->
             <svg
               viewBox="0 0 320 132"
@@ -1238,7 +1313,7 @@
               keeps.
             </p>
           </article>
-          <article data-reveal style="--delay: 240ms" class="border-t border-neutral-300 pt-6">
+          <article data-reveal style="--delay: 360ms" class="border-t border-neutral-300 pt-6">
             <!-- A chart with what changed numbered on it, explained below. -->
             <svg
               viewBox="0 0 320 132"

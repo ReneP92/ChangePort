@@ -226,6 +226,11 @@ html {
   fill: var(--color-teal);
 }
 
+/* Dark enough for the white numbers on it. */
+.flow .block-change-dark rect {
+  fill: var(--color-teal-dark);
+}
+
 .flow .segment-read rect {
   fill: var(--color-neutral-100);
   stroke: var(--color-neutral-200);
@@ -236,10 +241,31 @@ html {
   stroke: var(--color-teal);
 }
 
+.flow .segment-aborted rect {
+  fill: white;
+  stroke: var(--color-neutral-300);
+  stroke-dasharray: 3 3;
+}
+
+.flow .block-number {
+  font-size: 14.5px;
+  font-weight: 600;
+  fill: var(--color-ink);
+}
+
+.flow .block-number-aborted {
+  fill: var(--color-neutral-500);
+  text-decoration: line-through;
+}
+
 .flow .bracket {
   fill: none;
   stroke: var(--color-teal);
   stroke-width: 1.5;
+}
+
+.flow .bracket-muted {
+  stroke: var(--color-neutral-300);
 }
 
 .flow .read-head,
