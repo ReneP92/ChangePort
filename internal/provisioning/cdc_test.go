@@ -54,8 +54,8 @@ func TestRenderCDCRuntimeOnlyWithSources(t *testing.T) {
 	}
 	want := []string{
 		"KafkaUser changeport-connect", "KafkaUser changeport-registry", "ConfigMap changeport-connect-metrics", "KafkaConnect changeport-connect",
-		"KafkaTopic changeport.cdc.signals.app", "KafkaTopic changeport.cdc.notifications.app", "KafkaConnector app-x1y2z3",
-		"KafkaTopic changeport.cdc.signals.billing", "KafkaTopic changeport.cdc.notifications.billing",
+		"KafkaTopic changeport.cdc.signals.app", "KafkaTopic changeport.cdc.notifications.app", "KafkaTopic changeport.cdc.heartbeat.app", "KafkaConnector app-x1y2z3",
+		"KafkaTopic changeport.cdc.signals.billing", "KafkaTopic changeport.cdc.notifications.billing", "KafkaTopic changeport.cdc.heartbeat.billing",
 		"Deployment changeport-registry", "Service changeport-registry",
 		"NetworkPolicy changeport-connect-egress", "NetworkPolicy changeport-registry",
 		"Deployment changeport-registry-gateway", "Service changeport-registry-gateway", "NetworkPolicy changeport-registry-gateway",
@@ -415,7 +415,7 @@ func TestReconcilePrunesTheCDCRuntime(t *testing.T) {
 	spec.Sources = sources[:1]
 	provision(t, p, spec)
 	slices.Sort(cluster.deleted)
-	if want := []string{"KafkaTopic:customer-acme/changeport.cdc.notifications.billing", "KafkaTopic:customer-acme/changeport.cdc.signals.billing"}; !slices.Equal(cluster.deleted, want) {
+	if want := []string{"KafkaTopic:customer-acme/changeport.cdc.heartbeat.billing", "KafkaTopic:customer-acme/changeport.cdc.notifications.billing", "KafkaTopic:customer-acme/changeport.cdc.signals.billing"}; !slices.Equal(cluster.deleted, want) {
 		t.Errorf("removing one of two sources deleted %v, want %v", cluster.deleted, want)
 	}
 	cluster.deleted = nil
@@ -430,7 +430,7 @@ func TestReconcilePrunesTheCDCRuntime(t *testing.T) {
 	want := []string{
 		"ConfigMap:customer-acme/changeport-connect-metrics",
 		"Deployment:customer-acme/changeport-registry", "Deployment:customer-acme/changeport-registry-gateway", "KafkaConnect:customer-acme/changeport-connect", "KafkaConnector:customer-acme/app-x1y2z3",
-		"KafkaTopic:customer-acme/changeport.cdc.notifications.app", "KafkaTopic:customer-acme/changeport.cdc.signals.app",
+		"KafkaTopic:customer-acme/changeport.cdc.heartbeat.app", "KafkaTopic:customer-acme/changeport.cdc.notifications.app", "KafkaTopic:customer-acme/changeport.cdc.signals.app",
 		"KafkaUser:customer-acme/changeport-connect", "KafkaUser:customer-acme/changeport-registry",
 		"NetworkPolicy:customer-acme/changeport-connect-egress", "NetworkPolicy:customer-acme/changeport-registry",
 		"NetworkPolicy:customer-acme/changeport-registry-gateway",
@@ -604,27 +604,43 @@ func TestRenderRegistryGateway(t *testing.T) {
 	}
 }
 
-// The customer's user may use every transactional ID but the Connect
-// worker's: one of those would fence the worker's leader or a source's task.
-func TestRenderCustomerCannotUseConnectTransactionalIDs(t *testing.T) {
-	list, _, err := unstructured.NestedSlice(kafkaUser(t, renderSpec(t, acme), AdminUser).Object, "spec", "authorization", "acls")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var denied []string
-	for _, a := range list {
-		acl, _ := a.(map[string]any)
-		if acl["type"] != "deny" {
-			continue
+// The customer's user may use everything but the platform's: the Connect
+// worker's transactional IDs, which would fence its leader or a source's
+// task, the platform's topics and groups, and Kafka's own topics and the
+// topics of a source while it keeps them, which the customer may read only.
+func TestRenderCustomerCannotTouchThePlatforms(t *testing.T) {
+	denied := func(spec Spec) []string {
+		t.Helper()
+		list, _, err := unstructured.NestedSlice(kafkaUser(t, renderSpec(t, spec), AdminUser).Object, "spec", "authorization", "acls")
+		if err != nil {
+			t.Fatal(err)
 		}
-		resource, _, _ := unstructured.NestedString(acl, "resource", "type")
-		name, _, _ := unstructured.NestedString(acl, "resource", "name")
-		pattern, _, _ := unstructured.NestedString(acl, "resource", "patternType")
-		operations, _, _ := unstructured.NestedStringSlice(acl, "operations")
-		denied = append(denied, strings.Join(append(operations, resource, pattern, name), " "))
+		var result []string
+		for _, a := range list {
+			acl, _ := a.(map[string]any)
+			if acl["type"] != "deny" {
+				continue
+			}
+			resource, _, _ := unstructured.NestedString(acl, "resource", "type")
+			name, _, _ := unstructured.NestedString(acl, "resource", "name")
+			pattern, _, _ := unstructured.NestedString(acl, "resource", "patternType")
+			operations, _, _ := unstructured.NestedStringSlice(acl, "operations")
+			result = append(result, strings.Join(operations, ",")+" "+resource+" "+pattern+" "+name)
+		}
+		return result
 	}
-	want := []string{"All transactionalId prefix changeport.connect-", "All transactionalId literal connect-cluster-changeport.connect"}
-	if !slices.Equal(denied, want) {
-		t.Errorf("the customer's user is denied %v, want %v", denied, want)
+	platform := []string{
+		"All transactionalId prefix changeport.connect-", "All transactionalId literal connect-cluster-changeport.connect",
+		"All topic prefix changeport.", "All group prefix changeport.", "Write,Create,Delete,Alter,AlterConfigs topic prefix __",
+	}
+	if got := denied(acme); !slices.Equal(got, platform) {
+		t.Errorf("without sources, the customer's user is denied %v, want %v", got, platform)
+	}
+	spec := acme
+	spec.Sources = sources
+	want := append(slices.Clone(platform),
+		"Write,Create,Delete,Alter,AlterConfigs topic prefix app.", "Write,Create,Delete,Alter,AlterConfigs topic prefix billing.")
+	if got := denied(spec); !slices.Equal(got, want) {
+		t.Errorf("with sources, the customer's user is denied %v, want %v", got, want)
 	}
 }

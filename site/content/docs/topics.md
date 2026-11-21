@@ -95,8 +95,11 @@ brokers' disks.
 
 Topic names use letters, digits, dots, underscores and dashes, up to 200
 characters. Kafka counts dots and underscores as the same in its metrics,
-so `orders.eu` and `orders_eu` cannot both exist. Names starting with `_`,
-`changeport`, `strimzi` or `connect-` belong to Kafka and the platform.
+so `orders.eu` and `orders_eu` cannot both exist. The console won't create
+names starting with `_`, `changeport`, `strimzi` or `connect-`, which Kafka,
+its tools and the platform use, and a Postgres source keeps the names that
+start with its own name and a dot, such as `shop.`
+([Your cluster](your-cluster.md)).
 
 ## Creating topics
 

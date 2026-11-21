@@ -332,6 +332,31 @@ spec:
           name: connect-cluster-changeport.connect
           patternType: literal
         operations: [All]
+      # The platform's topics and groups: Kafka Connect's, the schema
+      # registry's, and the Postgres sources' signals, notifications and
+      # heartbeats. Customers reach what they need of them through the
+      # console and the registry gateway.
+      - type: deny
+        resource:
+          type: topic
+          name: changeport.
+          patternType: prefix
+        operations: [All]
+      - type: deny
+        resource:
+          type: group
+          name: changeport.
+          patternType: prefix
+        operations: [All]
+      # Kafka's own topics, such as the consumer groups' offsets and tiered
+      # storage's metadata (__remote_log_metadata): monitoring tools of the
+      # customer's may read them, but nothing of theirs may change them.
+      - type: deny
+        resource:
+          type: topic
+          name: __
+          patternType: prefix
+        operations: [Write, Create, Delete, Alter, AlterConfigs]
       - resource:
           type: cluster
         operations: [Describe, DescribeConfigs, IdempotentWrite]

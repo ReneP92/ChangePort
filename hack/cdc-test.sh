@@ -19,6 +19,8 @@ customer=${1:-demo}
 namespace=customer-$customer
 source_name="shop-$RANDOM"
 id=$(random_string a-z0-9 6)
+# A topic named as a Kafka Connect of the customer's own would name it.
+own="connect-configs-$id"
 password=$(random_string A-Za-z0-9 32)
 slot="changeport_${source_name//-/_}_$id"
 tables=public.customers,public.orders
@@ -54,6 +56,17 @@ registry() {
   kubectl -n "$namespace" exec changeport-connect-connect-0 -- curl -sf "http://changeport-registry:8080/apis/ccompat/v7$1" "${@:2}" 2>/dev/null
 }
 kafka() { docker run "${KAFKA_CLIENT[@]}" --entrypoint "/opt/kafka/bin/$1" "$KAFKA_IMAGE" --bootstrap-server "$bootstrap" "${@:2}"; }
+# Deletes topics of a deleted source as the customer, waiting a little for
+# the customer's user to lose the source's deny rule.
+delete_source_topics() {
+  local topic
+  for topic in "$@"; do
+    for _ in $(seq 20); do
+      kafka kafka-topics.sh --command-config /config/client.properties --delete --if-exists --topic "$topic" >/dev/null 2>&1 && break
+      sleep 3
+    done
+  done
+}
 cleanup() {
   # A failure keeps what the source said before it goes.
   # shellcheck disable=SC2181 # the exit status of the script, on EXIT
@@ -62,10 +75,11 @@ cleanup() {
   cdcsql -step cleanup -tables "$all_tables" | pg >/dev/null 2>&1 || true
   pg -c "DROP TABLE IF EXISTS $invoices" >/dev/null 2>&1 || true
   pg -c "DELETE FROM customers WHERE id >= 910001" >/dev/null 2>&1 || true
-  local topic
-  for topic in "$source_name.public.customers" "$source_name.public.orders" "$source_name.public.$invoices" "changeport.cdc.heartbeat.$source_name"; do
-    kafka kafka-topics.sh --command-config /config/client.properties --delete --if-exists --topic "$topic" >/dev/null 2>&1 || true
-  done
+  kafka kafka-topics.sh --command-config /config/client.properties --delete --if-exists --topic "$own" >/dev/null 2>&1 || true
+  # The source's topics stay, as the customer's, once it is gone: the
+  # customer's user may delete them as soon as Strimzi lifts the source's
+  # deny rule. Its signals, notifications and heartbeats go with it.
+  delete_source_topics "$source_name.public.customers" "$source_name.public.orders" "$source_name.public.$invoices"
   # The schemas of the source's topics, which the registry keeps. Only the
   # Connect worker reaches the registry.
   local subject
@@ -99,9 +113,6 @@ orders_rows=$(pg -c "SELECT count(*) FROM orders")
 if [[ $(source_field '.status.tables[?(@.name=="customers")].rowsCopied') != "$customers_rows" ||
   $(source_field '.status.tables[?(@.name=="orders")].rowsCopied') != "$orders_rows" ||
   $(source_field '.status.tables[*].snapshot') != "Done Done" ]]; then
-  # The snapshot's notifications, with Avro's bytes as spaces.
-  kafka kafka-console-consumer.sh --command-config /config/client.properties --topic "changeport.cdc.notifications.$source_name" \
-    --partition 0 --offset earliest --timeout-ms 10000 2>/dev/null | LC_ALL=C tr -c '[:print:]\n' ' ' >&2 || true
   kubectl -n "$namespace" logs changeport-connect-connect-0 2>&1 | grep -F "$source_name" |
     grep -iE "incremental|chunk|snapshot|signal|task|restart" | grep -v "Context is null" | tail -60 >&2 || true
   die "the snapshot's status is $(source_field .status.tables), want $customers_rows customers and $orders_rows orders copied"
@@ -205,6 +216,47 @@ count=$(message_count "$customers_topic")
 [[ $count == "$want" ]] ||
   die "$customers_topic has $count messages after the worker was killed, want $want: the snapshot's and the changes before, and each of the $crash_rows inserts once"
 pg -c "DELETE FROM customers WHERE id >= $crash_first"
+
+# The customer's credentials, as their own applications and Kafka's tools
+# use them, read a source's topics, but change neither them nor anything of
+# the platform's: Kafka Connect's topics and group, and the sources'
+# signals. The customer's own names, such as those of a Connect of theirs,
+# stay theirs.
+log "The customer's own client reads the source's topics, and cannot change them nor touch the platform's"
+# Runs a Kafka tool as the customer, and fails unless Kafka refuses it.
+refused() {
+  local output
+  output=$(kafka "$@" 2>&1 || true)
+  grep -qE "AuthorizationException|Not authorized|not authorized" <<<"$output" ||
+    die "the customer's user may $*:"$'\n'"$(tail -5 <<<"$output")"
+}
+refused kafka-producer-perf-test.sh --producer.config /config/client.properties \
+  --topic "$customers_topic" --num-records 1 --record-size 10 --throughput -1
+refused kafka-topics.sh --command-config /config/client.properties --delete --topic "$customers_topic"
+refused kafka-configs.sh --command-config /config/client.properties --alter --entity-type topics --entity-name "$customers_topic" \
+  --add-config retention.ms=60000
+refused kafka-console-consumer.sh --command-config /config/client.properties --topic changeport.connect.offsets \
+  --partition 0 --offset earliest --timeout-ms 10000
+# The platform's topics are hidden from the customer, so Kafka's tools,
+# which look a topic up first, find none to delete; Kafka would refuse it
+# anyway.
+output=$(kafka kafka-topics.sh --command-config /config/client.properties --delete --topic changeport.connect.offsets 2>&1 || true)
+grep -qE "AuthorizationException|does not exist" <<<"$output" ||
+  die "the customer's user may delete changeport.connect.offsets:"$'\n'"$(tail -5 <<<"$output")"
+refused kafka-console-consumer.sh --command-config /config/client.properties --topic "$customers_topic" \
+  --group changeport.connect --timeout-ms 10000
+refused kafka-producer-perf-test.sh --producer.config /config/client.properties \
+  --topic "changeport.cdc.signals.$source_name" --num-records 1 --record-size 10 --throughput -1
+# Kafka's own topics, such as tiered storage's metadata, the customer sees
+# but may not change.
+refused kafka-topics.sh --command-config /config/client.properties --delete --topic __remote_log_metadata
+listed=$(kafka kafka-topics.sh --command-config /config/client.properties --list 2>/dev/null) ||
+  die "the customer's user cannot list its topics"
+grep -qx "$customers_topic" <<<"$listed" || die "the customer's user does not see $customers_topic"
+! grep -q '^changeport\.' <<<"$listed" || die "the customer's user sees the platform's topics"
+kafka kafka-topics.sh --command-config /config/client.properties --create --topic "$own" --partitions 1 >/dev/null ||
+  die "the customer's user may not create $own, a name of their own"
+kafka kafka-topics.sh --command-config /config/client.properties --delete --topic "$own" >/dev/null
 
 log "A client decodes the messages through the registry gateway, with the customer's credentials"
 registry_host="registry.$customer.kafka.changeport.test"

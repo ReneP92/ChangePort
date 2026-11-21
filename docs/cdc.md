@@ -165,6 +165,26 @@ include, so `Ready` keeps meaning that clients can connect.
   - New workers start with it enabled, without KIP-618's `preparing` step:
     no worker ran without it outside kind. A kind worker gets it once the
     provisioner re-renders it, which restarts the worker.
+- **The customer's user:** it may do everything on the customer's cluster
+  but touch the platform's or change a source's topics.
+  - It is denied every topic and group starting `changeport.`: Kafka
+    Connect's topics and group, which hold every source's offsets and
+    tasks, the registry's, which hold the schemas, and the sources' signals,
+    notifications and heartbeats. Customers reach what they need of them
+    through the console and the registry gateway.
+  - It reads a source's topics but may not write, create, delete or
+    reconfigure them under the source's prefix `<source>.` while the source
+    keeps them. Once the source is gone they are the customer's. Between
+    the console's check that no topic is under the prefix and the deny
+    rule's taking effect lie a few seconds, in which a topic the customer
+    creates there becomes the source's to keep.
+  - It reads Kafka's own topics (`__`), such as tiered storage's
+    `__remote_log_metadata`, as monitoring tools do, but may not change
+    them.
+  - Names Kafka's tools use, such as `_schemas` or `connect-configs`, stay
+    the customer's, for a registry or a Connect of their own.
+  - `hack/cdc-test.sh` checks these denials as the customer's own client
+    would hit them.
 - **The image:** `images/connect`, Strimzi's Kafka image with the Debezium
   Postgres connector and Apicurio's Avro converter, pinned and checksummed.
 - **Replication:** with `pgoutput`.
@@ -234,6 +254,10 @@ include, so `Ready` keeps meaning that clients can connect.
     for it.
   - Debezium drops the messages (`message.prefix.exclude.list`), so they never
     become events.
+  - Its heartbeats go to the topic `changeport.cdc.heartbeat.<source>`, a
+    `KafkaTopic` of the template like the source's signals and
+    notifications, so it goes with the source. Connect created it by itself
+    before, and left it behind.
 - **Topics:**
   - one partition per table, keyed by primary key;
   - replicated and tiered like every topic;

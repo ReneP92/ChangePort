@@ -94,10 +94,13 @@ They are fixed per profile, so that you never have to think about them:
   user name and password (SASL SCRAM-SHA-512). See
   [Connecting](connecting.md).
 - **Platform topics:** topics and consumer groups whose names start with
-  `_`, `changeport`, `strimzi` or `connect-` belong to Kafka or to the
-  platform. The console hides them and won't create topics with those
-  names. Your `admin` user could, with Kafka's own tools: leave them
-  alone.
+  `changeport.` are the platform's, for Postgres sources and their schema
+  registry. Your `admin` user can't see, read or change them. Kafka's own
+  topics, whose names start with `__`, it may read but not change. The
+  console also hides names starting with `_`, `strimzi` or `connect-`,
+  which Kafka's tools use, and won't create topics with them. Your `admin`
+  user may, with Kafka's own tools, for example `_schemas` or
+  `connect-configs` for a schema registry or a Kafka Connect of your own.
 
 ## What we watch
 
