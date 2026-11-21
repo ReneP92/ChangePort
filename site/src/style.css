@@ -78,15 +78,127 @@ html {
   font-family: var(--font-sans);
 }
 
+/* The names in the hero's streams, as labels. */
+.stream-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 9999px;
+  background: white;
+  padding: 0.125rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgb(16 24 40 / 0.08);
+}
+
+.stream-label-dark {
+  border-color: rgb(255 255 255 / 0.16);
+  background: var(--color-ink);
+  color: white;
+}
+
+/*
+ * On the model, the labels keep their size as it scales, each on the side of
+ * its block that no other block is behind: above it, by default.
+ */
+.iso-label {
+  position: absolute;
+  translate: -50% -100%;
+}
+
+.iso-above-left {
+  translate: -85% -100%;
+}
+
+.iso-below {
+  translate: -12% 4px;
+}
+
+.iso-left {
+  translate: calc(-100% - 6px) -50%;
+}
+
+.iso-center {
+  translate: -50% -50%;
+}
+
+/* On phones, the streams as a column, with changes running down its links. */
+.stream-link {
+  position: relative;
+  margin-inline: auto;
+  width: 2px;
+  height: 1.5rem;
+  background: var(--color-neutral-300);
+}
+
+.stream-link::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--color-teal);
+  border-radius: 9999px;
+  background: white;
+  translate: -50% 0;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .stream-link::after {
+    animation: stream-link 1.4s linear infinite;
+  }
+}
+
+@keyframes stream-link {
+  20%,
+  80% {
+    opacity: 1;
+  }
+  to {
+    translate: -50% calc(1.5rem - 8px);
+    opacity: 0;
+  }
+}
+
+.stream-topic {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  column-gap: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 0.5rem;
+  background: rgb(255 255 255 / 0.07);
+  padding: 0.375rem 0.75rem;
+}
+
+/* The hero's choice between the model and the sentences. */
+.view-option {
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  color: var(--color-neutral-600);
+  transition: color 150ms;
+}
+
+.view-option[aria-pressed="true"] {
+  background: white;
+  color: var(--color-ink);
+  box-shadow: 0 1px 2px rgb(17 17 17 / 0.08);
+}
+
+.view-option:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+}
+
 .flow .line {
   fill: none;
   stroke: var(--color-neutral-300);
   stroke-width: 1.5;
-}
-
-.flow .line-behind {
-  stroke: var(--color-amber-400);
-  stroke-dasharray: 4 5;
 }
 
 .flow .node {
@@ -95,53 +207,84 @@ html {
   filter: drop-shadow(0 1px 2px rgb(17 17 17 / 0.06));
 }
 
-.flow .node-behind {
-  fill: var(--color-red-50);
-  stroke: var(--color-red-300);
-}
-
-.flow .name {
-  font-size: 14px;
-  font-weight: 600;
-  fill: var(--color-ink);
-}
-
 .flow .meta {
   font-size: 12px;
   fill: var(--color-neutral-500);
 }
 
-.flow .meta-behind {
-  fill: var(--color-red-600);
+.flow .meta-teal {
+  fill: var(--color-teal-dark);
   font-weight: 500;
 }
 
-.flow .pulse {
+/* The illustrations of the promises: blocks, log segments and a chart. */
+.flow .block rect {
+  fill: var(--color-neutral-200);
+}
+
+.flow .block-change rect {
+  fill: var(--color-teal);
+}
+
+.flow .segment-read rect {
+  fill: var(--color-neutral-100);
+  stroke: var(--color-neutral-200);
+}
+
+.flow .segment-kept rect {
+  fill: var(--color-teal-50);
+  stroke: var(--color-teal);
+}
+
+.flow .bracket {
   fill: none;
   stroke: var(--color-teal);
-  transform-box: fill-box;
-  transform-origin: center;
+  stroke-width: 1.5;
 }
 
-.flow .pulse-behind {
-  stroke: var(--color-red-400);
+.flow .read-head,
+.flow .change-line {
+  stroke: var(--color-ink);
+  stroke-width: 1.5;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .flow .pulse {
-    animation: flow-pulse 2.4s ease-out infinite;
-  }
+.flow .change-line {
+  stroke-dasharray: 3 4;
 }
 
-@keyframes flow-pulse {
-  from {
-    opacity: 0.6;
-    scale: 1;
-  }
-  to {
-    opacity: 0;
-    scale: 1.35;
-  }
+.flow .marker {
+  fill: var(--color-ink);
+}
+
+.flow .grid-line {
+  fill: none;
+  stroke: var(--color-neutral-200);
+  stroke-dasharray: 2 4;
+}
+
+.flow .series {
+  fill: none;
+  stroke: var(--color-teal);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.flow .change-badge {
+  fill: var(--color-ink);
+}
+
+/*
+ * The promises' illustrations shrink with their column, down to about 0.85
+ * of their size on a phone, so their text is larger in their own units.
+ */
+.flow.promise .meta {
+  font-size: 14.5px;
+}
+
+.flow .change-number {
+  font-size: 14.5px;
+  font-weight: 600;
+  fill: white;
 }
 
 /* The lag simulator's log: unread messages fill from the newest end. */

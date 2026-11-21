@@ -50,18 +50,62 @@ test("the 404 page leads home, and keeps out of search engines", async ({ page }
   await expect(page).toHaveURL(/\/$/);
 });
 
-test("the hero's diagram draws white nodes on thin lines", async ({ page }) => {
+test("the hero's model draws white blocks, with changes moving between them", async ({ page }) => {
   await page.goto("/");
+  test.skip((page.viewportSize()?.width ?? 0) < 640, "Phones get the streams as a column");
   const diagram = page.locator("svg[data-flow]:visible");
   await expect(diagram).toHaveAttribute("role", "img");
-  const styles = await diagram.evaluate((svg) => {
+  const drawn = await diagram.evaluate((svg) => {
     const node = svg.querySelector("rect.node");
-    const line = svg.querySelector("use.line");
-    return node && line
-      ? { node: getComputedStyle(node).fill, line: getComputedStyle(line).fill }
+    return node
+      ? {
+          node: getComputedStyle(node).fill,
+          moving: svg.querySelectorAll("animateMotion").length > 0,
+        }
       : null;
   });
-  expect(styles).toEqual({ node: "rgb(255, 255, 255)", line: "none" });
+  expect(drawn).toEqual({ node: "rgb(255, 255, 255)", moving: true });
+});
+
+test("phones get the hero's streams as a column, with every reader", async ({ page }) => {
+  await page.goto("/");
+  test.skip((page.viewportSize()?.width ?? 0) >= 640, "Wider screens get the model");
+  const column = page.locator("[data-scene] [role=img]:visible");
+  await expect(column).toHaveAccessibleName(/search-indexer, which is 3 minutes behind\.$/);
+  await expect(column.locator(".stream-label")).toHaveText([
+    "Postgres: shop",
+    "checkout-api",
+    "payments-api",
+    "billing",
+    "fraud-checks",
+    "search-indexer 3 min behind",
+    "warehouse-sync",
+  ]);
+});
+
+test("the hero tells its streams in plain words, and back", async ({ page }) => {
+  await page.goto("/");
+  const figure = page.getByRole("figure", { name: "Your streams, right now", exact: true });
+  const flow = figure.getByRole("button", { name: "Flow" });
+  const words = figure.getByRole("button", { name: "In plain words" });
+  await expect(page.locator("[data-clock]")).toHaveText(/^\d\d:\d\d:\d\d$/);
+  await expect(flow).toHaveAttribute("aria-pressed", "true");
+  await expect(figure.locator("[data-plain]")).toBeHidden();
+
+  await words.click();
+  await expect(words).toHaveAttribute("aria-pressed", "true");
+  await expect(flow).toHaveAttribute("aria-pressed", "false");
+  await expect(figure.locator("[data-plain]")).toBeVisible();
+  await expect(figure.locator("[data-scene]")).toBeHidden();
+  await expect(figure.locator("[data-scene]")).toHaveJSProperty("inert", true);
+  const results = await new AxeBuilder({ page }).include("[data-streams]").analyze();
+  expect(results.violations.map((v) => v.id)).toEqual([]);
+
+  await flow.focus();
+  await page.keyboard.press("Enter");
+  await expect(flow).toHaveAttribute("aria-pressed", "true");
+  await expect(figure.locator("[data-scene]")).toBeVisible();
+  await expect(figure.locator("[data-plain]")).toHaveJSProperty("inert", true);
 });
 
 test("the hero fills the first screen, so the next section starts at the fold", async ({
@@ -230,6 +274,12 @@ test.describe("with reduced motion", () => {
       .locator("svg[data-flow]")
       .evaluateAll((svgs) => svgs.every((svg) => (svg as SVGSVGElement).animationsPaused()));
     expect(paused).toBe(true);
+    const running = await page
+      .locator(".stream-link")
+      .evaluateAll((links) =>
+        links.filter((link) => getComputedStyle(link, "::after").animationName !== "none"),
+      );
+    expect(running).toHaveLength(0);
     await page.locator("[data-cdc]").scrollIntoViewIfNeeded();
     await page.waitForTimeout(3_500);
     await expect(page.locator("[data-cdc-messages] > li").first()).toContainText("41");
@@ -277,5 +327,14 @@ test.describe("without JavaScript", () => {
       ),
     );
     expect(lag.top).toBeGreaterThanOrEqual(overview.bottom - 1);
+  });
+
+  test("the hero shows its streams, and no toggle or clock that need the script", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(page.locator("[data-scene]")).toBeVisible();
+    await expect(page.locator("[data-view-toggle]")).toBeHidden();
+    await expect(page.locator("[data-clock]")).toBeHidden();
   });
 });

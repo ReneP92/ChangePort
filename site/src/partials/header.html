@@ -21,9 +21,15 @@
   data-header
   class="sticky top-0 z-40 border-b border-transparent bg-white/85 backdrop-blur-md"
 >
-  <div class="mx-auto flex h-16 max-w-6xl items-center gap-8 px-6">
+  <div class="mx-auto flex h-16 max-w-6xl items-center gap-4 px-6 min-[360px]:gap-8">
     <a href="/" class="shrink-0">
-      <img src="/logo.svg" alt="Changeport" width="140" height="19" class="h-[19px] w-[140px]" />
+      <img
+        src="/logo.svg"
+        alt="Changeport"
+        width="140"
+        height="19"
+        class="h-[15px] w-[112px] min-[360px]:h-[19px] min-[360px]:w-[140px]"
+      />
     </a>
     <nav aria-label="Site" class="hidden items-center gap-7 text-sm text-neutral-600 lg:flex">
       <a href="/#how" class="hover:text-ink">How it works</a>
@@ -33,11 +39,11 @@
       <a href="/#faq" class="hover:text-ink">Questions</a>
       <a href="/docs/" class="hover:text-ink">Docs</a>
     </nav>
-    <div class="ml-auto flex items-center gap-5 text-sm">
+    <div class="ml-auto flex items-center gap-2 text-sm min-[360px]:gap-3 sm:gap-5">
       <a href="%CONSOLE_URL%/" class="text-neutral-600 hover:text-ink max-sm:hidden">Sign in</a>
       <a
         href="%CONSOLE_URL%/trial"
-        class="rounded-lg bg-ink px-3.5 py-2 font-medium text-white transition-colors hover:bg-ink-soft"
+        class="rounded-lg bg-ink px-3 py-2 font-medium whitespace-nowrap min-[360px]:px-3.5 text-white transition-colors hover:bg-ink-soft"
         >Start a trial</a
       >
       <details class="relative lg:hidden">
