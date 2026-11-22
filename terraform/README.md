@@ -293,9 +293,9 @@ in its `terraform.tfvars` (#8); until then nothing of it exists.
 - **Records:** A and AAAA aliases of the distribution for the domain and its
   `www`, in the domain's zone.
 
-`.github/workflows/publish-site.yml` builds the site for the domain, with
-the console at `console.<domain>`, after every green CI run for main's
-newest commit (a re-run for an older one publishes nothing), and publishes
+`.github/workflows/publish-site.yml` checks the site on every push to main
+and builds it for the domain, with the console at `console.<domain>`, for
+main's newest commit (a run for an older one publishes nothing), and publishes
 it with `hack/publish-site.sh`: assets, whose names carry their
 content's hash, are kept by browsers for a year; pages and other files are
 revalidated by browsers on each visit and kept by CloudFront until the next

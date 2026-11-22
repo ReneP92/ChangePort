@@ -1,9 +1,12 @@
-# Publishes the landing site (site/) at the domain's root once CI passes on
-# main: builds it for the domain, with the console at console.<domain>, and
-# syncs it into its bucket behind CloudFront (terraform/modules/static-site,
-# hack/publish-site.sh). It publishes after every green run, as uploading the
-# few dozen files costs next to nothing, and CI cancels runs superseded by a
-# newer push, which a check of what one commit changed would miss.
+# Publishes the landing site (site/) at the domain's root on every push to
+# main, once the site's own checks pass (just site-check, as CI's site job
+# runs them): builds it for the domain, with the console at console.<domain>,
+# and syncs it into its bucket behind CloudFront (terraform/modules/static-site,
+# hack/publish-site.sh). It does not wait for the rest of CI, whose
+# end-to-end suites on kind take half an hour and cannot change the site. It
+# publishes on every push, as uploading the few dozen files costs next to
+# nothing, and a push whose run is superseded while it waits is published by
+# the newer one, which a check of what one commit changed would miss.
 #
 # It needs, once prod has a domain (#8), the repository variables
 # SITE_DOMAIN, SITE_BUCKET, SITE_DISTRIBUTION_ID and SITE_PUBLISH_ROLE_ARN,
@@ -12,9 +15,7 @@
 name: Publish site
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
     branches: [main]
   workflow_dispatch:
 
@@ -27,15 +28,13 @@ permissions:
   contents: read
 
 jobs:
-  # After CI passed for a push to main, or by hand; the publish role only
-  # trusts runs on main. A CI run re-run for an older commit passes too, and
-  # would put that commit's site back, so only main's newest commit is
-  # published.
+  # On a push to main, or by hand; the publish role only trusts runs on
+  # main. A run that waited behind another, or one re-run for an older
+  # commit, would put that commit's site back, so only main's newest commit
+  # is published.
   newest:
     name: Main's newest commit
-    if: >-
-      vars.SITE_PUBLISH_ROLE_ARN != '' && (github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+    if: vars.SITE_PUBLISH_ROLE_ARN != ''
     runs-on: ubuntu-26.04
     outputs:
       commit: ${{ steps.newest.outputs.commit }}
@@ -43,7 +42,7 @@ jobs:
       - id: newest
         env:
           GH_TOKEN: ${{ github.token }}
-          COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+          COMMIT: ${{ github.sha }}
           REPOSITORY: ${{ github.repository }}
         run: |
           main=$(gh api "repos/$REPOSITORY/commits/main" --jq .sha)
@@ -65,15 +64,28 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The commit CI passed for.
           ref: ${{ needs.newest.outputs.commit }}
       - uses: ./.github/actions/setup-just
+      # The pinned tools in bin/ and Playwright's browser, as CI's site job
+      # caches them.
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             bin/
             !bin/*.kubeconfig
-          key: site-publish-tools-${{ runner.os }}-${{ hashFiles('hack/lib.sh', 'site/bun.lock') }}
+            ~/.cache/ms-playwright
+          key: site-tools-${{ runner.os }}-${{ hashFiles('hack/lib.sh', 'site/bun.lock') }}
+      # The site's tests and Lighthouse, on the commit it publishes.
+      - run: just site-check
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: site-reports
+          path: |
+            site/lighthouse
+            site/playwright-report
+            site/test-results
+          retention-days: 14
       - name: Build
         env:
           CHANGEPORT_SITE_URL: https://${{ vars.SITE_DOMAIN }}

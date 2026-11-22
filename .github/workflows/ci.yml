@@ -36,7 +36,7 @@ jobs:
       terraform: ${{ steps.changes.outputs.terraform }}
       web: ${{ steps.changes.outputs.web }}
       site: ${{ steps.changes.outputs.site }}
-      e2e: ${{ steps.changes.outputs.e2e }}
+      e2e_suites: ${{ steps.changes.outputs.e2e_suites }}
       console: ${{ steps.changes.outputs.console }}
       kafka_image: ${{ steps.changes.outputs.kafka_image }}
       connect_image: ${{ steps.changes.outputs.connect_image }}
@@ -209,17 +209,18 @@ jobs:
 
   # The end-to-end suites on kind, each on a cluster of its own: the failover
   # and chaos suites disrupt clusters, which would disturb the others' tests.
-  # The chaos suite's six disruptions take about 40 minutes of their own.
+  # The chaos suite's six disruptions take about 25 minutes of their own.
+  # A pull request runs the suites its files can affect (hack/ci-changes.sh).
   e2e:
     name: End to end on kind
     needs: changes
-    if: needs.changes.outputs.e2e == 'true'
+    if: needs.changes.outputs.e2e_suites != '[]'
     runs-on: ubuntu-26.04
     timeout-minutes: ${{ matrix.suite == 'chaos' && 75 || 45 }}
     strategy:
       fail-fast: false
       matrix:
-        suite: [core, failover, cdc, chaos]
+        suite: ${{ fromJSON(needs.changes.outputs.e2e_suites) }}
     env:
       BUILD_CACHE: gha
     steps:
