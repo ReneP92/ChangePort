@@ -67,6 +67,8 @@ module "kafka_zone" {
 
   name               = "kafka.dev.${local.domain}"
   cloudflare_zone_id = data.cloudflare_zone.domain.zone_id
+  # Dev can be torn down and rebuilt, records and all.
+  force_destroy = true
 }
 
 module "eks" {

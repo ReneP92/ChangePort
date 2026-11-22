@@ -8,6 +8,12 @@ variable "name" {
   }
 }
 
+variable "force_destroy" {
+  description = "Whether destroying the zone deletes the records external-dns wrote in it, as an environment that is torn down and rebuilt needs; external-dns leaves them when its cluster goes."
+  type        = bool
+  default     = false
+}
+
 variable "cloudflare_zone_id" {
   description = "ID of the domain's zone on Cloudflare, which delegates this zone to Route 53."
   type        = string

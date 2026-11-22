@@ -12,7 +12,10 @@ data "cloudflare_zone" "domain" {
 
 # Who may issue certificates for the domain and its names: Let's Encrypt,
 # which cert-manager uses, and Amazon, whose ACM certificate the landing
-# site's distribution serves (terraform/modules/static-site). The zones
+# site's distribution serves (terraform/modules/static-site). Cloudflare adds
+# its own certificate authorities to the answer while its Universal SSL is on;
+# a vendor that serves one of the domain's names with a certificate of its
+# own, such as a custom domain, needs its authority here too. The zones
 # delegated to Route 53 say their own.
 resource "cloudflare_dns_record" "caa" {
   for_each = toset(["letsencrypt.org", "amazon.com"])

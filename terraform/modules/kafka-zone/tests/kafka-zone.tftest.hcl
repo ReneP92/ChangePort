@@ -30,6 +30,10 @@ run "the_zone_is_the_customer_endpoints" {
     condition     = output.zone_id == "Z0123456789ABCDEFGHIJ"
     error_message = "The zone's ID is what external-dns and cert-manager may change."
   }
+  assert {
+    condition     = !aws_route53_zone.kafka.force_destroy
+    error_message = "Destroying the zone keeps the customers' records unless asked otherwise."
+  }
 }
 
 run "only_lets_encrypt_issues_certificates" {

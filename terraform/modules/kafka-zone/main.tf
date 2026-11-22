@@ -5,8 +5,9 @@
 # registrar, which delegates this zone here with NS records.
 
 resource "aws_route53_zone" "kafka" {
-  name    = var.name
-  comment = "Changeport's customer endpoints"
+  name          = var.name
+  comment       = "Changeport's customer endpoints"
+  force_destroy = var.force_destroy
 
   lifecycle {
     postcondition {

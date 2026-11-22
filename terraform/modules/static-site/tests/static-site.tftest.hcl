@@ -123,6 +123,10 @@ run "the_distribution_serves_the_domain_securely" {
     error_message = "The certificate is validated through the domain's zone."
   }
   assert {
+    condition     = toset(aws_acm_certificate_validation.site.validation_record_fqdns) == toset(["_a.changeport.example", "_b.www.changeport.example"])
+    error_message = "ACM waits for the records Terraform wrote on Cloudflare, by their names."
+  }
+  assert {
     condition = (
       one(aws_cloudfront_distribution.site.viewer_certificate).minimum_protocol_version == "TLSv1.2_2021" &&
       one(aws_cloudfront_distribution.site.viewer_certificate).ssl_support_method == "sni-only"

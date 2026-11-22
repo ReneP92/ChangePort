@@ -169,9 +169,12 @@ zones of their own in Route 53, where external-dns and cert-manager work
 with the cluster's AWS roles.
 
 - **The domain's records** (`modules/domain`, prod): CAA records that let
-  only Let's Encrypt, for cert-manager, and Amazon, for the landing site's
-  ACM certificate, issue certificates for the domain. The landing site's
-  records are its module's.
+  Let's Encrypt, for cert-manager, and Amazon, for the landing site's ACM
+  certificate, issue certificates for the domain. Cloudflare adds its own
+  certificate authorities to the answer while its Universal SSL is on, and a
+  vendor that serves one of the domain's names with its own certificate,
+  such as a custom domain, needs its authority added here. The landing
+  site's records are its module's.
 - **The customer endpoints' zones** (`modules/kafka-zone`):
   `kafka.changeport.app` in prod and `kafka.dev.changeport.app` in dev, each
   in its account's Route 53, delegated from Cloudflare by NS records that
@@ -189,7 +192,10 @@ Tokens, create two custom tokens, each for the zone `changeport.app` only:
   secret `CLOUDFLARE_PLAN_API_TOKEN`.
 
 A token covers the whole zone, so dev's Terraform may change prod's
-records too; Terraform only changes the records it wrote. Once applied,
+records too; Terraform only changes the records it wrote. Cloudflare refuses
+a record identical to one that exists, so a record Terraform should write
+but someone made in the dashboard fails the apply until it is imported
+(`terraform import`, with `<zone ID>/<record ID>`) or deleted. Once applied,
 `dig NS kafka.changeport.app` and `dig NS kafka.dev.changeport.app` answer
 with the zones' Route 53 name servers.
 
