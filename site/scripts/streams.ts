@@ -1,16 +1,31 @@
 /**
  * Draws the hero's model of a customer's streams (docs/site.md): three
  * sources send their changes into Changeport, which routes each change only
- * to the apps that subscribe to its source, and watches every source and
- * every app. Each block carries a stack of the changes waiting there; past
- * its dashed line, Changeport raises an alert. src/main.ts plays the story:
- * which stacks grow, and which alerts fire.
+ * to the apps that subscribe to its source. The blocks Changeport watches,
+ * the Postgres source it reads and every app, carry a stack of the changes
+ * waiting there; past its dashed line, Changeport raises an alert.
+ * src/main.ts plays the story: which stacks grow, and which alerts fire.
+ * What the model is, its sources, apps and subscriptions, is in
+ * src/model.ts.
  *
  * The model lies on a 480 by 480 plane, z up, drawn in a 2:1 isometric
  * projection; the names are HTML labels over it, which keep their size as
  * the drawing scales. The pages plugin in vite.config.ts puts the result
  * where index.html says <!-- include:streams -->.
  */
+
+import {
+  type App,
+  colors,
+  levels,
+  names,
+  severe,
+  type Source,
+  start,
+  subscriptions,
+  threshold,
+  watched,
+} from "../src/model.ts";
 
 type Point = readonly [number, number];
 /** A rectangle on the plane: x0, y0, x1, y1. */
@@ -107,24 +122,6 @@ const ICONS = {
   warehouse: "M3 9l9-5 9 5v11H3zM7 20v-7h10v7M7 16.5h10",
 };
 
-type Source = "pg" | "checkout" | "payments";
-type App = "billing" | "fraud" | "search" | "warehouse";
-
-/** Each source's color, as the labels and the console show it too. */
-export const colors: Record<Source, string> = {
-  pg: "#2f9e8f",
-  checkout: "#3b6fd8",
-  payments: "#9457e0",
-};
-
-/** The sources each app subscribes to. */
-export const subscriptions: Record<App, Source[]> = {
-  billing: ["pg", "payments"],
-  fraud: ["checkout", "payments"],
-  search: ["checkout"],
-  warehouse: ["pg", "checkout"],
-};
-
 /** The blocks, each by the corner of its 84 by 84 base on the plane. */
 const stations: Record<Source | App, { at: Point; icon: keyof typeof ICONS }> = {
   pg: { at: [18, 48], icon: "database" },
@@ -136,13 +133,9 @@ const stations: Record<Source | App, { at: Point; icon: keyof typeof ICONS }> = 
   warehouse: { at: [378, 378], icon: "warehouse" },
 };
 
-/** The levels a stack has, and the level past which Changeport alerts. */
-export const levels = 8;
-export const threshold = 4;
-
 /** The classes of a block, or its label, at a level: behind past the line, and far behind. */
 const state = (level: number) =>
-  level > threshold ? (level >= 7 ? " is-behind is-severe" : " is-behind") : "";
+  level > threshold ? (level >= severe ? " is-behind is-severe" : " is-behind") : "";
 
 /**
  * The stack of changes waiting at a block, with its dashed line, and the
@@ -163,8 +156,8 @@ function stack(id: Source | App, cx: number, cy: number, start: number) {
   return `<g class="stack${state(start)}" data-node="${id}">${rings}${disc}${cubes}${line}</g>`;
 }
 
-/** A source's or an app's block: a base, an inner tile, its stack and an upright icon. */
-function station(id: Source | App, start: number) {
+/** A source's or an app's block: a base, an inner tile, its stack if watched, and an upright icon. */
+function station(id: Source | App) {
   const {
     at: [x0, y0],
     icon,
@@ -180,7 +173,7 @@ function station(id: Source | App, start: number) {
       ["#eef0f2", "#3a3f45", "#575d64"],
       ' stroke="#dadde1" stroke-width="1"',
     ) +
-    stack(id, x0 + 54, y0 + 30, start) +
+    (watched.includes(id) ? stack(id, x0 + 54, y0 + 30, start[id] ?? 0) : "") +
     `<g transform="${upright(x0 + 16, y0 + 64, 62)}">` +
     `<rect width="34" height="34" rx="9" fill="#141414" stroke="#2c3035" stroke-width="1" />` +
     `<path transform="translate(7 7) scale(0.8333)" d="${ICONS[icon]}" fill="none" stroke="white" stroke-width="2.16" stroke-linecap="round" stroke-linejoin="round" /></g>` +
@@ -263,17 +256,20 @@ const length = (points: Point[]) =>
 
 /**
  * Changes moving along a way, as cubes in the colors of their sources, at
- * one speed everywhere. The odd ones fade while their source falls behind,
- * as fewer of its changes get through (main.ts).
+ * one speed everywhere. Every other change of a source fades while it falls
+ * behind, as fewer of its changes get through (main.ts).
  */
 function changes(way: Point[], from: Source[], count: number) {
   const d = path(way.map(([x, y]) => P(x, y, 4)));
   const seconds = length(way) / 46;
+  const seen = new Map<Source, number>();
   return Array.from({ length: count }, (_, i) => {
     const source = from[i % from.length]!;
+    const nth = seen.get(source) ?? 0;
+    seen.set(source, nth + 1);
     const begin = i ? `-${n((seconds * i) / count)}s` : "0s";
     return (
-      `<g class="change" data-from="${source}" style="--ct:${shade(colors[source], 0.5)};--cl:${colors[source]};--cr:${shade(colors[source], -0.38)}">` +
+      `<g class="change" data-from="${source}"${nth % 2 ? " data-odd" : ""} style="--ct:${shade(colors[source], 0.5)};--cl:${colors[source]};--cr:${shade(colors[source], -0.38)}">` +
       cube(5.5) +
       `<animateMotion dur="${n(seconds)}s" begin="${begin}" repeatCount="indefinite" path="${d}" /></g>`
     );
@@ -313,17 +309,6 @@ function changeport() {
   );
 }
 
-/** The level each block starts at: search-indexer behind, as without the script. */
-export const start: Record<Source | App, number> = {
-  pg: 1,
-  checkout: 2,
-  payments: 1,
-  billing: 1,
-  fraud: 2,
-  search: 6,
-  warehouse: 1,
-};
-
 /** The screen position of a label, in percent of the model's box. */
 const at = (x: number, y: number, z = 0) => {
   const [sx, sy] = P(x, y, z);
@@ -331,22 +316,12 @@ const at = (x: number, y: number, z = 0) => {
   return `left: ${pct(((sx - view.x) / view.width) * 100)}%; top: ${pct(((sy - view.y) / view.height) * 100)}%`;
 };
 
-const names: Record<Source | App, string> = {
-  pg: "Postgres: shop",
-  checkout: "checkout-api",
-  payments: "payments-api",
-  billing: "billing",
-  fraud: "fraud-checks",
-  search: "search-indexer",
-  warehouse: "warehouse-sync",
-};
-
 /**
  * Each block's label, on the side of it that no other block is behind:
  * above it, above and to the left, below, or to its left.
  */
 const labels: [Source | App, string, string][] = [
-  ["pg", at(60, 90, 66), "iso-above-left"],
+  ["pg", at(36, 114, 66), "iso-above-left"],
   ["checkout", at(60, 240, 66), "iso-above-left"],
   ["payments", at(102, 432), "iso-below"],
   ["billing", at(420, 60, 66), ""],
@@ -363,7 +338,7 @@ function label([id, style, place]: (typeof labels)[number]) {
           .map((s) => `<span class="size-1.5 rounded-full" style="background:${colors[s]}"></span>`)
           .join("");
   return (
-    `<span class="stream-label iso-label ${place}${state(start[id])}" data-chip="${id}" style="${style}">` +
+    `<span class="stream-label iso-label ${place}${state(start[id] ?? 0)}" data-chip="${id}" style="${style}">` +
     `<span class="flex gap-0.5">${marks}</span>${names[id]}<span class="stream-alert"></span></span>`
   );
 }
@@ -379,26 +354,22 @@ export function renderStreams(): string {
     .map((way) => `<path class="belt" d="${path(way.map(([x, y]) => P(x, y, 4)))}" />`)
     .join("");
   const moving =
-    (Object.keys(into) as Source[])
-      .map((s) => `<g data-route="${s}">${changes(into[s], [s], 3)}</g>`)
-      .join("") +
-    (Object.keys(out) as App[])
-      .map((a) => `<g data-route="${a}">${changes(out[a], subscriptions[a], 4)}</g>`)
-      .join("");
+    (Object.keys(into) as Source[]).map((s) => changes(into[s], [s], 3)).join("") +
+    (Object.keys(out) as App[]).map((a) => changes(out[a], subscriptions[a], 4)).join("");
   // Back to front: the apps at the back, the sources, Changeport, the apps in front.
   const blocks =
-    station("billing", start.billing) +
-    station("pg", start.pg) +
-    station("fraud", start.fraud) +
+    station("billing") +
+    station("pg") +
+    station("fraud") +
     changeport() +
-    station("checkout", start.checkout) +
-    station("search", start.search) +
-    station("payments", start.payments) +
-    station("warehouse", start.warehouse);
+    station("checkout") +
+    station("search") +
+    station("payments") +
+    station("warehouse");
   const title =
-    "Postgres: shop, checkout-api and payments-api send their changes into Changeport, which delivers each change only to the apps subscribed to its source: billing, fraud-checks, search-indexer and warehouse-sync. A stack on each shows the changes waiting there; past its dashed line, Changeport raises an alert.";
+    "Postgres: shop, checkout-api and payments-api send their changes into Changeport, which delivers each change only to the apps subscribed to its source: billing, fraud-checks, search-indexer and warehouse-sync. A stack on Postgres: shop and on each app shows the changes waiting there; past its dashed line, Changeport raises an alert. Here search-indexer, then Postgres: shop, falls behind and catches up; In plain words says which, right now.";
   return `<div class="relative hidden sm:block">
-<svg data-flow viewBox="${view.x} ${view.y} ${view.width} ${view.height}" class="flow streams h-auto w-full overflow-visible" role="img" aria-labelledby="flow-title">
+<svg data-flow viewBox="${view.x} ${view.y} ${view.width} ${view.height}" class="flow streams-model h-auto w-full overflow-visible" role="img" aria-labelledby="flow-title">
 <title id="flow-title">${title}</title>
 ${plate}${lanes.map(lane).join("")}${belts}${moving}${blocks}
 </svg>

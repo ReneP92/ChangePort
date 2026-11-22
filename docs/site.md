@@ -41,10 +41,13 @@ just site-check   # type-check, format-check, build, test, then Lighthouse
 - **Shared parts**, such as the header and footer, are in
   `site/src/partials`. A page includes one where it says
   `<!-- include:header -->`.
-- **The hero's model** is drawn by `site/scripts/streams.ts`, from its
-  blocks, lanes and which apps subscribe to which source, where the page
-  says `<!-- include:streams -->`; `site/src/main.ts` plays its story, at
-  the levels the script draws.
+- **The hero's model** is drawn by `site/scripts/streams.ts` where the
+  page says `<!-- include:streams -->`, and `site/src/main.ts` plays its
+  story. Both take the model from `site/src/model.ts`: its sources and
+  apps, which app subscribes to which source, what Changeport watches, and
+  the second of the story the page starts at. The phone column and the
+  plain words are written in `index.html`, and a test checks that they
+  route as the model does.
 - **Addresses** come from the environment when the site is built:
   `CHANGEPORT_CONSOLE_URL`, where Sign in and every call to action lead
   (`http://localhost:8088` by default, the console on kind), and

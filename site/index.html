@@ -157,7 +157,7 @@
                 <!-- Narrow: the same streams as a column, whose text keeps its size. -->
                 <div
                   role="img"
-                  aria-label="Postgres: shop, checkout-api and payments-api send their changes into Changeport, as the topics shop.public.orders, orders and payments, which it delivers to the apps subscribed to them: billing, fraud-checks, search-indexer and warehouse-sync."
+                  aria-label="Postgres: shop, checkout-api and payments-api send their changes into Changeport, as the topics shop.public.orders, orders and payments, which it delivers to the apps subscribed to them: billing, fraud-checks, search-indexer and warehouse-sync. Here search-indexer, then Postgres: shop, falls behind and catches up; In plain words says which, right now."
                   class="sm:hidden"
                 >
                   <div class="flex flex-wrap justify-center gap-2">
@@ -195,19 +195,27 @@
                         <span class="flex items-center gap-2 font-mono"
                           ><span class="size-1.5 rounded-xs bg-[#2f9e8f]"></span
                           >shop.public.orders</span
-                        ><span class="text-neutral-400">to billing, warehouse-sync</span>
+                        ><span class="text-neutral-400"
+                          >to <span class="whitespace-nowrap">billing</span>,
+                          <span class="whitespace-nowrap">warehouse-sync</span></span
+                        >
                       </div>
                       <div class="stream-topic">
                         <span class="flex items-center gap-2 font-mono"
                           ><span class="size-1.5 rounded-xs bg-[#3b6fd8]"></span>orders</span
                         ><span class="text-neutral-400"
-                          >to fraud-checks, search-indexer, warehouse-sync</span
+                          >to <span class="whitespace-nowrap">fraud-checks</span>,
+                          <span class="whitespace-nowrap">search-indexer</span>,
+                          <span class="whitespace-nowrap">warehouse-sync</span></span
                         >
                       </div>
                       <div class="stream-topic">
                         <span class="flex items-center gap-2 font-mono"
                           ><span class="size-1.5 rounded-xs bg-[#9457e0]"></span>payments</span
-                        ><span class="text-neutral-400">to billing, fraud-checks</span>
+                        ><span class="text-neutral-400"
+                          >to <span class="whitespace-nowrap">billing</span>,
+                          <span class="whitespace-nowrap">fraud-checks</span></span
+                        >
                       </div>
                     </div>
                   </div>
@@ -254,16 +262,12 @@
                   Each change reaches the apps subscribed to its source as it happens.
                 </p>
                 <p data-say="search" class="py-2.5 leading-relaxed text-neutral-700">
-                  <span class="font-semibold text-amber-700"
-                    >search-indexer can't keep up with orders.</span
-                  >
+                  <span class="stream-say">search-indexer can't keep up with orders.</span>
                   It consumes 80 messages a second, while orders receives 118. Up to 4 more
                   consumers can share its work.
                 </p>
                 <p data-say="pg" hidden class="py-2.5 leading-relaxed text-neutral-700">
-                  <span class="font-semibold text-amber-700"
-                    >Postgres: shop is falling behind.</span
-                  >
+                  <span class="stream-say">Postgres: shop is falling behind.</span>
                   Changeport reads its changes slower than the database makes them, so the database
                   keeps more of its log until it catches up.
                 </p>

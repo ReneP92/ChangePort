@@ -3,6 +3,8 @@
 // change data capture demo. Everything here enhances a page that is already
 // complete without it, and keeps still for people who ask for less motion.
 
+import { opening, severe, threshold, watched } from "./model.ts";
+
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const numbers = new Intl.NumberFormat("en-US");
 
@@ -137,7 +139,7 @@ function hero(): void {
   const rates = figure.querySelectorAll("[data-rate]");
   const play = story(figure);
   let value = 1284;
-  let second = 0;
+  let second = opening + 1;
   let running = true;
   watch(figure, (on) => (running = on));
   setInterval(() => {
@@ -156,18 +158,15 @@ function hero(): void {
 }
 
 /**
- * The hero's story, over 28 seconds: search-indexer falls behind and
- * catches up, then Postgres: shop does. Each block's stack shows the changes
- * waiting there, a few at most while it keeps up; past the dashed line,
- * Changeport raises an alert, which the model, its labels and the sentences
- * show. Without the script, or with reduced motion, the page keeps its own
- * state: search-indexer behind. The levels match scripts/streams.ts.
+ * The hero's story, over 32 seconds: search-indexer falls behind and
+ * catches up, then Postgres: shop does. Each watched block's stack shows the
+ * changes waiting there, a few at most while it keeps up; past the dashed
+ * line, Changeport raises an alert, which the model, its labels and the
+ * sentences show. The page starts in the story, at its opening second
+ * (src/model.ts), with search-indexer behind, and keeps that state without
+ * the script or with reduced motion; the script goes on from there.
  */
 function story(figure: HTMLElement): (second: number) => void {
-  const nodes = ["pg", "checkout", "payments", "billing", "fraud", "search", "warehouse"];
-  const sources = new Set(["pg", "checkout", "payments"]);
-  const threshold = 4;
-  const severe = 7;
   // Up by one a second from a time to a peak, held until a later time, then
   // down by three a second.
   const ramp = (t: number, from: number, to: number, peak: number) =>
@@ -175,21 +174,22 @@ function story(figure: HTMLElement): (second: number) => void {
   const all = <T extends Element>(selector: string) => [...figure.querySelectorAll<T>(selector)];
   const stacks = all<SVGGElement>(".stack[data-node]");
   const chips = all<HTMLElement>("[data-chip]");
-  const routes = all<SVGGElement>("[data-route]");
+  const odd = all<SVGGElement>(".change[data-odd]");
   const alerts = all<HTMLElement>("[data-alert]");
   const says = all<HTMLElement>("[data-say]");
   const statuses = all<HTMLElement>("[data-status]");
 
   return (second) => {
-    const t = second % 28;
-    const level = new Map(
-      nodes.map((id, i) => [
+    const t = second % 32;
+    // A change or two waits now and then while a block keeps up.
+    const level = new Map<string, number>(
+      watched.map((id, i) => [
         id,
         (second * 7 + i * 3) % 5 === 0 ? 2 : (second + i) % 3 === 0 ? 1 : 0,
       ]),
     );
-    level.set("search", Math.max(level.get("search")!, ramp(t, 3, 11, 8)));
-    level.set("pg", Math.max(level.get("pg")!, ramp(t, 15, 22, 7)));
+    level.set("search", Math.max(level.get("search")!, ramp(t, 3, 14, 8)));
+    level.set("pg", Math.max(level.get("pg")!, ramp(t, 18, 28, 7)));
     const behind = (id: string) => (level.get(id) ?? 0) > threshold;
     const far = (id: string) => (level.get(id) ?? 0) >= severe;
     const mark = (element: Element, id: string) => {
@@ -207,11 +207,11 @@ function story(figure: HTMLElement): (second: number) => void {
     for (const chip of chips) {
       mark(chip, chip.dataset.chip!);
     }
-    for (const route of routes) {
-      const id = route.dataset.route!;
-      route.classList.toggle("is-thin", sources.has(id) && level.get(id)! >= 3);
+    // Fewer of a source's changes get through while it falls behind.
+    for (const change of odd) {
+      change.classList.toggle("is-thin", (level.get(change.dataset.from!) ?? 0) >= 3);
     }
-    const quiet = !nodes.some(behind);
+    const quiet = !watched.some(behind);
     for (const element of [...alerts, ...says]) {
       const id = element.dataset.alert ?? element.dataset.say!;
       element.hidden = id === "none" ? !quiet : !behind(id);

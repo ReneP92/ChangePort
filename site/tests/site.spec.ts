@@ -1,7 +1,38 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { colors, names, subscriptions, topics, type App, type Source } from "../src/model.ts";
 
 const wide = (page: Page) => (page.viewportSize()?.width ?? 0) >= 768;
+
+/**
+ * Stops the page's clock, which then moves only as the test runs it, not
+ * with real time: the hero's story ticks once a second.
+ */
+async function holdClock(page: Page) {
+  const time = new Date("2026-11-21T10:00:00Z");
+  await page.clock.install({ time });
+  await page.clock.pauseAt(new Date(time.getTime() + 10));
+}
+
+/**
+ * Scrolls the hero's model into view, and waits until the page knows: its
+ * story only plays while in view. An observer of the test's own reports in
+ * the same step as the page's, after it.
+ */
+async function storyInView(page: Page) {
+  await page.locator("[data-streams]").scrollIntoViewIfNeeded();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        new IntersectionObserver((entries, observer) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            observer.disconnect();
+            resolve();
+          }
+        }).observe(document.querySelector("[data-streams]")!),
+      ),
+  );
+}
 
 /** The docs' pages the tests visit: each kind of page once. */
 const docs = [
@@ -69,12 +100,12 @@ test("the hero's model draws white blocks, with changes moving between them", as
 
 test("phones get the hero's streams as a column, with every reader", async ({ page }) => {
   // The story waits, so that the column shows the page's own state.
-  await page.clock.install();
+  await holdClock(page);
   await page.goto("/");
   test.skip((page.viewportSize()?.width ?? 0) >= 640, "Wider screens get the model");
   const column = page.locator("[data-scene] [role=img]:visible");
   await expect(column).toHaveAccessibleName(
-    /subscribed to them: billing, fraud-checks, search-indexer and warehouse-sync\.$/,
+    /subscribed to them: billing, fraud-checks, search-indexer and warehouse-sync\. Here search-indexer, then Postgres: shop, falls behind and catches up; In plain words says which, right now\.$/,
   );
   await expect(column.locator(".stream-label")).toHaveText(
     [
@@ -90,25 +121,78 @@ test("phones get the hero's streams as a column, with every reader", async ({ pa
   );
 });
 
-test("the hero's story raises an alert when a reader falls behind, and clears it", async ({
+test("the phone column and the plain words route as the model does", async ({ page }) => {
+  await page.goto("/");
+  const sources = Object.keys(topics) as Source[];
+  const apps = Object.keys(subscriptions) as App[];
+  const readers = (source: Source) =>
+    apps.filter((app) => subscriptions[app].includes(source)).map((app) => names[app]);
+  const rgb = (hex: string) =>
+    `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
+
+  const rows = page.locator(".stream-topic");
+  await expect(rows).toHaveText(sources.map((s) => `${topics[s]}to ${readers(s).join(", ")}`));
+  for (const [i, source] of sources.entries()) {
+    await expect(rows.nth(i).locator(".rounded-xs")).toHaveCSS(
+      "background-color",
+      rgb(colors[source]),
+    );
+  }
+  // Each reader's dots, in the column and on the model, are its sources'.
+  for (const app of apps) {
+    const want = subscriptions[app].map((s) => rgb(colors[s]));
+    for (const chip of await page
+      .locator(".stream-label")
+      .filter({ hasText: new RegExp(`^${names[app]}`) })
+      .all()) {
+      const dots = await chip
+        .locator(".rounded-full")
+        .evaluateAll((spans) => spans.map((span) => getComputedStyle(span).backgroundColor));
+      expect(dots, names[app]).toEqual(want);
+    }
+  }
+  const plain = await page
+    .locator("[data-plain] li > span:first-child")
+    .evaluateAll((rows) => rows.map((row) => row.textContent.replace(/\s+/g, " ").trim()));
+  expect(plain).toEqual(
+    apps.map(
+      (app) => `${names[app]} reads ${subscriptions[app].map((s) => topics[s]).join(" and ")}`,
+    ),
+  );
+});
+
+test("the hero's story goes on from the page's state, and raises and clears alerts", async ({
   page,
 }) => {
-  await page.clock.install();
+  await holdClock(page);
   await page.goto("/");
+  await storyInView(page);
   const alert = (id: string) => page.locator(`[data-alert="${id}"]`);
   const status = page.locator('[data-status="search"]');
-  // search-indexer falls behind a few seconds in, and catches up again.
-  await page.clock.runFor(9_000);
+  const pg = page.locator('[data-scene] [data-chip="pg"]:visible');
+  // search-indexer, behind as the page starts, falls further behind.
+  await page.clock.runFor(1_000);
   await expect(status).toHaveText("falling behind");
+  await expect(status).toHaveClass(/is-severe/);
   if (wide(page)) {
     await expect(alert("search")).toBeVisible();
-    await expect(page.locator('.stack[data-node="search"]')).toHaveClass(/is-behind/);
+    await expect(page.locator('.stack[data-node="search"]')).toHaveClass(/is-severe/);
   }
+  // Then it catches up, and all is quiet.
   await page.clock.runFor(6_000);
   await expect(status).toHaveText("caught up");
+  await expect(pg).not.toHaveClass(/is-behind/);
   if (wide(page)) {
     await expect(alert("search")).toBeHidden();
     await expect(alert("none")).toBeVisible();
+  }
+  // Then Postgres: shop falls behind.
+  await page.clock.runFor(7_000);
+  await expect(pg).toHaveClass(/is-behind/);
+  await expect(page.locator('[data-say="pg"]')).not.toHaveAttribute("hidden");
+  if (wide(page)) {
+    await expect(alert("pg")).toBeVisible();
+    await expect(alert("none")).toBeHidden();
   }
 });
 
@@ -314,6 +398,18 @@ test("the docs lead from page to page, and nothing scrolls sideways", async ({ p
 test.describe("with reduced motion", () => {
   test.use({ reducedMotion: "reduce" });
 
+  test("the hero's story keeps the page's state", async ({ page }) => {
+    await holdClock(page);
+    await page.goto("/");
+    await storyInView(page);
+    await page.clock.runFor(20_000);
+    await expect(page.locator('[data-status="search"]')).toHaveText("falling behind");
+    await expect(page.locator('[data-say="search"]')).not.toHaveAttribute("hidden");
+    if (wide(page)) {
+      await expect(page.locator('[data-alert="search"]')).toBeVisible();
+    }
+  });
+
   test("the hero keeps still, and every section shows", async ({ page }) => {
     await page.goto("/");
     const paused = await page
@@ -321,9 +417,13 @@ test.describe("with reduced motion", () => {
       .evaluateAll((svgs) => svgs.every((svg) => (svg as SVGSVGElement).animationsPaused()));
     expect(paused).toBe(true);
     const running = await page
-      .locator(".stream-link")
-      .evaluateAll((links) =>
-        links.filter((link) => getComputedStyle(link, "::after").animationName !== "none"),
+      .locator(".stream-link, .belt, .stack-ring, .console-log")
+      .evaluateAll((elements) =>
+        elements.filter(
+          (element) =>
+            getComputedStyle(element).animationName !== "none" ||
+            getComputedStyle(element, "::after").animationName !== "none",
+        ),
       );
     expect(running).toHaveLength(0);
     await page.locator("[data-cdc]").scrollIntoViewIfNeeded();

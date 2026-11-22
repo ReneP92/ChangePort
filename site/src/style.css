@@ -183,6 +183,16 @@ html {
   color: var(--color-red-700);
 }
 
+/* What Changeport says in plain words, amber while an app or source is behind, red far behind. */
+.stream-say {
+  font-weight: 600;
+  color: var(--color-amber-700);
+}
+
+[data-say].is-severe .stream-say {
+  color: var(--color-red-700);
+}
+
 /* What Changeport raises, over the model's corner. */
 .stream-ok,
 .stream-alert-card {
@@ -220,52 +230,53 @@ html {
  * The model's changes, in their sources' colors, and its stacks of changes
  * waiting, which grow as main.ts sets their levels.
  */
-.flow.streams .change .ct,
-.flow.streams .stack .ct {
+.flow.streams-model .change .ct,
+.flow.streams-model .stack .ct {
   fill: var(--ct);
 }
 
-.flow.streams .change .cl {
+.flow.streams-model .change .cl {
   fill: var(--cl);
 }
 
-.flow.streams .stack .cl {
+.flow.streams-model .stack .cl {
   fill: var(--c);
 }
 
-.flow.streams .change .cr,
-.flow.streams .stack .cr {
+.flow.streams-model .change .cr,
+.flow.streams-model .stack .cr {
   fill: var(--cr);
 }
 
-.flow.streams [data-route] .change {
+.flow.streams-model .change {
   transition: opacity 400ms;
 }
 
-.flow.streams [data-route].is-thin .change:nth-of-type(even) {
+/* Every other change of a source that falls behind, on every belt it takes. */
+.flow.streams-model .change.is-thin {
   opacity: 0;
 }
 
-.flow.streams .belt {
+.flow.streams-model .belt {
   fill: none;
   stroke: #c9c9c3;
   stroke-width: 2;
   stroke-dasharray: 2 9;
 }
 
-.flow.streams .stack.is-behind {
+.flow.streams-model .stack.is-behind {
   --c: #e9a23b;
   --ct: #f4d09d;
   --cr: #90641f;
 }
 
-.flow.streams .stack.is-severe {
+.flow.streams-model .stack.is-severe {
   --c: #e5484d;
   --ct: #f2a3a6;
   --cr: #8e2c30;
 }
 
-.flow.streams .level {
+.flow.streams-model .level {
   opacity: 0;
   translate: 0 -8px;
   transition:
@@ -273,31 +284,31 @@ html {
     translate 300ms cubic-bezier(0.3, 1.4, 0.5, 1);
 }
 
-.flow.streams .level.on {
+.flow.streams-model .level.on {
   opacity: 1;
   translate: 0 0;
 }
 
-.flow.streams .level polygon {
+.flow.streams-model .level polygon {
   transition: fill 400ms;
 }
 
-.flow.streams .stack-disc {
+.flow.streams-model .stack-disc {
   fill: #cfcfca;
 }
 
-.flow.streams .stack-line {
+.flow.streams-model .stack-line {
   fill: none;
   stroke: #b5b5af;
   stroke-width: 1;
   stroke-dasharray: 3 3;
 }
 
-.flow.streams .stack.is-behind .stack-line {
+.flow.streams-model .stack.is-behind .stack-line {
   stroke: var(--c);
 }
 
-.flow.streams .stack-ring {
+.flow.streams-model .stack-ring {
   fill: none;
   stroke: var(--c);
   stroke-width: 2;
@@ -306,20 +317,20 @@ html {
   transform-origin: center;
 }
 
-.flow.streams .stack.is-behind .stack-ring {
+.flow.streams-model .stack.is-behind .stack-ring {
   opacity: 0.6;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .flow.streams .belt {
+  .flow.streams-model .belt {
     animation: belt 0.6s linear infinite;
   }
 
-  .flow.streams .stack.is-behind .stack-ring {
+  .flow.streams-model .stack.is-behind .stack-ring {
     animation: stack-ring 2.2s linear infinite;
   }
 
-  .flow.streams .console-log {
+  .flow.streams-model .console-log {
     animation: console-log 9s linear infinite;
   }
 }
