@@ -3,6 +3,8 @@
 // change data capture demo. Everything here enhances a page that is already
 // complete without it, and keeps still for people who ask for less motion.
 
+import { opening, severe, threshold, watched } from "./model.ts";
+
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const numbers = new Intl.NumberFormat("en-US");
 
@@ -135,7 +137,9 @@ function hero(): void {
     }
   }
   const rates = figure.querySelectorAll("[data-rate]");
+  const play = story(figure);
   let value = 1284;
+  let second = opening + 1;
   let running = true;
   watch(figure, (on) => (running = on));
   setInterval(() => {
@@ -148,8 +152,77 @@ function hero(): void {
       for (const rate of rates) {
         rate.textContent = `${numbers.format(value)} changes/s`;
       }
+      play(second++);
     }
   }, 1000);
+}
+
+/**
+ * The hero's story, over 32 seconds: search-indexer falls behind and
+ * catches up, then Postgres: shop does. Each watched block's stack shows the
+ * changes waiting there, a few at most while it keeps up; past the dashed
+ * line, Changeport raises an alert, which the model, its labels and the
+ * sentences show. The page starts in the story, at its opening second
+ * (src/model.ts), with search-indexer behind, and keeps that state without
+ * the script or with reduced motion; the script goes on from there.
+ */
+function story(figure: HTMLElement): (second: number) => void {
+  // Up by one a second from a time to a peak, held until a later time, then
+  // down by three a second.
+  const ramp = (t: number, from: number, to: number, peak: number) =>
+    t < from ? 0 : t < to ? Math.min(peak, 1 + t - from) : Math.max(0, peak - 3 * (t - to + 1));
+  const all = <T extends Element>(selector: string) => [...figure.querySelectorAll<T>(selector)];
+  const stacks = all<SVGGElement>(".stack[data-node]");
+  const chips = all<HTMLElement>("[data-chip]");
+  const odd = all<SVGGElement>(".change[data-odd]");
+  const alerts = all<HTMLElement>("[data-alert]");
+  const says = all<HTMLElement>("[data-say]");
+  const statuses = all<HTMLElement>("[data-status]");
+
+  return (second) => {
+    const t = second % 32;
+    // A change or two waits now and then while a block keeps up.
+    const level = new Map<string, number>(
+      watched.map((id, i) => [
+        id,
+        (second * 7 + i * 3) % 5 === 0 ? 2 : (second + i) % 3 === 0 ? 1 : 0,
+      ]),
+    );
+    level.set("search", Math.max(level.get("search")!, ramp(t, 3, 14, 8)));
+    level.set("pg", Math.max(level.get("pg")!, ramp(t, 18, 28, 7)));
+    const behind = (id: string) => (level.get(id) ?? 0) > threshold;
+    const far = (id: string) => (level.get(id) ?? 0) >= severe;
+    const mark = (element: Element, id: string) => {
+      element.classList.toggle("is-behind", behind(id));
+      element.classList.toggle("is-severe", far(id));
+    };
+
+    for (const stack of stacks) {
+      const id = stack.dataset.node!;
+      mark(stack, id);
+      stack.querySelectorAll(".level").forEach((cube, i) => {
+        cube.classList.toggle("on", i < level.get(id)!);
+      });
+    }
+    for (const chip of chips) {
+      mark(chip, chip.dataset.chip!);
+    }
+    // Fewer of a source's changes get through while it falls behind.
+    for (const change of odd) {
+      change.classList.toggle("is-thin", (level.get(change.dataset.from!) ?? 0) >= 3);
+    }
+    const quiet = !watched.some(behind);
+    for (const element of [...alerts, ...says]) {
+      const id = element.dataset.alert ?? element.dataset.say!;
+      element.hidden = id === "none" ? !quiet : !behind(id);
+      element.classList.toggle("is-severe", far(id));
+    }
+    for (const status of statuses) {
+      const id = status.dataset.status!;
+      mark(status, id);
+      status.textContent = behind(id) ? "falling behind" : "caught up";
+    }
+  };
 }
 
 /**
