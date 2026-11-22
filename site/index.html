@@ -98,7 +98,7 @@
           <figure
             data-streams
             aria-labelledby="streams-title"
-            class="mx-auto w-full max-w-xl rounded-2xl border border-neutral-200 bg-neutral-100 p-4 shadow-[0_20px_60px_-20px_rgb(17_17_17/0.25)] sm:p-6 lg:max-w-none xl:-mr-16"
+            class="mx-auto w-full max-w-xl rounded-2xl border border-neutral-200 bg-neutral-100 p-4 shadow-[0_20px_60px_-20px_rgb(17_17_17/0.25)] sm:p-6 lg:mx-0 lg:w-auto lg:max-w-none xl:-mr-[min(10rem,calc((100vw_-_72rem)/2_-_0.5rem))]"
           >
             <figcaption class="flex flex-wrap items-center justify-between gap-3">
               <span class="flex items-center gap-3">
@@ -135,7 +135,7 @@
                 <div class="relative hidden sm:block">
                   <svg
                     data-flow
-                    viewBox="40 112 680 384"
+                    viewBox="60 112 640 384"
                     class="flow h-auto w-full overflow-visible"
                     role="img"
                     aria-labelledby="flow-title"
@@ -963,49 +963,49 @@
                   <span
                     aria-hidden="true"
                     class="stream-label iso-label iso-above-left"
-                    style="left: 46.88%; top: 8.9%"
+                    style="left: 46.68%; top: 8.9%"
                     ><span class="size-1.5 rounded-xs bg-teal"></span>Postgres: shop</span
                   >
                   <span
                     aria-hidden="true"
                     class="stream-label iso-label iso-above-left"
-                    style="left: 31.28%; top: 22.71%"
+                    style="left: 30.11%; top: 22.71%"
                     ><span class="size-1.5 rounded-xs bg-teal"></span>checkout-api</span
                   >
                   <span
                     aria-hidden="true"
                     class="stream-label iso-label iso-below"
-                    style="left: 15.68%; top: 59.14%"
+                    style="left: 13.53%; top: 59.14%"
                     ><span class="size-1.5 rounded-xs bg-teal"></span>payments-api</span
                   >
                   <span
                     aria-hidden="true"
                     class="stream-label stream-label-dark iso-label iso-center"
-                    style="left: 47.3%; top: 50.25%"
+                    style="left: 47.13%; top: 50.25%"
                     >Changeport</span
                   >
                   <span
                     aria-hidden="true"
                     class="stream-label iso-label"
-                    style="left: 87.44%; top: 39.28%"
+                    style="left: 89.78%; top: 39.28%"
                     ><span class="size-1.5 rounded-full bg-teal"></span>billing</span
                   >
                   <span
                     aria-hidden="true"
                     class="stream-label iso-label iso-below"
-                    style="left: 74.96%; top: 72.95%"
+                    style="left: 76.52%; top: 72.95%"
                     ><span class="size-1.5 rounded-full bg-teal"></span>fraud-checks</span
                   >
                   <span
                     aria-hidden="true"
                     class="stream-label iso-label iso-below border-red-200"
-                    style="left: 62.48%; top: 84%"
+                    style="left: 63.26%; top: 84%"
                     ><span class="size-1.5 rounded-full bg-red-500"></span>search-indexer</span
                   >
                   <span
                     aria-hidden="true"
                     class="stream-label iso-label iso-left"
-                    style="left: 41.27%; top: 85.51%"
+                    style="left: 40.72%; top: 85.51%"
                     ><span class="size-1.5 rounded-full bg-teal"></span>warehouse-sync</span
                   >
                 </div>
@@ -1077,49 +1077,51 @@
                 </div>
               </div>
 
-              <!-- The same streams, in sentences. -->
-              <ul
+              <!-- The same streams, in sentences: the console's diagnosis, then each stream. -->
+              <div
                 data-plain
                 inert
-                class="invisible self-start divide-y divide-neutral-200 rounded-xl bg-white px-4 text-sm [grid-area:1/1]"
+                class="invisible self-start rounded-xl bg-white px-4 text-sm [grid-area:1/1]"
               >
-                <li class="py-2">
-                  <span class="font-medium">billing</span> reads shop.public.orders, from Postgres:
-                  shop, and payments. It is caught up.
-                </li>
-                <li class="py-2">
-                  <span class="font-medium">fraud-checks</span> reads payments, from payments-api.
-                  It is caught up.
-                </li>
-                <li class="py-2">
-                  <span class="font-medium text-red-700">search-indexer</span> reads orders, from
-                  checkout-api. It is 3 minutes behind, and falling further.
-                </li>
-                <li class="py-2">
-                  <span class="font-medium">warehouse-sync</span> reads shop.public.orders, from
-                  Postgres: shop. It is caught up.
-                </li>
-              </ul>
-            </div>
-
-            <!-- What the console says, in its own words. -->
-            <div class="mt-4 flex gap-3 rounded-xl border border-neutral-200 bg-white p-4">
-              <svg aria-hidden="true" viewBox="0 0 32 32" class="size-8 shrink-0">
-                <rect width="32" height="32" rx="8" fill="#111111" />
-                <rect x="8" y="9" width="11" height="3.2" rx="1.6" fill="white" />
-                <rect x="8" y="14.4" width="7" height="3.2" rx="1.6" fill="white" />
-                <circle cx="19" cy="16" r="1.9" fill="#2dd4bf" />
-                <rect x="8" y="19.8" width="16" height="3.2" rx="1.6" fill="white" />
-              </svg>
-              <div class="text-sm leading-relaxed">
-                <p class="text-xs font-medium text-neutral-600">The console, in plain words</p>
-                <p class="mt-1 text-neutral-700">
+                <p class="py-2.5 leading-relaxed text-neutral-700">
                   <span class="font-semibold text-amber-700"
                     >search-indexer can't keep up with orders.</span
                   >
-                  It consumes 80 messages a second of orders, which receives 118: 3 minutes behind,
-                  and falling further. Up to 4 more consumers can share its work.
+                  It consumes 80 messages a second, while orders receives 118. Up to 4 more
+                  consumers can share its work.
                 </p>
+                <ul class="divide-y divide-neutral-200 border-t border-neutral-200">
+                  <li class="flex justify-between gap-x-3 py-1.5">
+                    <span
+                      ><span class="font-medium">billing</span
+                      ><span class="max-sm:hidden">
+                        reads shop.public.orders and payments</span
+                      ></span
+                    >
+                    <span class="shrink-0 text-right text-neutral-600">caught up</span>
+                  </li>
+                  <li class="flex justify-between gap-x-3 py-1.5">
+                    <span
+                      ><span class="font-medium">fraud-checks</span
+                      ><span class="max-sm:hidden"> reads payments</span></span
+                    >
+                    <span class="shrink-0 text-right text-neutral-600">caught up</span>
+                  </li>
+                  <li class="flex justify-between gap-x-3 py-1.5">
+                    <span
+                      ><span class="font-medium text-red-700">search-indexer</span
+                      ><span class="max-sm:hidden"> reads orders</span></span
+                    >
+                    <span class="shrink-0 text-right font-medium text-red-700">3 min behind</span>
+                  </li>
+                  <li class="flex justify-between gap-x-3 py-1.5">
+                    <span
+                      ><span class="font-medium">warehouse-sync</span
+                      ><span class="max-sm:hidden"> reads shop.public.orders</span></span
+                    >
+                    <span class="shrink-0 text-right text-neutral-600">caught up</span>
+                  </li>
+                </ul>
               </div>
             </div>
           </figure>

@@ -108,6 +108,23 @@ test("the hero tells its streams in plain words, and back", async ({ page }) => 
   await expect(figure.locator("[data-plain]")).toHaveJSProperty("inert", true);
 });
 
+test("the hero's plain words never leave its streams with a gap below them", async ({ page }) => {
+  await page.goto("/");
+  // The two views share one place, as tall as the taller of them.
+  for (const width of [320, 360, 412, 480, 640, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    const [scene, plain] = await page.evaluate(() => [
+      Math.max(
+        ...[...document.querySelectorAll("[data-scene] > *")].map(
+          (view) => view.getBoundingClientRect().height,
+        ),
+      ),
+      document.querySelector("[data-plain]")!.getBoundingClientRect().height,
+    ]);
+    expect(plain, `at ${width}px`).toBeLessThanOrEqual(scene + 1.5);
+  }
+});
+
 test("the hero fills the first screen, so the next section starts at the fold", async ({
   page,
 }) => {
