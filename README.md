@@ -600,8 +600,9 @@ from the Kafka image with tiered storage configured. Run
 
 A pull request runs only the jobs its files can affect, which
 `hack/ci-changes.sh` decides: a change to the landing site runs the site's
-checks, and a change to Go runs nearly everything. A file it does not know
-counts as the platform's, and a change to the workflow, the `justfile` or
-`hack/lib.sh` runs everything. Pushes to main, and runs started by hand, run
+checks, a change to one end-to-end suite's scripts runs that suite on kind,
+and a change to Go runs nearly everything. A file it does not know counts
+as the platform's, and a change to the workflow, `hack/ci-changes.sh`, the
+`justfile` or `hack/lib.sh` runs everything. Pushes to main, and runs started by hand, run
 every job whatever changed. To see what a branch would run:
 `hack/ci-changes.sh main`.

@@ -157,11 +157,17 @@ that fell short. Its reports are in `site/lighthouse`; CI runs it, after the tes
 
 ## Publishing
 
-Once prod has a domain (#8), `.github/workflows/publish-site.yml` builds the
-site for it after every green CI run for main's newest commit, with the console at
-`console.<domain>`, and publishes it to its bucket behind CloudFront
+Once prod has a domain (#8), `.github/workflows/publish-site.yml` checks
+the site (`just site-check`) on every push to main and builds it for the
+domain, with the console at `console.<domain>`, then publishes main's
+newest commit to its bucket behind CloudFront
 (`hack/publish-site.sh`, [terraform/README.md](../terraform/README.md#landing-site-modulesstatic-site-prod-only)).
-A merge reaches visitors a few minutes after CI passes.
+It does not wait for the rest of CI, so a merge reaches visitors a few
+minutes after it lands. A merge whose other checks fail goes live all the
+same: of the checks on the customer docs, Go's tests of the alerts' links
+and the core suite's run of the connection guide's examples run in CI only.
+The tests and the build run without the publish role, which only the job
+that uploads gets.
 
 Each page carries a Content-Security-Policy, which the build writes into it:
 the site's own files only, and of inline scripts only those the page was
