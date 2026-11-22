@@ -577,8 +577,9 @@ keeps it:
 kubectl -n mail port-forward svc/mailpit 8025:http   # then open http://localhost:8025
 ```
 
-The AWS environments send through Amazon SES, once the domain exists (#8)
-and has its SES identity.
+The AWS environments send through Amazon SES, once the domain,
+`changeport.app`, has its SES identity, whose records go in its zone on
+Cloudflare (terraform/README.md, Domain and DNS).
 
 ## Alerting
 

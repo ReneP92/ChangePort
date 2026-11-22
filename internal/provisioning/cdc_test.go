@@ -576,7 +576,7 @@ func TestRenderRegistryGateway(t *testing.T) {
 	objects := renderSpec(t, eks)
 	service := objectNamed(t, objects, "Service", RegistryGateway)
 	annotations := service.GetAnnotations()
-	if annotations[externalDNSHostname] != "registry.acme.kafka.changeport.invalid" ||
+	if annotations[externalDNSHostname] != "registry.acme.kafka.changeport.app" ||
 		annotations["service.beta.kubernetes.io/aws-load-balancer-target-group-attributes"] != "preserve_client_ip.enabled=true" ||
 		annotations["service.beta.kubernetes.io/aws-load-balancer-scheme"] != "internet-facing" {
 		t.Errorf("gateway Service annotations = %v", annotations)

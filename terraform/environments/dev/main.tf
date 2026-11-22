@@ -13,8 +13,15 @@ provider "aws" {
   }
 }
 
+# The domain's zone on Cloudflare, with the token in CLOUDFLARE_API_TOKEN
+# (terraform/README.md).
+provider "cloudflare" {}
+
 locals {
   name = "changeport-dev"
+  # Registered at Cloudflare, which keeps its zone (docs/PROJECT_PLAN.md,
+  # Domain).
+  domain = "changeport.app"
   # The repository as its OpenID Connect tokens name it, which the roles for
   # GitHub Actions trust: immutable subjects carry the owner's and the
   # repository's IDs (gh api repos/ReneP92/ChangePort/actions/oidc/customization/sub).
@@ -48,6 +55,22 @@ module "vpc" {
   nat_gateway_per_zone = false
 }
 
+data "cloudflare_zone" "domain" {
+  filter = {
+    name = local.domain
+  }
+}
+
+# The zone of dev's customer endpoints, delegated from the domain's zone.
+module "kafka_zone" {
+  source = "../../modules/kafka-zone"
+
+  name               = "kafka.dev.${local.domain}"
+  cloudflare_zone_id = data.cloudflare_zone.domain.zone_id
+  # Dev can be torn down and rebuilt, records and all.
+  force_destroy = true
+}
+
 module "eks" {
   source = "../../modules/eks"
 
@@ -58,7 +81,7 @@ module "eks" {
 
   api_allowed_cidrs             = var.api_allowed_cidrs
   administrator_permission_sets = var.administrator_permission_sets
-  kafka_dns_zone_ids            = var.kafka_dns_zone_ids
+  kafka_dns_zone_ids            = [module.kafka_zone.zone_id]
 
   # Dev can be torn down and rebuilt.
   deletion_protection = false

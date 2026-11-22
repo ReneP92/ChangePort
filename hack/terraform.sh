@@ -9,8 +9,10 @@
 #   apply      plans and applies once you approve
 # Credentials come from the AWS CLI profile changeport-<account> (aws sso
 # login --profile changeport-<account>) unless AWS_PROFILE is set or GitHub
-# Actions provides them. Inputs come from terraform.tfvars next to the
-# account's configuration. Bootstrapping or applying management or prod
+# Actions provides them. Dev and prod also write the domain's records on
+# Cloudflare, with the API token in CLOUDFLARE_API_TOKEN (terraform/README.md),
+# which bootstrapping does not need. Inputs come from terraform.tfvars next to
+# the account's configuration. Bootstrapping or applying management or prod
 # needs CONFIRM=<account>.
 # Usage: hack/terraform.sh bootstrap|plan|apply management|dev|prod
 # shellcheck source=lib.sh
@@ -26,6 +28,9 @@ if [[ $action != plan && $account != dev && ${CONFIRM:-} != "$account" ]]; then
 fi
 
 command -v aws >/dev/null || die "the AWS CLI is needed"
+if [[ $action != bootstrap && $account != management && -z ${CLOUDFLARE_API_TOKEN:-} ]]; then
+  die "$action in $account needs CLOUDFLARE_API_TOKEN, a Cloudflare API token for the domain's zone (terraform/README.md)"
+fi
 [[ -n ${GITHUB_ACTIONS:-} ]] || export AWS_PROFILE=${AWS_PROFILE:-changeport-$account}
 
 dir=terraform/environments/$account

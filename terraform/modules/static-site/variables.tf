@@ -4,17 +4,17 @@ variable "name" {
 }
 
 variable "domain" {
-  description = "The domain the site is served at, such as changeport.io; www.<domain> redirects to it."
+  description = "The domain the site is served at, such as changeport.app; www.<domain> redirects to it."
   type        = string
 
   validation {
     condition     = can(regex("^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$", var.domain))
-    error_message = "Name the domain in lowercase, without a scheme or a trailing dot, such as changeport.io."
+    error_message = "Name the domain in lowercase, without a scheme or a trailing dot, such as changeport.app."
   }
 }
 
-variable "zone_id" {
-  description = "ID of the Route 53 hosted zone of the domain, where the site's records and the certificate's validation go."
+variable "cloudflare_zone_id" {
+  description = "ID of the domain's zone on Cloudflare (terraform/modules/domain), where the site's records and the certificate's validation go."
   type        = string
 }
 

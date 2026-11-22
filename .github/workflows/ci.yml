@@ -100,8 +100,9 @@ jobs:
   # Plans each AWS account with a role that may only read, and lists the
   # addresses of what would change: the log is public, so the details stay
   # with `just tf-plan <account>`. An account is skipped until its role and
-  # inputs are set (terraform/README.md), as are pull requests from forks,
-  # which get neither.
+  # inputs are set, and dev and prod until a Cloudflare token that may read
+  # the domain's zone is set too (terraform/README.md), as are pull requests
+  # from forks, which get none of them.
   terraform-plan:
     name: Terraform plan
     needs: changes
@@ -118,22 +119,31 @@ jobs:
       # Names of variables and secrets match whatever their case.
       ROLE_ARN: ${{ vars[format('TERRAFORM_PLAN_ROLE_ARN_{0}', matrix.account)] }}
       TFVARS: ${{ secrets[format('TERRAFORM_TFVARS_{0}', matrix.account)] }}
+      CLOUDFLARE_API_TOKEN: ${{ matrix.account != 'management' && secrets.CLOUDFLARE_PLAN_API_TOKEN || '' }}
     steps:
-      - name: Skip without a role or inputs
-        if: env.ROLE_ARN == '' || env.TFVARS == ''
-        run: echo "::notice::No plan role or inputs for ${{ matrix.account }}; skipped."
-      - if: env.ROLE_ARN != '' && env.TFVARS != ''
+      - id: ready
+        name: Check for the role and inputs
+        env:
+          ACCOUNT: ${{ matrix.account }}
+        run: |
+          if [[ -z $ROLE_ARN || -z $TFVARS || ($ACCOUNT != management && -z $CLOUDFLARE_API_TOKEN) ]]; then
+            echo "::notice::No plan role, inputs or Cloudflare token for $ACCOUNT; skipped."
+            echo "ready=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >>"$GITHUB_OUTPUT"
+          fi
+      - if: steps.ready.outputs.ready == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - if: env.ROLE_ARN != '' && env.TFVARS != ''
+      - if: steps.ready.outputs.ready == 'true'
         uses: ./.github/actions/setup-just
-      - if: env.ROLE_ARN != '' && env.TFVARS != ''
+      - if: steps.ready.outputs.ready == 'true'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ env.ROLE_ARN }}
           aws-region: us-east-1
-      - if: env.ROLE_ARN != '' && env.TFVARS != ''
+      - if: steps.ready.outputs.ready == 'true'
         run: printf '%s\n' "$TFVARS" >"terraform/environments/${{ matrix.account }}/terraform.tfvars"
-      - if: env.ROLE_ARN != '' && env.TFVARS != ''
+      - if: steps.ready.outputs.ready == 'true'
         run: just tf-plan ${{ matrix.account }}
 
   shell:

@@ -799,8 +799,8 @@ func eksTieredStorage(environment string) TieredStorage {
 }
 
 // EKSDevPlatform is the EKS cluster of the dev AWS account, with gp3 volumes
-// and nodes across three availability zones. Its Kafka domain is a reserved
-// .invalid placeholder until the domain is registered (#8).
+// and nodes across three availability zones. Its Kafka domain is dev's zone
+// in Route 53 (terraform/modules/kafka-zone).
 var EKSDevPlatform = Platform{
 	Name:                 "eks-dev",
 	KafkaImage:           eksImages.Kafka,
@@ -811,7 +811,7 @@ var EKSDevPlatform = Platform{
 	StorageClass:         "gp3",
 	Zones:                3,
 	RackLabel:            eksZoneIDLabel,
-	KafkaDomain:          "kafka.dev.changeport.invalid",
+	KafkaDomain:          "kafka.dev.changeport.app",
 	CertificateIssuer:    "letsencrypt-staging",
 	LoadBalancer:         eksLoadBalancer,
 	TieredStorage:        eksTieredStorage("dev"),
@@ -819,8 +819,8 @@ var EKSDevPlatform = Platform{
 }
 
 // EKSProdPlatform is the EKS cluster of the prod AWS account, where customers
-// run. Its Kafka domain is a reserved .invalid placeholder until the domain is
-// registered (#8).
+// run. Its Kafka domain is prod's zone in Route 53
+// (terraform/modules/kafka-zone).
 var EKSProdPlatform = Platform{
 	Name:                 "eks-prod",
 	KafkaImage:           eksImages.Kafka,
@@ -831,7 +831,7 @@ var EKSProdPlatform = Platform{
 	StorageClass:         "gp3",
 	Zones:                3,
 	RackLabel:            eksZoneIDLabel,
-	KafkaDomain:          "kafka.changeport.invalid",
+	KafkaDomain:          "kafka.changeport.app",
 	CertificateIssuer:    "letsencrypt",
 	LoadBalancer:         eksLoadBalancer,
 	TieredStorage:        eksTieredStorage("prod"),

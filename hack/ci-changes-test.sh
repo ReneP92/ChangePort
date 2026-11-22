@@ -27,6 +27,7 @@ expect "web/src/App.tsx" web go console e2e_core
 expect "hack/kafka-with.sh" e2e_core console
 expect "hack/Transaction.java" e2e_core console
 expect "terraform/modules/static-site/main.tf" terraform
+expect "hack/terraform.sh" terraform
 expect "README.md" ""
 expect "docs/PROJECT_PLAN.md" ""
 expect "docs/runbook.md" go

@@ -62,7 +62,7 @@ while IFS= read -r file; do
   # The Bun and the Playwright browser the site, the web app and the core
   # suite's console test run on.
   hack/bun.sh | hack/playwright-install.sh) mark "$file" site web go console e2e_core ;;
-  terraform/*) mark "$file" terraform ;;
+  terraform/* | hack/terraform.sh) mark "$file" terraform ;;
   # The Kafka and Connect images run in every cluster on kind.
   images/kafka/* | hack/kafka-image-test.sh) mark "$file" kafka_image "${suites[@]}" console ;;
   images/connect/* | hack/connect-image-test.sh) mark "$file" connect_image "${suites[@]}" console ;;

@@ -32,9 +32,3 @@ variable "administrator_permission_sets" {
   type        = list(string)
   default     = ["AdministratorAccess"]
 }
-
-variable "kafka_dns_zone_ids" {
-  description = "Route 53 hosted zone IDs of the environment's kafka.* zones, once the domain is registered (#8)."
-  type        = list(string)
-  default     = []
-}

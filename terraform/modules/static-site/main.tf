@@ -89,7 +89,7 @@ resource "aws_s3_bucket_policy" "site" {
 }
 
 # The certificate of the domain and its www, validated through the domain's
-# zone and renewed by ACM for as long as the records stay.
+# zone on Cloudflare and renewed by ACM for as long as the records stay.
 resource "aws_acm_certificate" "site" {
   domain_name               = var.domain
   subject_alternative_names = ["www.${var.domain}"]
@@ -107,20 +107,21 @@ resource "aws_acm_certificate" "site" {
 
 # Keyed by the names the certificate covers, which are known before ACM says
 # which records prove them.
-resource "aws_route53_record" "certificate_validation" {
+resource "cloudflare_dns_record" "certificate_validation" {
   for_each = toset(local.aliases)
 
-  zone_id         = var.zone_id
-  name            = local.validation[each.key].resource_record_name
-  type            = local.validation[each.key].resource_record_type
-  records         = [local.validation[each.key].resource_record_value]
-  ttl             = 300
-  allow_overwrite = true
+  zone_id = var.cloudflare_zone_id
+  name    = trimsuffix(local.validation[each.key].resource_record_name, ".")
+  type    = local.validation[each.key].resource_record_type
+  content = trimsuffix(local.validation[each.key].resource_record_value, ".")
+  ttl     = 300
+  proxied = false
+  comment = "Proves the landing site's certificate to ACM (Changeport's Terraform)"
 }
 
 resource "aws_acm_certificate_validation" "site" {
   certificate_arn         = aws_acm_certificate.site.arn
-  validation_record_fqdns = [for record in aws_route53_record.certificate_validation : record.fqdn]
+  validation_record_fqdns = [for record in cloudflare_dns_record.certificate_validation : record.name]
 }
 
 resource "aws_cloudfront_origin_access_control" "site" {
@@ -239,24 +240,20 @@ resource "aws_cloudfront_distribution" "site" {
   }
 }
 
-# The domain and its www, over IPv4 and IPv6.
-resource "aws_route53_record" "site" {
-  for_each = {
-    for pair in setproduct(local.aliases, ["A", "AAAA"]) : "${pair[0]} ${pair[1]}" => {
-      name = pair[0]
-      type = pair[1]
-    }
-  }
+# The domain and its www, as CNAMEs of the distribution, which Cloudflare
+# answers with the distribution's IPv4 and IPv6 addresses at the domain
+# itself (CNAME flattening). Not through Cloudflare's proxy: CloudFront is
+# the site's CDN, and serves its certificate and headers.
+resource "cloudflare_dns_record" "site" {
+  for_each = toset(local.aliases)
 
-  zone_id = var.zone_id
-  name    = each.value.name
-  type    = each.value.type
-
-  alias {
-    name                   = aws_cloudfront_distribution.site.domain_name
-    zone_id                = aws_cloudfront_distribution.site.hosted_zone_id
-    evaluate_target_health = false
-  }
+  zone_id = var.cloudflare_zone_id
+  name    = each.key
+  type    = "CNAME"
+  content = aws_cloudfront_distribution.site.domain_name
+  ttl     = 300
+  proxied = false
+  comment = "The landing site's distribution (Changeport's Terraform)"
 }
 
 resource "aws_iam_role" "publish" {

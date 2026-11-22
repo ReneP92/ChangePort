@@ -49,11 +49,11 @@ output "terraform_plan_role_arn" {
 }
 
 output "site_publishing" {
-  description = "What the site workflow needs, once there is a domain: set each as the repository variable of its name on GitHub (terraform/README.md)."
-  value = var.domain == "" ? null : {
-    SITE_DOMAIN           = var.domain
-    SITE_BUCKET           = module.static_site[0].bucket
-    SITE_DISTRIBUTION_ID  = module.static_site[0].distribution_id
-    SITE_PUBLISH_ROLE_ARN = module.static_site[0].publish_role_arn
+  description = "What the site workflow needs: set each as the repository variable of its name on GitHub (terraform/README.md)."
+  value = {
+    SITE_DOMAIN           = local.domain
+    SITE_BUCKET           = module.static_site.bucket
+    SITE_DISTRIBUTION_ID  = module.static_site.distribution_id
+    SITE_PUBLISH_ROLE_ARN = module.static_site.publish_role_arn
   }
 }

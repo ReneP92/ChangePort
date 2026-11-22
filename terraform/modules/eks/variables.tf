@@ -39,7 +39,7 @@ variable "administrator_permission_sets" {
 }
 
 variable "kafka_dns_zone_ids" {
-  description = "Route 53 hosted zone IDs of the kafka.* zones the customers' Kafka names live in, which external-dns and cert-manager may change. Empty until the domain is registered (#8)."
+  description = "Route 53 hosted zone IDs of the kafka.* zones the customers' Kafka names live in, which external-dns and cert-manager may change (terraform/modules/kafka-zone). Without zones, neither role exists."
   type        = list(string)
   default     = []
 }
