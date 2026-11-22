@@ -1,12 +1,13 @@
-# Alerting rules for customers' Postgres CDC sources (docs/cdc.md), in the
-# rule format vmalert reads. Nothing evaluates them yet: vmalert and
-# Alertmanager come with #96, which pages Changeport's operators, and #97
-# alerts customers themselves. Each alert carries tenant, cluster, env and
-# source, says who it is for (audience) and how urgent (severity: page or
-# warn), and links its section of docs/runbook.md, or for the customer's
-# alerts, of the customer docs (site/content/docs/alerts.md, by the
-# annotation docs, which their notifications link). internal/alerts checks
-# them, and the end-to-end tests evaluate them on kind.
+# Alerting rules for customers' Postgres CDC sources (docs/cdc.md), which
+# vmalert evaluates with the other rules here. Each alert carries tenant,
+# cluster, env and source, says who it is for (audience: operator, which
+# Alertmanager pages or warns, or customer, which the console shows and the
+# customer's own receivers get) and how urgent (severity: page or warn), and
+# links its section of docs/runbook.md, or for the customer's alerts, of the
+# customer docs (site/content/docs/alerts.md, by the annotation docs, which
+# their notifications link). Unlike the alerts in customers.yaml, their
+# thresholds are fixed (#205). internal/alerts checks them, and the
+# end-to-end tests evaluate them on kind.
 groups:
   - name: postgres-sources
     rules:
