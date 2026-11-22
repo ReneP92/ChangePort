@@ -585,9 +585,8 @@ generated code.
 
 CI runs the same Go lint and tests, the web app's checks and Playwright
 tests, the landing site's tests and Lighthouse check, `just tf-fmt tf-validate tf-test`, `just shellcheck`, and `just check-text`,
-which fails on any em dash in the repository, and on every push and pull
-request the whole end-to-end suite on a fresh kind cluster: `just dev-up e2e
-platform-check`, where `platform-check` also server-side dry-runs the EKS
+which fails on any em dash in the repository, and the whole end-to-end suite
+on a fresh kind cluster: `just dev-up e2e platform-check`, where `platform-check` also server-side dry-runs the EKS
 overlays. When that job fails, it uploads
 the output of `hack/diagnostics.sh` (pods, events, resources and logs) as the
 `e2e-diagnostics-<suite>` artifact. A second kind job runs `just ui-e2e` against the
@@ -598,3 +597,11 @@ a notice. CI also builds the Kafka, agent, provisioner and console images
 for amd64 and arm64 and runs `just kafka-image-test`, which starts a broker
 from the Kafka image with tiered storage configured. Run
 `just` for every recipe.
+
+A pull request runs only the jobs its files can affect, which
+`hack/ci-changes.sh` decides: a change to the landing site runs the site's
+checks, and a change to Go runs nearly everything. A file it does not know
+counts as the platform's, and a change to the workflow, the `justfile` or
+`hack/lib.sh` runs everything. Pushes to main, and runs started by hand, run
+every job whatever changed. To see what a branch would run:
+`hack/ci-changes.sh main`.

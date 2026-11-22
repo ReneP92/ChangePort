@@ -19,8 +19,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which jobs a pull request needs, from the files it changes
+  # (hack/ci-changes.sh): a change to the landing site, say, runs the site's
+  # checks without the end-to-end suites on kind. Pushes to main and runs
+  # started by hand run every job, so main is always checked in full, and
+  # publishing waits for that. A job a pull request does not need shows as
+  # skipped, which counts as passed.
+  changes:
+    name: Jobs this change needs
+    runs-on: ubuntu-26.04
+    outputs:
+      go: ${{ steps.changes.outputs.go }}
+      terraform: ${{ steps.changes.outputs.terraform }}
+      web: ${{ steps.changes.outputs.web }}
+      site: ${{ steps.changes.outputs.site }}
+      e2e: ${{ steps.changes.outputs.e2e }}
+      console: ${{ steps.changes.outputs.console }}
+      kafka_image: ${{ steps.changes.outputs.kafka_image }}
+      connect_image: ${{ steps.changes.outputs.connect_image }}
+      images: ${{ steps.changes.outputs.images }}
+    steps:
+      # The merge commit of a pull request, with its first parent, the base
+      # branch, to compare with.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - id: changes
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [[ $EVENT == pull_request ]]; then
+            hack/ci-changes.sh >>"$GITHUB_OUTPUT"
+          else
+            hack/ci-changes.sh --all >>"$GITHUB_OUTPUT"
+          fi
+
   go:
     name: Go lint and test
+    needs: changes
+    if: needs.changes.outputs.go == 'true'
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,6 +85,8 @@ jobs:
   # laptop.
   terraform:
     name: Terraform format, validate and test
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,6 +102,8 @@ jobs:
   # which get neither.
   terraform-plan:
     name: Terraform plan (${{ matrix.account }})
+    needs: changes
+    if: needs.changes.outputs.terraform == 'true'
     runs-on: ubuntu-26.04
     permissions:
       contents: read
@@ -107,11 +148,14 @@ jobs:
       - run: just shellcheck
       - run: just check-text
       - run: just alerting-check
+      - run: hack/ci-changes-test.sh
 
   # The pinned, checksum-verified Bun from hack/lib.sh runs everything, as it
   # does on a laptop, so no Node or setup action is involved.
   web:
     name: Web lint, test and build
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
@@ -140,6 +184,8 @@ jobs:
   # page held to Lighthouse 95+ on a phone and a desktop.
   site:
     name: Site tests and Lighthouse
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
@@ -168,6 +214,8 @@ jobs:
   # The chaos suite's six disruptions take about 40 minutes of their own.
   e2e:
     name: End to end on kind (${{ matrix.suite }})
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: ${{ matrix.suite == 'chaos' && 75 || 45 }}
     strategy:
@@ -228,6 +276,8 @@ jobs:
   # users of its own, as one runner took longer than its timeout.
   console-e2e:
     name: Console end to end with Clerk (${{ matrix.shard }}/2)
+    needs: changes
+    if: needs.changes.outputs.console == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     strategy:
@@ -308,6 +358,8 @@ jobs:
 
   kafka-image:
     name: Kafka image
+    needs: changes
+    if: needs.changes.outputs.kafka_image == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     steps:
@@ -338,6 +390,8 @@ jobs:
 
   connect-image:
     name: Connect image
+    needs: changes
+    if: needs.changes.outputs.connect_image == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
@@ -364,6 +418,8 @@ jobs:
 
   provisioner-image:
     name: Provisioner image
+    needs: changes
+    if: needs.changes.outputs.images == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
@@ -380,6 +436,8 @@ jobs:
 
   console-image:
     name: Console image
+    needs: changes
+    if: needs.changes.outputs.console == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
@@ -396,6 +454,8 @@ jobs:
 
   agent-image:
     name: Agent image
+    needs: changes
+    if: needs.changes.outputs.images == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
@@ -412,6 +472,8 @@ jobs:
 
   registry-gateway-image:
     name: Registry gateway image
+    needs: changes
+    if: needs.changes.outputs.images == 'true'
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
