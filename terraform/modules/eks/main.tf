@@ -129,7 +129,8 @@ resource "aws_iam_role_policy_attachment" "customer_node" {
 
 # external-dns publishes the customers' Kafka names and cert-manager answers
 # Let's Encrypt's DNS challenges for them, in the kafka.* hosted zones only.
-# The zones come with the domain (#8); until then neither role exists.
+# The zones are the environment's (terraform/modules/kafka-zone); without
+# them neither role exists.
 locals {
   kafka_dns_zone_arns = [for id in var.kafka_dns_zone_ids : "arn:${local.partition}:route53:::hostedzone/${id}"]
 }

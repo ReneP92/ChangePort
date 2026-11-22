@@ -10,7 +10,7 @@
 # published by the newer one, which a check of what one commit changed would
 # miss.
 #
-# It needs, once prod has a domain (#8), the repository variables
+# It needs, once prod is applied, the repository variables
 # SITE_DOMAIN, SITE_BUCKET, SITE_DISTRIBUTION_ID and SITE_PUBLISH_ROLE_ARN,
 # from the site_publishing output of terraform/environments/prod
 # (terraform/README.md); until they are set, nothing runs.

@@ -13,8 +13,15 @@ provider "aws" {
   }
 }
 
+# The domain's zone on Cloudflare, with the token in CLOUDFLARE_API_TOKEN
+# (terraform/README.md).
+provider "cloudflare" {}
+
 locals {
   name = "changeport-prod"
+  # Registered at Cloudflare, which keeps its zone (docs/PROJECT_PLAN.md,
+  # Domain).
+  domain = "changeport.app"
   # The repository as its OpenID Connect tokens name it, which the roles for
   # GitHub Actions trust: immutable subjects carry the owner's and the
   # repository's IDs (gh api repos/ReneP92/ChangePort/actions/oidc/customization/sub).
@@ -48,6 +55,21 @@ module "vpc" {
   nat_gateway_per_zone = true
 }
 
+# The domain's own records on Cloudflare, which prod keeps.
+module "domain" {
+  source = "../../modules/domain"
+
+  domain = local.domain
+}
+
+# The zone of the customers' endpoints, delegated from the domain's zone.
+module "kafka_zone" {
+  source = "../../modules/kafka-zone"
+
+  name               = "kafka.${local.domain}"
+  cloudflare_zone_id = module.domain.cloudflare_zone_id
+}
+
 module "eks" {
   source = "../../modules/eks"
 
@@ -58,7 +80,7 @@ module "eks" {
 
   api_allowed_cidrs             = var.api_allowed_cidrs
   administrator_permission_sets = var.administrator_permission_sets
-  kafka_dns_zone_ids            = var.kafka_dns_zone_ids
+  kafka_dns_zone_ids            = [module.kafka_zone.zone_id]
 
   # The customers' clusters run here.
   deletion_protection = true
@@ -89,14 +111,13 @@ module "ecr" {
   github_oidc_provider_arn  = module.github_oidc.provider_arn
 }
 
-# The landing site at the domain's root, once the domain is registered (#8).
+# The landing site at the domain's root.
 module "static_site" {
   source = "../../modules/static-site"
-  count  = var.domain == "" ? 0 : 1
 
   name                      = local.name
-  domain                    = var.domain
-  zone_id                   = var.domain_zone_id
+  domain                    = local.domain
+  cloudflare_zone_id        = module.domain.cloudflare_zone_id
   github_repository_subject = local.github_repository_subject
   github_oidc_provider_arn  = module.github_oidc.provider_arn
 }

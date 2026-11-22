@@ -1,6 +1,9 @@
-# Applies the module to a mocked AWS provider and checks who may read the
-# bucket, what the distribution serves and tells browsers, the records of the
-# domain and who may publish, without an AWS account.
+# Applies the module to mocked AWS and Cloudflare providers and checks who
+# may read the bucket, what the distribution serves and tells browsers, the
+# records of the domain and who may publish, without an AWS account or a
+# Cloudflare token.
+
+mock_provider "cloudflare" {}
 
 mock_provider "aws" {
   mock_data "aws_region" {
@@ -66,7 +69,7 @@ mock_provider "aws" {
 variables {
   name                      = "changeport-test"
   domain                    = "changeport.example"
-  zone_id                   = "Z0123456789ABCDEFGHIJ"
+  cloudflare_zone_id        = "023e105f4ecef8ad9ca31a8372d0c353"
   github_repository_subject = "ReneP92@40995280/ChangePort@1412834684"
   github_oidc_provider_arn  = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
 }
@@ -116,7 +119,7 @@ run "the_distribution_serves_the_domain_securely" {
     error_message = "The certificate covers the domain and its www."
   }
   assert {
-    condition     = toset([for record in aws_route53_record.certificate_validation : record.name]) == toset(["_a.changeport.example.", "_b.www.changeport.example."])
+    condition     = toset([for record in cloudflare_dns_record.certificate_validation : "${record.name} ${record.content}"]) == toset(["_a.changeport.example _a.acm-validations.aws", "_b.www.changeport.example _b.acm-validations.aws"])
     error_message = "The certificate is validated through the domain's zone."
   }
   assert {
@@ -187,12 +190,16 @@ run "the_domain_and_www_point_at_the_distribution" {
   command = apply
 
   assert {
-    condition     = toset(keys(aws_route53_record.site)) == toset(["changeport.example A", "changeport.example AAAA", "www.changeport.example A", "www.changeport.example AAAA"])
-    error_message = "The domain and its www resolve over IPv4 and IPv6."
+    condition     = toset(keys(cloudflare_dns_record.site)) == toset(["changeport.example", "www.changeport.example"])
+    error_message = "The domain and its www resolve."
   }
   assert {
-    condition     = alltrue([for record in aws_route53_record.site : one(record.alias).name == "d111111abcdef8.cloudfront.net" && record.zone_id == "Z0123456789ABCDEFGHIJ"])
-    error_message = "Each record is an alias of the distribution, in the domain's zone."
+    condition     = alltrue([for record in cloudflare_dns_record.site : record.type == "CNAME" && record.content == "d111111abcdef8.cloudfront.net" && record.zone_id == "023e105f4ecef8ad9ca31a8372d0c353"])
+    error_message = "Each record names the distribution, in the domain's zone on Cloudflare."
+  }
+  assert {
+    condition     = alltrue([for record in concat(values(cloudflare_dns_record.site), values(cloudflare_dns_record.certificate_validation)) : !record.proxied])
+    error_message = "No record goes through Cloudflare's proxy: CloudFront serves the site, and ACM reads its proofs as they are."
   }
 }
 

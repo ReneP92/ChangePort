@@ -6,8 +6,9 @@ composes the modules in `modules/`:
 
 - `management`: the Organization, its guardrails, single sign-on and cost
   alerts. No workload runs here.
-- `dev` and `prod`: VPC, EKS, S3 and IAM, and in prod the image registry
-  and the landing site.
+- `dev` and `prod`: VPC, EKS, S3, IAM and the zone of the customer
+  endpoints, and in prod the domain's records, the image registry and the
+  landing site.
 
 Nothing has been applied yet; [Setting up the accounts](#setting-up-the-accounts)
 lists the steps.
@@ -23,8 +24,9 @@ just tf-apply dev                # management and prod need CONFIRM=<account>
 
 The recipes download the Terraform version that `hack/lib.sh` pins into
 `bin/`, checksum-verified, and CI runs the same recipes. `tf-test` runs each
-module's `tests/` with `terraform test` against a mocked AWS provider, so it
-needs no AWS account. The lock files pin the AWS provider for Linux and macOS
+module's `tests/` with `terraform test` against mocked AWS and Cloudflare
+providers, so it needs no AWS account or Cloudflare token. The lock files
+pin the providers for Linux and macOS
 on amd64 and arm64; after changing a provider version, run
 `terraform providers lock -platform=linux_amd64 -platform=linux_arm64
 -platform=darwin_amd64 -platform=darwin_arm64` in each environment and module
@@ -35,7 +37,9 @@ be reached from, are in `terraform.tfvars` next to its configuration, which
 git ignores; `terraform.tfvars.example` lists them. The recipes sign in with
 the AWS CLI profile `changeport-<account>` unless `AWS_PROFILE` is set, and
 refuse to run when the credentials belong to another account than the state
-bucket's.
+bucket's. Dev and prod also write records of the domain's zone on
+Cloudflare, so their plans and applies need a Cloudflare API token in
+`CLOUDFLARE_API_TOKEN` ([Domain and DNS](#domain-and-dns-modulesdomain-moduleskafka-zone)).
 
 ## Accounts (`environments/management`)
 
@@ -97,7 +101,9 @@ push to main. The log is public, so they print only the addresses of the
 resources that would change; `just tf-plan <account>` shows the details. An
 account's job is skipped until it has the repository variable
 `TERRAFORM_PLAN_ROLE_ARN_<ACCOUNT>` and the secret
-`TERRAFORM_TFVARS_<ACCOUNT>`, the contents of its `terraform.tfvars`.
+`TERRAFORM_TFVARS_<ACCOUNT>`, the contents of its `terraform.tfvars`; dev's
+and prod's also wait for the secret `CLOUDFLARE_PLAN_API_TOKEN`, a token
+that may only read the domain's zone.
 
 ## Setting up the accounts
 
@@ -133,8 +139,9 @@ the Organization and single sign-on before it can sign in.
    management, delete the dev account's root user credentials. Prod was
    created without any.
 6. **dev and prod.** Fill in each `terraform.tfvars` and create the state
-   buckets and plan roles. Applying the rest brings up the environments
-   (#28, #31).
+   buckets and plan roles. Applying the rest, with a Cloudflare token
+   ([Domain and DNS](#domain-and-dns-modulesdomain-moduleskafka-zone)),
+   brings up the environments (#28, #31).
 
    ```bash
    just tf-bootstrap dev
@@ -149,7 +156,42 @@ the Organization and single sign-on before it can sign in.
      gh variable set "TERRAFORM_PLAN_ROLE_ARN_$key" --body "$(terraform -chdir=terraform/environments/$account output -raw terraform_plan_role_arn)"
      gh secret set "TERRAFORM_TFVARS_$key" <"terraform/environments/$account/terraform.tfvars"
    done
+   gh secret set CLOUDFLARE_PLAN_API_TOKEN   # the read-only token, pasted when asked
    ```
+
+## Domain and DNS (`modules/domain`, `modules/kafka-zone`)
+
+Changeport's domain, `changeport.app`, is registered at Cloudflare, which
+keeps its zone: a domain registered there must use Cloudflare's name
+servers ([docs/PROJECT_PLAN.md](../docs/PROJECT_PLAN.md), Domain).
+Terraform writes the records it needs there; the customer endpoints get
+zones of their own in Route 53, where external-dns and cert-manager work
+with the cluster's AWS roles.
+
+- **The domain's records** (`modules/domain`, prod): CAA records that let
+  only Let's Encrypt, for cert-manager, and Amazon, for the landing site's
+  ACM certificate, issue certificates for the domain. The landing site's
+  records are its module's.
+- **The customer endpoints' zones** (`modules/kafka-zone`):
+  `kafka.changeport.app` in prod and `kafka.dev.changeport.app` in dev, each
+  in its account's Route 53, delegated from Cloudflare by NS records that
+  Terraform writes there, with a CAA record that lets only Let's Encrypt
+  issue certificates, wildcards included. The provisioning service names
+  customers under them (`internal/provisioning`).
+
+Dev's and prod's Terraform reach Cloudflare with an API token in
+`CLOUDFLARE_API_TOKEN`. In the Cloudflare dashboard, My Profile, API
+Tokens, create two custom tokens, each for the zone `changeport.app` only:
+
+- one with **Zone: Read** and **DNS: Edit**, for `just tf-plan` and
+  `just tf-apply` on a laptop, kept in your password manager;
+- one with **Zone: Read** and **DNS: Read**, for the plans in CI, as the
+  secret `CLOUDFLARE_PLAN_API_TOKEN`.
+
+A token covers the whole zone, so dev's Terraform may change prod's
+records too; Terraform only changes the records it wrote. Once applied,
+`dig NS kafka.changeport.app` and `dig NS kafka.dev.changeport.app` answer
+with the zones' Route 53 name servers.
 
 ## Network (`modules/vpc`)
 
@@ -196,9 +238,9 @@ patching, EBS volumes and load balancers.
   default) are cluster administrators. The public API endpoint only answers
   the `api_allowed_cidrs`, which each apply must be given; `0.0.0.0/0` is
   refused.
-- **DNS:** once the domain is registered (#8), `kafka_dns_zone_ids` gives
-  external-dns and cert-manager Pod Identity roles that may change only the
-  `kafka.*` zones. Without zones, neither role exists.
+- **DNS:** `kafka_dns_zone_ids`, the environment's `kafka.*` zone
+  (`modules/kafka-zone`), gives external-dns and cert-manager Pod Identity
+  roles that may change only that zone. Without zones, neither role exists.
 - **Deletion protection** is on in prod and off in dev, which can be rebuilt.
 
 After an apply, sign in through single sign-on and point kubectl at the
@@ -272,26 +314,28 @@ publish every image.
 ## Landing site (`modules/static-site`, prod only)
 
 The landing site (`site/`, [docs/site.md](../docs/site.md)) is served at the
-domain's root from the prod account, once `domain` and `domain_zone_id` are
-in its `terraform.tfvars` (#8); until then nothing of it exists.
+domain's root from the prod account.
 
 - **The bucket**, `changeport-prod-site`, is private: only the site's
   CloudFront distribution reads it, signing its requests with origin access
   control, and requests without TLS 1.2 are refused.
 - **The distribution** answers for the domain and `www.<domain>` with an ACM
-  certificate of both, validated through the domain's zone, over HTTP/2 and
-  HTTP/3 and TLS 1.2 or newer; plain HTTP redirects to HTTPS. A CloudFront
-  Function redirects `www.<domain>` to the domain, keeping the path and the
-  query. An address the bucket has no page for gets the site's `404.html`,
-  with a 404. It serves from North America and Europe (`PriceClass_100`).
+  certificate of both, validated through the domain's zone on Cloudflare, over
+  HTTP/2 and HTTP/3 and TLS 1.2 or newer; plain HTTP redirects to HTTPS. A
+  CloudFront Function redirects `www.<domain>` to the domain, keeping the path
+  and the query. An address the bucket has no page for gets the site's
+  `404.html`, with a 404. It serves from North America and Europe
+  (`PriceClass_100`).
 - **Headers:** HSTS for two years with subdomains, `nosniff`, no framing,
   `strict-origin-when-cross-origin` referrers, a Permissions-Policy that
   turns off the camera, microphone, location, payment and USB, and a
   Content-Security-Policy with what a page cannot say for itself. The pages
   carry their own policy for scripts and styles, with the hashes of their
   inline scripts, which the build computes (`site/vite.config.ts`).
-- **Records:** A and AAAA aliases of the distribution for the domain and its
-  `www`, in the domain's zone.
+- **Records:** the domain and its `www` as CNAMEs of the distribution, on
+  Cloudflare, which answers for the domain itself with the distribution's
+  addresses (CNAME flattening). Cloudflare's proxy is off: CloudFront is the
+  site's CDN.
 
 `.github/workflows/publish-site.yml` checks the site on every push to main
 and builds it for the domain, with the console at `console.<domain>`, for
@@ -304,7 +348,7 @@ assets the new pages no longer use. It assumes `changeport-prod-site-publish`,
 which only runs on main may assume, through the account's OpenID Connect
 provider, and which reaches only the site's bucket and distribution.
 
-Once prod is applied with a domain, set the repository variables the
+Once prod is applied, set the repository variables the
 workflow needs, then run it once by hand (Actions, Publish site, Run
 workflow):
 

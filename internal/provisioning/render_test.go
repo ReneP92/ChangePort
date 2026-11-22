@@ -293,7 +293,7 @@ func TestRenderPublicListener(t *testing.T) {
 	}
 	certificate, kafka := objectOfKind(t, objects, "Certificate"), objectOfKind(t, objects, "Kafka")
 	dnsNames, _, _ := unstructured.NestedStringSlice(certificate.Object, "spec", "dnsNames")
-	if len(dnsNames) != 1 || dnsNames[0] != "*.acme.kafka.changeport.invalid" {
+	if len(dnsNames) != 1 || dnsNames[0] != "*.acme.kafka.changeport.app" {
 		t.Errorf("certificate covers %q, want the customer's wildcard name", dnsNames)
 	}
 	if encoding, _, _ := unstructured.NestedString(certificate.Object, "spec", "privateKey", "encoding"); encoding != "PKCS8" {
@@ -320,9 +320,9 @@ func TestRenderPublicListener(t *testing.T) {
 		{[]string{"authentication", "type"}, "scram-sha-512"},
 		{[]string{"configuration", "class"}, "eks.amazonaws.com/nlb"},
 		{[]string{"configuration", "brokerCertChainAndKey", "secretName"}, ExternalListenerSecret},
-		{[]string{"configuration", "advertisedHostTemplate"}, "b{nodeId}.acme.kafka.changeport.invalid"},
-		{[]string{"configuration", "bootstrap", "annotations", "external-dns.alpha.kubernetes.io/hostname"}, "bootstrap.acme.kafka.changeport.invalid"},
-		{[]string{"configuration", "perBrokerAnnotationsTemplate", "external-dns.alpha.kubernetes.io/hostname"}, "b{nodeId}.acme.kafka.changeport.invalid"},
+		{[]string{"configuration", "advertisedHostTemplate"}, "b{nodeId}.acme.kafka.changeport.app"},
+		{[]string{"configuration", "bootstrap", "annotations", "external-dns.alpha.kubernetes.io/hostname"}, "bootstrap.acme.kafka.changeport.app"},
+		{[]string{"configuration", "perBrokerAnnotationsTemplate", "external-dns.alpha.kubernetes.io/hostname"}, "b{nodeId}.acme.kafka.changeport.app"},
 		{[]string{"configuration", "perBrokerAnnotationsTemplate", "service.beta.kubernetes.io/aws-load-balancer-scheme"}, "internet-facing"},
 	} {
 		if got, _, _ := unstructured.NestedString(external, field.path...); got != field.want {

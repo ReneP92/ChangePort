@@ -92,7 +92,7 @@ metadata:
 spec:
   # One wildcard name covers the bootstrap name and every broker's name.
   dnsNames:
-    - "*.acme.kafka.changeport.invalid"
+    - "*.acme.kafka.changeport.app"
   secretName: external-listener-tls
   privateKey:
     algorithm: ECDSA
@@ -188,13 +188,13 @@ spec:
             key: tls.key
           bootstrap:
             annotations:
-              external-dns.alpha.kubernetes.io/hostname: "bootstrap.acme.kafka.changeport.invalid"
+              external-dns.alpha.kubernetes.io/hostname: "bootstrap.acme.kafka.changeport.app"
               service.beta.kubernetes.io/aws-load-balancer-listener-attributes.TCP-9094: "tcp.idle_timeout.seconds=900"
               service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
               service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
-          advertisedHostTemplate: b{nodeId}.acme.kafka.changeport.invalid
+          advertisedHostTemplate: b{nodeId}.acme.kafka.changeport.app
           perBrokerAnnotationsTemplate:
-            external-dns.alpha.kubernetes.io/hostname: "b{nodeId}.acme.kafka.changeport.invalid"
+            external-dns.alpha.kubernetes.io/hostname: "b{nodeId}.acme.kafka.changeport.app"
             service.beta.kubernetes.io/aws-load-balancer-listener-attributes.TCP-9094: "tcp.idle_timeout.seconds=900"
             service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
             service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"

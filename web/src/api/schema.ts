@@ -1027,7 +1027,7 @@ export interface components {
             supportEmail?: string;
             /**
              * Format: uri
-             * @description Where the customer docs are, such as https://changeport.io/docs; the console links each diagnosis, alert and warning to its page there, and without it to none
+             * @description Where the customer docs are, such as https://changeport.app/docs; the console links each diagnosis, alert and warning to its page there, and without it to none
              */
             docsUrl?: string;
         };

@@ -868,7 +868,7 @@ type Config struct {
 	// ClerkPublishableKey The Clerk publishable key the web app signs in with
 	ClerkPublishableKey string `json:"clerkPublishableKey"`
 
-	// DocsUrl Where the customer docs are, such as https://changeport.io/docs; the console links each diagnosis, alert and warning to its page there, and without it to none
+	// DocsUrl Where the customer docs are, such as https://changeport.app/docs; the console links each diagnosis, alert and warning to its page there, and without it to none
 	DocsUrl *string `json:"docsUrl,omitempty"`
 
 	// SupportEmail Where customers contact Changeport's support; without it the console offers no address

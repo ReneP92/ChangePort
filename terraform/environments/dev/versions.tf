@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.59"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.28"
+    }
   }
 
   # In this account's own bucket (module.state_backend), locked with a lock
