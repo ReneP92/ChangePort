@@ -135,7 +135,9 @@ function hero(): void {
     }
   }
   const rates = figure.querySelectorAll("[data-rate]");
+  const play = story(figure);
   let value = 1284;
+  let second = 0;
   let running = true;
   watch(figure, (on) => (running = on));
   setInterval(() => {
@@ -148,8 +150,79 @@ function hero(): void {
       for (const rate of rates) {
         rate.textContent = `${numbers.format(value)} changes/s`;
       }
+      play(second++);
     }
   }, 1000);
+}
+
+/**
+ * The hero's story, over 28 seconds: search-indexer falls behind and
+ * catches up, then Postgres: shop does. Each block's stack shows the changes
+ * waiting there, a few at most while it keeps up; past the dashed line,
+ * Changeport raises an alert, which the model, its labels and the sentences
+ * show. Without the script, or with reduced motion, the page keeps its own
+ * state: search-indexer behind. The levels match scripts/streams.ts.
+ */
+function story(figure: HTMLElement): (second: number) => void {
+  const nodes = ["pg", "checkout", "payments", "billing", "fraud", "search", "warehouse"];
+  const sources = new Set(["pg", "checkout", "payments"]);
+  const threshold = 4;
+  const severe = 7;
+  // Up by one a second from a time to a peak, held until a later time, then
+  // down by three a second.
+  const ramp = (t: number, from: number, to: number, peak: number) =>
+    t < from ? 0 : t < to ? Math.min(peak, 1 + t - from) : Math.max(0, peak - 3 * (t - to + 1));
+  const all = <T extends Element>(selector: string) => [...figure.querySelectorAll<T>(selector)];
+  const stacks = all<SVGGElement>(".stack[data-node]");
+  const chips = all<HTMLElement>("[data-chip]");
+  const routes = all<SVGGElement>("[data-route]");
+  const alerts = all<HTMLElement>("[data-alert]");
+  const says = all<HTMLElement>("[data-say]");
+  const statuses = all<HTMLElement>("[data-status]");
+
+  return (second) => {
+    const t = second % 28;
+    const level = new Map(
+      nodes.map((id, i) => [
+        id,
+        (second * 7 + i * 3) % 5 === 0 ? 2 : (second + i) % 3 === 0 ? 1 : 0,
+      ]),
+    );
+    level.set("search", Math.max(level.get("search")!, ramp(t, 3, 11, 8)));
+    level.set("pg", Math.max(level.get("pg")!, ramp(t, 15, 22, 7)));
+    const behind = (id: string) => (level.get(id) ?? 0) > threshold;
+    const far = (id: string) => (level.get(id) ?? 0) >= severe;
+    const mark = (element: Element, id: string) => {
+      element.classList.toggle("is-behind", behind(id));
+      element.classList.toggle("is-severe", far(id));
+    };
+
+    for (const stack of stacks) {
+      const id = stack.dataset.node!;
+      mark(stack, id);
+      stack.querySelectorAll(".level").forEach((cube, i) => {
+        cube.classList.toggle("on", i < level.get(id)!);
+      });
+    }
+    for (const chip of chips) {
+      mark(chip, chip.dataset.chip!);
+    }
+    for (const route of routes) {
+      const id = route.dataset.route!;
+      route.classList.toggle("is-thin", sources.has(id) && level.get(id)! >= 3);
+    }
+    const quiet = !nodes.some(behind);
+    for (const element of [...alerts, ...says]) {
+      const id = element.dataset.alert ?? element.dataset.say!;
+      element.hidden = id === "none" ? !quiet : !behind(id);
+      element.classList.toggle("is-severe", far(id));
+    }
+    for (const status of statuses) {
+      const id = status.dataset.status!;
+      mark(status, id);
+      status.textContent = behind(id) ? "falling behind" : "caught up";
+    }
+  };
 }
 
 /**

@@ -10,8 +10,10 @@ review before launch.
 It is plain HTML with Tailwind's CSS in the console's brand
 ([docs/brand](brand)), and one small script with no framework,
 `site/src/main.ts`, for its animations and interactive parts: the hero's
-model of data streaming through Changeport (a column of labels on phones,
-whose text keeps its size), which also tells the same in plain words, the Postgres change data capture demo,
+model of data streaming through Changeport, which plays a story of an app
+and then a source falling behind and the alerts Changeport raises (a column
+of labels on phones, whose text keeps its size), and also tells the same in
+plain words, the Postgres change data capture demo,
 the lag simulator and the console tour. There are no cookies, no analytics and no
 third-party requests. Vite builds it into `site/dist`, a folder of static
 files, which CloudFront serves from a private bucket in the prod account
@@ -39,6 +41,10 @@ just site-check   # type-check, format-check, build, test, then Lighthouse
 - **Shared parts**, such as the header and footer, are in
   `site/src/partials`. A page includes one where it says
   `<!-- include:header -->`.
+- **The hero's model** is drawn by `site/scripts/streams.ts`, from its
+  blocks, lanes and which apps subscribe to which source, where the page
+  says `<!-- include:streams -->`; `site/src/main.ts` plays its story, at
+  the levels the script draws.
 - **Addresses** come from the environment when the site is built:
   `CHANGEPORT_CONSOLE_URL`, where Sign in and every call to action lead
   (`http://localhost:8088` by default, the console on kind), and

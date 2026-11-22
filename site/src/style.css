@@ -125,6 +125,229 @@ html {
   translate: -50% -50%;
 }
 
+/*
+ * A block that falls behind, past its stack's dashed line: amber, or red
+ * once far behind. Its label says so too, with a dot, and on phones in
+ * words.
+ */
+.stream-label.is-behind {
+  border-color: #f2d29c;
+}
+
+.stream-label.is-severe {
+  border-color: #f3b7b9;
+}
+
+.stream-alert {
+  display: none;
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: #e9a23b;
+}
+
+.stream-label.is-behind .stream-alert {
+  display: block;
+}
+
+.stream-label.is-severe .stream-alert {
+  background: #e5484d;
+}
+
+.stream-status {
+  display: none;
+  font-weight: 500;
+  color: var(--color-amber-700);
+}
+
+.stream-label.is-behind .stream-status {
+  display: inline;
+}
+
+.stream-label.is-severe .stream-status {
+  color: var(--color-red-700);
+}
+
+.stream-row-status {
+  flex-shrink: 0;
+  text-align: right;
+  color: var(--color-neutral-600);
+}
+
+.stream-row-status.is-behind {
+  font-weight: 500;
+  color: var(--color-amber-700);
+}
+
+.stream-row-status.is-severe {
+  color: var(--color-red-700);
+}
+
+/* What Changeport raises, over the model's corner. */
+.stream-ok,
+.stream-alert-card {
+  border: 1px solid var(--color-neutral-200);
+  background: white;
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+  box-shadow: 0 4px 14px rgb(16 24 40 / 0.08);
+}
+
+.stream-ok {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-weight: 500;
+}
+
+.stream-alert-card {
+  border-color: #f2d29c;
+  border-radius: 0.75rem;
+  background: #fdf3e1;
+  padding: 0.5rem 0.75rem;
+  color: #7a4a00;
+}
+
+.stream-alert-card.is-severe {
+  border-color: #f3b7b9;
+  background: #fdecec;
+  color: #9b1c22;
+}
+
+/*
+ * The model's changes, in their sources' colors, and its stacks of changes
+ * waiting, which grow as main.ts sets their levels.
+ */
+.flow.streams .change .ct,
+.flow.streams .stack .ct {
+  fill: var(--ct);
+}
+
+.flow.streams .change .cl {
+  fill: var(--cl);
+}
+
+.flow.streams .stack .cl {
+  fill: var(--c);
+}
+
+.flow.streams .change .cr,
+.flow.streams .stack .cr {
+  fill: var(--cr);
+}
+
+.flow.streams [data-route] .change {
+  transition: opacity 400ms;
+}
+
+.flow.streams [data-route].is-thin .change:nth-of-type(even) {
+  opacity: 0;
+}
+
+.flow.streams .belt {
+  fill: none;
+  stroke: #c9c9c3;
+  stroke-width: 2;
+  stroke-dasharray: 2 9;
+}
+
+.flow.streams .stack.is-behind {
+  --c: #e9a23b;
+  --ct: #f4d09d;
+  --cr: #90641f;
+}
+
+.flow.streams .stack.is-severe {
+  --c: #e5484d;
+  --ct: #f2a3a6;
+  --cr: #8e2c30;
+}
+
+.flow.streams .level {
+  opacity: 0;
+  translate: 0 -8px;
+  transition:
+    opacity 300ms,
+    translate 300ms cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+
+.flow.streams .level.on {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.flow.streams .level polygon {
+  transition: fill 400ms;
+}
+
+.flow.streams .stack-disc {
+  fill: #cfcfca;
+}
+
+.flow.streams .stack-line {
+  fill: none;
+  stroke: #b5b5af;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.flow.streams .stack.is-behind .stack-line {
+  stroke: var(--c);
+}
+
+.flow.streams .stack-ring {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 2;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.flow.streams .stack.is-behind .stack-ring {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .flow.streams .belt {
+    animation: belt 0.6s linear infinite;
+  }
+
+  .flow.streams .stack.is-behind .stack-ring {
+    animation: stack-ring 2.2s linear infinite;
+  }
+
+  .flow.streams .console-log {
+    animation: console-log 9s linear infinite;
+  }
+}
+
+@keyframes belt {
+  to {
+    stroke-dashoffset: -11;
+  }
+}
+
+@keyframes stack-ring {
+  from {
+    scale: 0.7;
+    opacity: 0.9;
+  }
+  24%,
+  to {
+    scale: 1.9;
+    opacity: 0;
+  }
+}
+
+@keyframes console-log {
+  to {
+    translate: 0 -63px;
+  }
+}
+
 /* On phones, the streams as a column, with changes running down its links. */
 .stream-link {
   position: relative;

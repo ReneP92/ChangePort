@@ -56,7 +56,7 @@ test("the hero's model draws white blocks, with changes moving between them", as
   const diagram = page.locator("svg[data-flow]:visible");
   await expect(diagram).toHaveAttribute("role", "img");
   const drawn = await diagram.evaluate((svg) => {
-    const node = svg.querySelector("rect.node");
+    const node = svg.querySelector(".node");
     return node
       ? {
           node: getComputedStyle(node).fill,
@@ -68,19 +68,48 @@ test("the hero's model draws white blocks, with changes moving between them", as
 });
 
 test("phones get the hero's streams as a column, with every reader", async ({ page }) => {
+  // The story waits, so that the column shows the page's own state.
+  await page.clock.install();
   await page.goto("/");
   test.skip((page.viewportSize()?.width ?? 0) >= 640, "Wider screens get the model");
   const column = page.locator("[data-scene] [role=img]:visible");
-  await expect(column).toHaveAccessibleName(/search-indexer, which is 3 minutes behind\.$/);
-  await expect(column.locator(".stream-label")).toHaveText([
-    "Postgres: shop",
-    "checkout-api",
-    "payments-api",
-    "billing",
-    "fraud-checks",
-    "search-indexer 3 min behind",
-    "warehouse-sync",
-  ]);
+  await expect(column).toHaveAccessibleName(
+    /subscribed to them: billing, fraud-checks, search-indexer and warehouse-sync\.$/,
+  );
+  await expect(column.locator(".stream-label")).toHaveText(
+    [
+      "Postgres: shop",
+      "checkout-api",
+      "payments-api",
+      "billing",
+      "fraud-checks",
+      "search-indexer falling behind",
+      "warehouse-sync",
+    ],
+    { useInnerText: true },
+  );
+});
+
+test("the hero's story raises an alert when a reader falls behind, and clears it", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.goto("/");
+  const alert = (id: string) => page.locator(`[data-alert="${id}"]`);
+  const status = page.locator('[data-status="search"]');
+  // search-indexer falls behind a few seconds in, and catches up again.
+  await page.clock.runFor(9_000);
+  await expect(status).toHaveText("falling behind");
+  if (wide(page)) {
+    await expect(alert("search")).toBeVisible();
+    await expect(page.locator('.stack[data-node="search"]')).toHaveClass(/is-behind/);
+  }
+  await page.clock.runFor(6_000);
+  await expect(status).toHaveText("caught up");
+  if (wide(page)) {
+    await expect(alert("search")).toBeHidden();
+    await expect(alert("none")).toBeVisible();
+  }
 });
 
 test("the hero tells its streams in plain words, and back", async ({ page }) => {

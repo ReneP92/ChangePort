@@ -130,901 +130,48 @@
             </figcaption>
 
             <div class="mt-4 grid">
-              <div data-scene class="[grid-area:1/1]">
-                <!-- Wide: the streams as a model, with the names as labels above it. -->
-                <div class="relative hidden sm:block">
-                  <svg
-                    data-flow
-                    viewBox="60 112 640 384"
-                    class="flow h-auto w-full overflow-visible"
-                    role="img"
-                    aria-labelledby="flow-title"
-                  >
-                    <title id="flow-title">
-                      Postgres: shop, checkout-api and payments-api stream through Changeport to
-                      billing, fraud-checks, search-indexer and warehouse-sync. All are caught up
-                      except search-indexer, which is 3 minutes behind.
-                    </title>
-                    <defs>
-                      <pattern id="iso-dots" width="16" height="16" patternUnits="userSpaceOnUse">
-                        <rect width="16" height="16" fill="rgb(255 255 255 / 0.75)" />
-                        <circle cx="8" cy="8" r="1.1" fill="#d6dadf" />
-                      </pattern>
-                    </defs>
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 151.2)"
-                      width="480"
-                      height="480"
-                      rx="32"
-                      fill="url(#iso-dots)"
-                      stroke="#e1e4e7"
-                      stroke-width="1.2"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.34)"
-                      points="384.2,220.3 404,230.2 404,225 384.2,215.1"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.42)"
-                      points="412.5,226 404,230.2 404,225 412.5,220.8"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 145.1)"
-                      x="102"
-                      y="84"
-                      width="28"
-                      height="12"
-                      rx="3"
-                      fill="rgb(13 148 136 / 0.16)"
-                      stroke="rgb(255 255 255 / 0.7)"
-                      stroke-width="1"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.34)"
-                      points="278.2,273.3 319.2,293.8 319.2,288.6 278.2,268.1"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.42)"
-                      points="327.7,289.6 319.2,293.8 319.2,288.6 327.7,284.4"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 145.1)"
-                      x="102"
-                      y="234"
-                      width="58"
-                      height="12"
-                      rx="3"
-                      fill="rgb(13 148 136 / 0.16)"
-                      stroke="rgb(255 255 255 / 0.7)"
-                      stroke-width="1"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.34)"
-                      points="172.1,326.4 191.9,336.3 191.9,331.1 172.1,321.2"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.42)"
-                      points="200.4,332 191.9,336.3 191.9,331.1 200.4,326.8"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 145.1)"
-                      x="102"
-                      y="384"
-                      width="28"
-                      height="12"
-                      rx="3"
-                      fill="rgb(13 148 136 / 0.16)"
-                      stroke="rgb(255 255 255 / 0.7)"
-                      stroke-width="1"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.34)"
-                      points="187.7,334.1 196.2,338.4 196.2,333.2 187.7,328.9"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.42)"
-                      points="416.8,228.1 196.2,338.4 196.2,333.2 416.8,222.9"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 145.1)"
-                      x="124"
-                      y="84"
-                      width="12"
-                      height="312"
-                      rx="3"
-                      fill="rgb(13 148 136 / 0.16)"
-                      stroke="rgb(255 255 255 / 0.7)"
-                      stroke-width="1"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.34)"
-                      points="432.3,350.4 453.5,361 453.5,355.8 432.3,345.2"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.42)"
-                      points="462,356.8 453.5,361 453.5,355.8 462,351.6"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 145.1)"
-                      x="320"
-                      y="234"
-                      width="30"
-                      height="12"
-                      rx="3"
-                      fill="rgb(13 148 136 / 0.16)"
-                      stroke="rgb(255 255 255 / 0.7)"
-                      stroke-width="1"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.34)"
-                      points="322,422.5 330.5,426.8 330.5,421.6 322,417.3"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.42)"
-                      points="593.5,295.3 330.5,426.8 330.5,421.6 593.5,290.1"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 145.1)"
-                      x="344"
-                      y="54"
-                      width="12"
-                      height="372"
-                      rx="3"
-                      fill="rgb(13 148 136 / 0.16)"
-                      stroke="rgb(255 255 255 / 0.7)"
-                      stroke-width="1"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.34)"
-                      points="580.8,297.4 600.6,307.3 600.6,302.1 580.8,292.2"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.42)"
-                      points="609.1,303 600.6,307.3 600.6,302.1 609.1,297.8"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 145.1)"
-                      x="350"
-                      y="54"
-                      width="28"
-                      height="12"
-                      rx="3"
-                      fill="rgb(13 148 136 / 0.16)"
-                      stroke="rgb(255 255 255 / 0.7)"
-                      stroke-width="1"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.34)"
-                      points="496,339.8 515.8,349.7 515.8,344.5 496,334.6"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.42)"
-                      points="524.2,345.5 515.8,349.7 515.8,344.5 524.2,340.3"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 145.1)"
-                      x="350"
-                      y="174"
-                      width="28"
-                      height="12"
-                      rx="3"
-                      fill="rgb(13 148 136 / 0.16)"
-                      stroke="rgb(255 255 255 / 0.7)"
-                      stroke-width="1"
-                    />
-                    <polygon
-                      fill="rgb(245 158 11 / 0.34)"
-                      points="411.1,382.2 430.9,392.1 430.9,386.9 411.1,377"
-                    />
-                    <polygon
-                      fill="rgb(245 158 11 / 0.42)"
-                      points="439.4,387.9 430.9,392.1 430.9,386.9 439.4,382.7"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 145.1)"
-                      x="350"
-                      y="294"
-                      width="28"
-                      height="12"
-                      rx="3"
-                      fill="rgb(245 158 11 / 0.16)"
-                      stroke="rgb(255 255 255 / 0.7)"
-                      stroke-width="1"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.34)"
-                      points="326.3,424.7 346.1,434.6 346.1,429.4 326.3,419.5"
-                    />
-                    <polygon
-                      fill="rgb(13 148 136 / 0.42)"
-                      points="354.5,430.3 346.1,434.6 346.1,429.4 354.5,425.1"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 145.1)"
-                      x="350"
-                      y="414"
-                      width="28"
-                      height="12"
-                      rx="3"
-                      fill="rgb(13 148 136 / 0.16)"
-                      stroke="rgb(255 255 255 / 0.7)"
-                      stroke-width="1"
-                    />
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="3.2s"
-                        begin="0s"
-                        repeatCount="indefinite"
-                        path="M388.5 211.2 L408.3 221.1 L302.2 274.2 L323.4 284.8"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="3.2s"
-                        begin="-1.6s"
-                        repeatCount="indefinite"
-                        path="M388.5 211.2 L408.3 221.1 L302.2 274.2 L323.4 284.8"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="1.4s"
-                        begin="0s"
-                        repeatCount="indefinite"
-                        path="M282.4 264.3 L323.4 284.8"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="1.4s"
-                        begin="-0.7s"
-                        repeatCount="indefinite"
-                        path="M282.4 264.3 L323.4 284.8"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="3.2s"
-                        begin="0s"
-                        repeatCount="indefinite"
-                        path="M176.4 317.3 L196.2 327.2 L302.2 274.2 L323.4 284.8"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="3.2s"
-                        begin="-1.6s"
-                        repeatCount="indefinite"
-                        path="M176.4 317.3 L196.2 327.2 L302.2 274.2 L323.4 284.8"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="3s"
-                        begin="0s"
-                        repeatCount="indefinite"
-                        path="M436.6 341.4 L457.8 352 L585.1 288.3 L604.9 298.2"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="3s"
-                        begin="-1.5s"
-                        repeatCount="indefinite"
-                        path="M436.6 341.4 L457.8 352 L585.1 288.3 L604.9 298.2"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="2s"
-                        begin="0s"
-                        repeatCount="indefinite"
-                        path="M436.6 341.4 L457.8 352 L500.2 330.7 L520 340.6"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="2s"
-                        begin="-1s"
-                        repeatCount="indefinite"
-                        path="M436.6 341.4 L457.8 352 L500.2 330.7 L520 340.6"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="3.4s"
-                        begin="0s"
-                        repeatCount="indefinite"
-                        path="M436.6 341.4 L457.8 352 L330.5 415.6 L350.3 425.5"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#0d9488" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#0d9488" stroke-width="2.5" />
-                      <animateMotion
-                        dur="3.4s"
-                        begin="-1.7s"
-                        repeatCount="indefinite"
-                        path="M436.6 341.4 L457.8 352 L330.5 415.6 L350.3 425.5"
-                      />
-                    </g>
-                    <g>
-                      <circle r="7" fill="#f59e0b" opacity="0.25" />
-                      <circle r="4" fill="white" stroke="#f59e0b" stroke-width="2.5" />
-                      <animateMotion
-                        dur="6.5s"
-                        begin="0s"
-                        repeatCount="indefinite"
-                        path="M436.6 341.4 L457.8 352 L415.4 373.2 L435.2 383.1"
-                      />
-                    </g>
-                    <polygon
-                      fill="#141414"
-                      points="575.2,320 634.6,349.7 634.6,335.8 575.2,306.1"
-                    />
-                    <polygon fill="#30353a" points="694,320 634.6,349.7 634.6,335.8 694,306.1" />
-                    <rect
-                      class="node"
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 136.4)"
-                      x="378"
-                      y="18"
-                      width="84"
-                      height="84"
-                      rx="8"
-                      fill="white"
-                    />
-                    <polygon
-                      fill="#3a3f45"
-                      points="592.1,306.1 634.6,327.4 634.6,320.4 592.1,299.2"
-                    />
-                    <polygon fill="#575d64" points="677,306.1 634.6,327.4 634.6,320.4 677,299.2" />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.5)"
-                      x="390"
-                      y="30"
-                      width="60"
-                      height="60"
-                      rx="5"
-                      fill="#eef0f2"
-                      stroke="#dadde1"
-                      stroke-width="1"
-                    />
-                    <circle
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.1)"
-                      cx="420"
-                      cy="60"
-                      r="18.5"
-                      fill="#0d9488"
-                      stroke="rgb(255 255 255 / 0.55)"
-                      stroke-width="3"
-                    />
-                    <g transform="matrix(0.7071 0.3536 0 0.8660 609.1 266.3)">
-                      <rect
-                        width="36"
-                        height="36"
-                        rx="10"
-                        fill="#141414"
-                        stroke="#2c3035"
-                        stroke-width="1"
-                      />
-                      <path
-                        transform="translate(8 8) scale(0.8333)"
-                        d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="2.16"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </g>
-                    <polygon
-                      fill="#141414"
-                      points="299.4,203.3 358.8,233 358.8,219.2 299.4,189.5"
-                    />
-                    <polygon
-                      fill="#30353a"
-                      points="418.2,203.3 358.8,233 358.8,219.2 418.2,189.5"
-                    />
-                    <rect
-                      class="node"
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 136.4)"
-                      x="18"
-                      y="48"
-                      width="84"
-                      height="84"
-                      rx="8"
-                      fill="white"
-                    />
-                    <polygon
-                      fill="#3a3f45"
-                      points="316.4,189.5 358.8,210.7 358.8,203.8 316.4,182.5"
-                    />
-                    <polygon
-                      fill="#575d64"
-                      points="401.2,189.5 358.8,210.7 358.8,203.8 401.2,182.5"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.5)"
-                      x="30"
-                      y="60"
-                      width="60"
-                      height="60"
-                      rx="5"
-                      fill="#eef0f2"
-                      stroke="#dadde1"
-                      stroke-width="1"
-                    />
-                    <circle
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.1)"
-                      cx="60"
-                      cy="90"
-                      r="18.5"
-                      fill="#0d9488"
-                      stroke="rgb(255 255 255 / 0.55)"
-                      stroke-width="3"
-                    />
-                    <g transform="matrix(0.7071 0.3536 0 0.8660 333.3 149.6)">
-                      <rect
-                        width="36"
-                        height="36"
-                        rx="10"
-                        fill="#141414"
-                        stroke="#2c3035"
-                        stroke-width="1"
-                      />
-                      <path
-                        transform="translate(8 8) scale(0.8333)"
-                        d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="2.16"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </g>
-                    <polygon
-                      fill="#141414"
-                      points="490.3,362.4 549.7,392.1 549.7,378.3 490.3,348.6"
-                    />
-                    <polygon
-                      fill="#30353a"
-                      points="609.1,362.4 549.7,392.1 549.7,378.3 609.1,348.6"
-                    />
-                    <rect
-                      class="node"
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 136.4)"
-                      x="378"
-                      y="138"
-                      width="84"
-                      height="84"
-                      rx="8"
-                      fill="white"
-                    />
-                    <polygon
-                      fill="#3a3f45"
-                      points="507.3,348.6 549.7,369.8 549.7,362.9 507.3,341.6"
-                    />
-                    <polygon
-                      fill="#575d64"
-                      points="592.1,348.6 549.7,369.8 549.7,362.9 592.1,341.6"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.5)"
-                      x="390"
-                      y="150"
-                      width="60"
-                      height="60"
-                      rx="5"
-                      fill="#eef0f2"
-                      stroke="#dadde1"
-                      stroke-width="1"
-                    />
-                    <circle
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.1)"
-                      cx="420"
-                      cy="180"
-                      r="18.5"
-                      fill="#0d9488"
-                      stroke="rgb(255 255 255 / 0.55)"
-                      stroke-width="3"
-                    />
-                    <g transform="matrix(0.7071 0.3536 0 0.8660 524.2 308.7)">
-                      <rect
-                        width="36"
-                        height="36"
-                        rx="10"
-                        fill="#141414"
-                        stroke="#2c3035"
-                        stroke-width="1"
-                      />
-                      <path
-                        transform="translate(8 8) scale(0.8333)"
-                        d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6zM9 12l2 2 4-4"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="2.16"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </g>
-                    <polygon fill="#141414" points="266.9,320 380,376.6 380,359.2 266.9,302.7" />
-                    <polygon fill="#30353a" points="493.1,320 380,376.6 380,359.2 493.1,302.7" />
-                    <rect
-                      class="node"
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 133)"
-                      x="160"
-                      y="160"
-                      width="160"
-                      height="160"
-                      rx="12"
-                      fill="white"
-                    />
-                    <polygon fill="#0b0b0b" points="289.5,302.7 380,347.9 380,341 289.5,295.8" />
-                    <polygon fill="#1f2226" points="470.5,302.7 380,347.9 380,341 470.5,295.8" />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 126)"
-                      x="176"
-                      y="176"
-                      width="128"
-                      height="128"
-                      rx="8"
-                      fill="#111111"
-                    />
-                    <g transform="matrix(0.7071 0.3536 0 0.8660 384.2 192.8)">
-                      <rect width="104" height="74" rx="9" fill="#141414" />
-                      <circle cx="10" cy="8" r="2" fill="#2dd4bf" />
-                      <circle cx="17" cy="8" r="2" fill="#3a3f45" />
-                      <circle cx="24" cy="8" r="2" fill="#3a3f45" />
-                      <rect x="6" y="15" width="92" height="53" rx="4" fill="white" />
-                      <circle cx="15" cy="25" r="2" fill="#0d9488" />
-                      <rect x="21" y="23.5" width="22" height="3" rx="1.5" fill="#d5d9dd" />
-                      <rect x="79" y="23.5" width="8" height="3" rx="1.5" fill="#0d9488" />
-                      <circle cx="15" cy="36" r="2" fill="#0d9488" />
-                      <rect x="21" y="34.5" width="22" height="3" rx="1.5" fill="#d5d9dd" />
-                      <rect x="73" y="34.5" width="8" height="3" rx="1.5" fill="#0d9488" />
-                      <circle cx="15" cy="47" r="2" fill="#0d9488" />
-                      <rect x="21" y="45.5" width="22" height="3" rx="1.5" fill="#d5d9dd" />
-                      <rect x="79" y="45.5" width="8" height="3" rx="1.5" fill="#f59e0b" />
-                      <circle cx="15" cy="58" r="2" fill="#0d9488" />
-                      <rect x="21" y="56.5" width="22" height="3" rx="1.5" fill="#d5d9dd" />
-                      <rect x="73" y="56.5" width="8" height="3" rx="1.5" fill="#0d9488" />
-                    </g>
-                    <polygon
-                      fill="#141414"
-                      points="193.3,256.4 252.7,286.1 252.7,272.2 193.3,242.5"
-                    />
-                    <polygon
-                      fill="#30353a"
-                      points="312.1,256.4 252.7,286.1 252.7,272.2 312.1,242.5"
-                    />
-                    <rect
-                      class="node"
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 136.4)"
-                      x="18"
-                      y="198"
-                      width="84"
-                      height="84"
-                      rx="8"
-                      fill="white"
-                    />
-                    <polygon
-                      fill="#3a3f45"
-                      points="210.3,242.5 252.7,263.7 252.7,256.8 210.3,235.6"
-                    />
-                    <polygon
-                      fill="#575d64"
-                      points="295.1,242.5 252.7,263.7 252.7,256.8 295.1,235.6"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.5)"
-                      x="30"
-                      y="210"
-                      width="60"
-                      height="60"
-                      rx="5"
-                      fill="#eef0f2"
-                      stroke="#dadde1"
-                      stroke-width="1"
-                    />
-                    <circle
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.1)"
-                      cx="60"
-                      cy="240"
-                      r="18.5"
-                      fill="#0d9488"
-                      stroke="rgb(255 255 255 / 0.55)"
-                      stroke-width="3"
-                    />
-                    <g transform="matrix(0.7071 0.3536 0 0.8660 227.3 202.7)">
-                      <rect
-                        width="36"
-                        height="36"
-                        rx="10"
-                        fill="#141414"
-                        stroke="#2c3035"
-                        stroke-width="1"
-                      />
-                      <path
-                        transform="translate(8 8) scale(0.8333)"
-                        d="M3 4h2l2.2 10.4a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L19.5 8H6M9 20h.01M17 20h.01"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="2.16"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </g>
-                    <polygon
-                      fill="#141414"
-                      points="405.5,404.9 464.9,434.6 464.9,420.7 405.5,391"
-                    />
-                    <polygon
-                      fill="#30353a"
-                      points="524.2,404.9 464.9,434.6 464.9,420.7 524.2,391"
-                    />
-                    <rect
-                      class="node"
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 136.4)"
-                      x="378"
-                      y="258"
-                      width="84"
-                      height="84"
-                      rx="8"
-                      fill="white"
-                    />
-                    <polygon
-                      fill="#3a3f45"
-                      points="422.4,391 464.9,412.2 464.9,405.3 422.4,384.1"
-                    />
-                    <polygon
-                      fill="#575d64"
-                      points="507.3,391 464.9,412.2 464.9,405.3 507.3,384.1"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.5)"
-                      x="390"
-                      y="270"
-                      width="60"
-                      height="60"
-                      rx="5"
-                      fill="#eef0f2"
-                      stroke="#dadde1"
-                      stroke-width="1"
-                    />
-                    <circle
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.1)"
-                      cx="420"
-                      cy="300"
-                      r="18.5"
-                      fill="#f59e0b"
-                      stroke="rgb(255 255 255 / 0.55)"
-                      stroke-width="3"
-                    />
-                    <g transform="matrix(0.7071 0.3536 0 0.8660 439.4 351.2)">
-                      <rect
-                        width="36"
-                        height="36"
-                        rx="10"
-                        fill="#141414"
-                        stroke="#2c3035"
-                        stroke-width="1"
-                      />
-                      <path
-                        transform="translate(8 8) scale(0.8333)"
-                        d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="2.16"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </g>
-                    <polygon
-                      fill="#141414"
-                      points="87.3,309.4 146.7,339.1 146.7,325.2 87.3,295.5"
-                    />
-                    <polygon
-                      fill="#30353a"
-                      points="206.1,309.4 146.7,339.1 146.7,325.2 206.1,295.5"
-                    />
-                    <rect
-                      class="node"
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 136.4)"
-                      x="18"
-                      y="348"
-                      width="84"
-                      height="84"
-                      rx="8"
-                      fill="white"
-                    />
-                    <polygon
-                      fill="#3a3f45"
-                      points="104.2,295.5 146.7,316.8 146.7,309.8 104.2,288.6"
-                    />
-                    <polygon
-                      fill="#575d64"
-                      points="189.1,295.5 146.7,316.8 146.7,309.8 189.1,288.6"
-                    />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.5)"
-                      x="30"
-                      y="360"
-                      width="60"
-                      height="60"
-                      rx="5"
-                      fill="#eef0f2"
-                      stroke="#dadde1"
-                      stroke-width="1"
-                    />
-                    <circle
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.1)"
-                      cx="60"
-                      cy="390"
-                      r="18.5"
-                      fill="#0d9488"
-                      stroke="rgb(255 255 255 / 0.55)"
-                      stroke-width="3"
-                    />
-                    <g transform="matrix(0.7071 0.3536 0 0.8660 121.2 255.7)">
-                      <rect
-                        width="36"
-                        height="36"
-                        rx="10"
-                        fill="#141414"
-                        stroke="#2c3035"
-                        stroke-width="1"
-                      />
-                      <path
-                        transform="translate(8 8) scale(0.8333)"
-                        d="M3 6h18v12H3zM3 10h18M7 15h4"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="2.16"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </g>
-                    <polygon fill="#141414" points="320.6,447.3 380,477 380,463.1 320.6,433.4" />
-                    <polygon fill="#30353a" points="439.4,447.3 380,477 380,463.1 439.4,433.4" />
-                    <rect
-                      class="node"
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 136.4)"
-                      x="378"
-                      y="378"
-                      width="84"
-                      height="84"
-                      rx="8"
-                      fill="white"
-                    />
-                    <polygon fill="#3a3f45" points="337.6,433.4 380,454.6 380,447.7 337.6,426.5" />
-                    <polygon fill="#575d64" points="422.4,433.4 380,454.6 380,447.7 422.4,426.5" />
-                    <rect
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.5)"
-                      x="390"
-                      y="390"
-                      width="60"
-                      height="60"
-                      rx="5"
-                      fill="#eef0f2"
-                      stroke="#dadde1"
-                      stroke-width="1"
-                    />
-                    <circle
-                      transform="matrix(0.7071 0.3536 -0.7071 0.3536 380 129.1)"
-                      cx="420"
-                      cy="420"
-                      r="18.5"
-                      fill="#0d9488"
-                      stroke="rgb(255 255 255 / 0.55)"
-                      stroke-width="3"
-                    />
-                    <g transform="matrix(0.7071 0.3536 0 0.8660 354.5 393.6)">
-                      <rect
-                        width="36"
-                        height="36"
-                        rx="10"
-                        fill="#141414"
-                        stroke="#2c3035"
-                        stroke-width="1"
-                      />
-                      <path
-                        transform="translate(8 8) scale(0.8333)"
-                        d="M3 9l9-5 9 5v11H3zM7 20v-7h10v7M7 16.5h10"
-                        fill="none"
-                        stroke="white"
-                        stroke-width="2.16"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </g>
-                  </svg>
-                  <span
-                    aria-hidden="true"
-                    class="stream-label iso-label iso-above-left"
-                    style="left: 46.68%; top: 8.9%"
-                    ><span class="size-1.5 rounded-xs bg-teal"></span>Postgres: shop</span
-                  >
-                  <span
-                    aria-hidden="true"
-                    class="stream-label iso-label iso-above-left"
-                    style="left: 30.11%; top: 22.71%"
-                    ><span class="size-1.5 rounded-xs bg-teal"></span>checkout-api</span
-                  >
-                  <span
-                    aria-hidden="true"
-                    class="stream-label iso-label iso-below"
-                    style="left: 13.53%; top: 59.14%"
-                    ><span class="size-1.5 rounded-xs bg-teal"></span>payments-api</span
-                  >
-                  <span
-                    aria-hidden="true"
-                    class="stream-label stream-label-dark iso-label iso-center"
-                    style="left: 47.13%; top: 50.25%"
-                    >Changeport</span
-                  >
-                  <span
-                    aria-hidden="true"
-                    class="stream-label iso-label"
-                    style="left: 89.78%; top: 39.28%"
-                    ><span class="size-1.5 rounded-full bg-teal"></span>billing</span
-                  >
-                  <span
-                    aria-hidden="true"
-                    class="stream-label iso-label iso-below"
-                    style="left: 76.52%; top: 72.95%"
-                    ><span class="size-1.5 rounded-full bg-teal"></span>fraud-checks</span
-                  >
-                  <span
-                    aria-hidden="true"
-                    class="stream-label iso-label iso-below border-red-200"
-                    style="left: 63.26%; top: 84%"
-                    ><span class="size-1.5 rounded-full bg-red-500"></span>search-indexer</span
-                  >
-                  <span
-                    aria-hidden="true"
-                    class="stream-label iso-label iso-left"
-                    style="left: 40.72%; top: 85.51%"
-                    ><span class="size-1.5 rounded-full bg-teal"></span>warehouse-sync</span
-                  >
+              <div data-scene class="relative [grid-area:1/1]">
+                <!-- Wide: the streams as a model (scripts/streams.ts), and the alert Changeport raises. -->
+                <!-- include:streams -->
+                <div
+                  aria-hidden="true"
+                  class="pointer-events-none absolute top-0 right-0 hidden max-w-[44%] flex-col items-end sm:flex"
+                >
+                  <p data-alert="none" hidden class="stream-ok">
+                    <span class="size-1.5 rounded-full bg-teal"></span
+                    ><span class="xl:hidden">All caught up</span
+                    ><span class="hidden xl:inline">All sources and apps are keeping up</span>
+                  </p>
+                  <p data-alert="search" class="stream-alert-card">
+                    <span class="block font-semibold">search-indexer is behind</span>
+                    <span class="hidden xl:inline">App: changes wait for it to read them</span>
+                  </p>
+                  <p data-alert="pg" hidden class="stream-alert-card">
+                    <span class="block font-semibold">Postgres: shop is behind</span>
+                    <span class="hidden xl:inline"
+                      >Source: Changeport reads its changes slower than it makes them</span
+                    >
+                  </p>
                 </div>
 
                 <!-- Narrow: the same streams as a column, whose text keeps its size. -->
                 <div
                   role="img"
-                  aria-label="Postgres: shop, checkout-api and payments-api stream through Changeport, as the topics shop.public.orders, orders and payments, to billing, fraud-checks, search-indexer and warehouse-sync. All are caught up except search-indexer, which is 3 minutes behind."
+                  aria-label="Postgres: shop, checkout-api and payments-api send their changes into Changeport, as the topics shop.public.orders, orders and payments, which it delivers to the apps subscribed to them: billing, fraud-checks, search-indexer and warehouse-sync."
                   class="sm:hidden"
                 >
                   <div class="flex flex-wrap justify-center gap-2">
-                    <span class="stream-label"
-                      ><span class="size-1.5 rounded-xs bg-teal"></span>Postgres: shop</span
+                    <span data-chip="pg" class="stream-label"
+                      ><span class="size-1.5 rounded-xs bg-[#2f9e8f]"></span>Postgres: shop<span
+                        class="stream-status"
+                        >falling behind</span
+                      ></span
                     >
                     <span class="stream-label"
-                      ><span class="size-1.5 rounded-xs bg-teal"></span>checkout-api</span
+                      ><span class="size-1.5 rounded-xs bg-[#3b6fd8]"></span>checkout-api</span
                     >
                     <span class="stream-label"
-                      ><span class="size-1.5 rounded-xs bg-teal"></span>payments-api</span
+                      ><span class="size-1.5 rounded-xs bg-[#9457e0]"></span>payments-api</span
                     >
                   </div>
                   <div class="stream-link"></div>
@@ -1045,15 +192,21 @@
                     </div>
                     <div class="mt-3 grid gap-1.5 text-xs">
                       <div class="stream-topic">
-                        <span class="font-mono">shop.public.orders</span
+                        <span class="flex items-center gap-2 font-mono"
+                          ><span class="size-1.5 rounded-xs bg-[#2f9e8f]"></span
+                          >shop.public.orders</span
                         ><span class="text-neutral-400">to billing, warehouse-sync</span>
                       </div>
                       <div class="stream-topic">
-                        <span class="font-mono">orders</span
-                        ><span class="text-neutral-400">to search-indexer</span>
+                        <span class="flex items-center gap-2 font-mono"
+                          ><span class="size-1.5 rounded-xs bg-[#3b6fd8]"></span>orders</span
+                        ><span class="text-neutral-400"
+                          >to fraud-checks, search-indexer, warehouse-sync</span
+                        >
                       </div>
                       <div class="stream-topic">
-                        <span class="font-mono">payments</span
+                        <span class="flex items-center gap-2 font-mono"
+                          ><span class="size-1.5 rounded-xs bg-[#9457e0]"></span>payments</span
                         ><span class="text-neutral-400">to billing, fraud-checks</span>
                       </div>
                     </div>
@@ -1061,65 +214,95 @@
                   <div class="stream-link"></div>
                   <div class="flex flex-wrap justify-center gap-2">
                     <span class="stream-label"
-                      ><span class="size-1.5 rounded-full bg-teal"></span>billing</span
+                      ><span class="flex gap-0.5"
+                        ><span class="size-1.5 rounded-full bg-[#2f9e8f]"></span
+                        ><span class="size-1.5 rounded-full bg-[#9457e0]"></span></span
+                      >billing</span
                     >
                     <span class="stream-label"
-                      ><span class="size-1.5 rounded-full bg-teal"></span>fraud-checks</span
+                      ><span class="flex gap-0.5"
+                        ><span class="size-1.5 rounded-full bg-[#3b6fd8]"></span
+                        ><span class="size-1.5 rounded-full bg-[#9457e0]"></span></span
+                      >fraud-checks</span
                     >
-                    <span class="stream-label border-red-200"
-                      ><span class="size-1.5 rounded-full bg-red-500"></span>search-indexer
-                      <span class="font-medium text-red-700">3 min behind</span></span
+                    <span data-chip="search" class="stream-label is-behind"
+                      ><span class="size-1.5 rounded-full bg-[#3b6fd8]"></span>search-indexer<span
+                        class="stream-status"
+                        >falling behind</span
+                      ></span
                     >
                     <span class="stream-label"
-                      ><span class="size-1.5 rounded-full bg-teal"></span>warehouse-sync</span
+                      ><span class="flex gap-0.5"
+                        ><span class="size-1.5 rounded-full bg-[#2f9e8f]"></span
+                        ><span class="size-1.5 rounded-full bg-[#3b6fd8]"></span></span
+                      >warehouse-sync</span
                     >
                   </div>
                 </div>
               </div>
 
-              <!-- The same streams, in sentences: the console's diagnosis, then each stream. -->
+              <!-- The same streams, in sentences: what Changeport says, then each app. -->
               <div
                 data-plain
                 inert
                 class="invisible self-start rounded-xl bg-white px-4 text-sm [grid-area:1/1]"
               >
-                <p class="py-2.5 leading-relaxed text-neutral-700">
+                <p data-say="none" hidden class="py-2.5 leading-relaxed text-neutral-700">
+                  <span class="font-semibold text-teal-dark"
+                    >All sources and apps are keeping up.</span
+                  >
+                  Each change reaches the apps subscribed to its source as it happens.
+                </p>
+                <p data-say="search" class="py-2.5 leading-relaxed text-neutral-700">
                   <span class="font-semibold text-amber-700"
                     >search-indexer can't keep up with orders.</span
                   >
                   It consumes 80 messages a second, while orders receives 118. Up to 4 more
                   consumers can share its work.
                 </p>
+                <p data-say="pg" hidden class="py-2.5 leading-relaxed text-neutral-700">
+                  <span class="font-semibold text-amber-700"
+                    >Postgres: shop is falling behind.</span
+                  >
+                  Changeport reads its changes slower than the database makes them, so the database
+                  keeps more of its log until it catches up.
+                </p>
                 <ul class="divide-y divide-neutral-200 border-t border-neutral-200">
                   <li class="flex justify-between gap-x-3 py-1.5">
                     <span
                       ><span class="font-medium">billing</span
-                      ><span class="max-sm:hidden">
+                      ><span class="max-sm:hidden lg:max-xl:hidden">
                         reads shop.public.orders and payments</span
                       ></span
                     >
-                    <span class="shrink-0 text-right text-neutral-600">caught up</span>
+                    <span data-status="billing" class="stream-row-status">caught up</span>
                   </li>
                   <li class="flex justify-between gap-x-3 py-1.5">
                     <span
                       ><span class="font-medium">fraud-checks</span
-                      ><span class="max-sm:hidden"> reads payments</span></span
+                      ><span class="max-sm:hidden lg:max-xl:hidden">
+                        reads orders and payments</span
+                      ></span
                     >
-                    <span class="shrink-0 text-right text-neutral-600">caught up</span>
+                    <span data-status="fraud" class="stream-row-status">caught up</span>
                   </li>
                   <li class="flex justify-between gap-x-3 py-1.5">
                     <span
-                      ><span class="font-medium text-red-700">search-indexer</span
-                      ><span class="max-sm:hidden"> reads orders</span></span
+                      ><span class="font-medium">search-indexer</span
+                      ><span class="max-sm:hidden lg:max-xl:hidden"> reads orders</span></span
                     >
-                    <span class="shrink-0 text-right font-medium text-red-700">3 min behind</span>
+                    <span data-status="search" class="stream-row-status is-behind"
+                      >falling behind</span
+                    >
                   </li>
                   <li class="flex justify-between gap-x-3 py-1.5">
                     <span
                       ><span class="font-medium">warehouse-sync</span
-                      ><span class="max-sm:hidden"> reads shop.public.orders</span></span
+                      ><span class="max-sm:hidden lg:max-xl:hidden">
+                        reads shop.public.orders and orders</span
+                      ></span
                     >
-                    <span class="shrink-0 text-right text-neutral-600">caught up</span>
+                    <span data-status="warehouse" class="stream-row-status">caught up</span>
                   </li>
                 </ul>
               </div>

@@ -4,6 +4,7 @@ import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
 import { content, renderDocs } from "./scripts/docs.ts";
+import { renderStreams } from "./scripts/streams.ts";
 
 // The landing site at the domain's root (docs/site.md): plain HTML pages
 // with Tailwind's CSS, one small script and no cookies. The console's address,
@@ -19,6 +20,9 @@ const siteURL = (process.env.CHANGEPORT_SITE_URL ?? "http://localhost:4174").rep
 // The customer docs' pages, rendered from content/docs into docs/.
 const docs = await renderDocs();
 
+/** The partials drawn by a script rather than written by hand. */
+const drawn: Record<string, () => string> = { streams: renderStreams };
+
 /**
  * Puts the shared partials into each page, where it says
  * <!-- include:header -->, and fills in %CONSOLE_URL%, %SITE_URL% and
@@ -26,6 +30,7 @@ const docs = await renderDocs();
  */
 function pages(): Plugin {
   const partial = (name: string) =>
+    drawn[name]?.() ??
     readFileSync(path.join(import.meta.dirname, "src", "partials", `${name}.html`), "utf8");
   return {
     name: "changeport-pages",
