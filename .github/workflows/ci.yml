@@ -22,9 +22,8 @@ jobs:
   # Which jobs a pull request needs, from the files it changes
   # (hack/ci-changes.sh): a change to the landing site, say, runs the site's
   # checks without the end-to-end suites on kind. Pushes to main and runs
-  # started by hand run every job, so main is always checked in full, and
-  # publishing waits for that. A job a pull request does not need shows as
-  # skipped, which counts as passed.
+  # started by hand run every job, so main is always checked in full. A job
+  # a pull request does not need shows as skipped, which counts as passed.
   # GitHub names each run of a matrix job after its matrix values, as in
   # "End to end on kind (core)"; a name that included them itself would show
   # unexpanded on a job that is skipped.

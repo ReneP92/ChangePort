@@ -23,7 +23,9 @@ expect "site/index.html" site
 expect "site/src/main.ts
 site/tests/site.spec.ts" site
 expect "site/content/docs/alerts.md" site go web e2e_core
-expect "web/src/App.tsx" web go console
+expect "web/src/App.tsx" web go console e2e_core
+expect "hack/kafka-with.sh" e2e_core console
+expect "hack/Transaction.java" e2e_core console
 expect "terraform/modules/static-site/main.tf" terraform
 expect "README.md" ""
 expect "docs/PROJECT_PLAN.md" ""
@@ -50,6 +52,34 @@ expect "hack/ci-changes.sh" go terraform web site e2e_core e2e_cdc e2e_failover 
 expect ".github/workflows/ci.yml" go terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos console kafka_image connect_image images
 expect "justfile" go terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos console kafka_image connect_image images
 expect "hack/lib.sh" go terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos console kafka_image connect_image images
+
+# Every script a suite of hack/e2e.sh runs marks that suite, so that a
+# script one more suite comes to run is not left to the suites it ran in.
+e2e="$(dirname "${BASH_SOURCE[0]}")/e2e.sh"
+# scripts START END: the scripts hack/e2e.sh runs from the line matching
+# START to the next matching END.
+scripts() {
+  awk -v start="$1" -v end="$2" '$0 ~ start { on = 1 } on { print } on && $0 ~ end { exit }' "$e2e" |
+    { grep -o 'hack/[a-z-]*\.sh' || true; } | sort -u
+}
+for suite in core cdc failover chaos; do
+  if [[ $suite == core ]]; then
+    ran=$(scripts '^core_suite' '^}')
+  else
+    ran=$(scripts "SUITE == $suite " '^fi')
+  fi
+  [[ -n $ran ]] || {
+    echo "found no scripts of the $suite suite in hack/e2e.sh" >&2
+    failed=1
+  }
+  for script in $ran; do
+    marked=$(printf '%s\n' "$script" | "$changes" - 2>/dev/null)
+    [[ $marked == *$'\n'"e2e_$suite=true"$'\n'* ]] || {
+      printf 'a change of %s does not run the %s suite, which runs it (hack/e2e.sh)\n' "$script" "$suite" >&2
+      failed=1
+    }
+  done
+done
 
 # The suites the end-to-end job's matrix runs.
 suites() {

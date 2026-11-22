@@ -328,7 +328,7 @@ provision customer="acme" profile="dev":
 deprovision customer="acme":
     go run ./cmd/provisioner deprovision -context {{ kube_context }} -customer {{ customer }} -wait
 
-# Run the end-to-end suites on kind: core, failover, cdc, chaos or all (chaos takes 40 minutes); KEEP=1 keeps the customers
+# Run the end-to-end suites on kind: core, failover, cdc, chaos or all (chaos takes 25 minutes); KEEP=1 keeps the customers
 [group('Local development (kind + Strimzi)')]
 e2e suite="all" customer="acme":
     SUITE={{ suite }} hack/e2e.sh {{ customer }}

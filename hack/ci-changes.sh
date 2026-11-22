@@ -53,9 +53,10 @@ while IFS= read -r file; do
   # suite runs the connection guide's.
   site/content/docs/*) mark "$file" site go web e2e_core ;;
   site/*) mark "$file" site ;;
-  # The console's web app, built into the console's image; just generate,
-  # which the Go job checks, writes its API types and examples.
-  web/*) mark "$file" web go console ;;
+  # The console's web app, built into the console's image, whose Playwright
+  # tests the core suite runs too; just generate, which the Go job checks,
+  # writes its API types and examples.
+  web/*) mark "$file" web go console e2e_core ;;
   # The API the console serves and the web app's types are generated from.
   api/openapi.yaml) mark "$file" web go "${suites[@]}" console images ;;
   # The Bun and the Playwright browser the site, the web app and the core
@@ -74,7 +75,10 @@ while IFS= read -r file; do
     load.sh) mark "$file" e2e_failover e2e_chaos ;;
     usage-test.sh) mark "$file" e2e_core e2e_failover ;;
     cdc-test.sh | cdc-recovery-test.sh) mark "$file" e2e_cdc ;;
-    metrics-test.sh | deletion-protection-test.sh | agent-test.sh | lag-test.sh | kafka-with.sh | Transaction.java | \
+    # The core suite's lag test and the console's signed-in tests run
+    # Kafka's tools with these.
+    kafka-with.sh | Transaction.java) mark "$file" e2e_core console ;;
+    metrics-test.sh | deletion-protection-test.sh | agent-test.sh | lag-test.sh | \
       client-telemetry-test.sh | console-access-test.sh | console-test.sh | tiered-storage-test.sh | replay-test.sh | \
       host-access-test.sh | host-dns.sh | connecting-guide-test.sh | postgres-test.sh | cdc-runtime-test.sh)
       mark "$file" e2e_core
