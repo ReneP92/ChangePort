@@ -47,11 +47,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
-      - name: Check that variables and secrets match whatever their case (temporary)
-        env:
-          VARIABLE: ${{ vars[format('clerk_{0}', 'publishable_key')] }}
-          SECRET: ${{ secrets[format('clerk_{0}', 'secret_key')] }}
-        run: test -n "$VARIABLE" && test -n "$SECRET" && echo "both found"
       - id: changes
         env:
           EVENT: ${{ github.event_name }}
