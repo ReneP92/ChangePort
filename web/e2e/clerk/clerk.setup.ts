@@ -140,6 +140,8 @@ async function sharedOperator(): Promise<UserFixture> {
  * The janitor: removes the test users, organizations, customers and trial
  * requests of runs that started over an hour ago and never cleaned up, so
  * that a crashed run costs nothing for long. Younger ones may belong to a run in progress.
+ * Every shard's setup runs it at the same moment, so another may remove one
+ * first, which counts as removed.
  */
 async function removeAbandoned(): Promise<void> {
   const clerk = clerkClient();
@@ -150,7 +152,7 @@ async function removeAbandoned(): Promise<void> {
   for (const u of users.data) {
     const email = u.primaryEmailAddress?.emailAddress ?? "";
     if (testEmailPattern.test(email) && u.createdAt < cutoff) {
-      await clerk.users.deleteUser(u.id);
+      await unlessGone(clerk.users.deleteUser(u.id));
     }
   }
   const organizations = await clerk.organizations.getOrganizationList({
@@ -159,7 +161,7 @@ async function removeAbandoned(): Promise<void> {
   });
   for (const o of organizations.data) {
     if (testOrganizationPattern.test(o.name) && o.createdAt < cutoff) {
-      await clerk.organizations.deleteOrganization(o.id);
+      await unlessGone(clerk.organizations.deleteOrganization(o.id));
     }
   }
   for (const c of testCustomers()) {
@@ -170,6 +172,19 @@ async function removeAbandoned(): Promise<void> {
   for (const r of testTrialRequests()) {
     if (Date.parse(r.metadata.creationTimestamp) < cutoff) {
       kubectl(["delete", "trialrequest", r.metadata.name, "--wait=false", "--ignore-not-found"]);
+    }
+  }
+}
+
+/** Waits for a removal, which another run may have made already. */
+async function unlessGone(removal: Promise<unknown>): Promise<void> {
+  try {
+    await removal;
+  } catch (error) {
+    const gone =
+      isClerkAPIResponseError(error) && error.errors.some((e) => e.code === "resource_not_found");
+    if (!gone) {
+      throw error;
     }
   }
 }
