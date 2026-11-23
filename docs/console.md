@@ -1,8 +1,12 @@
 # The console
 
 What the console does for customers and for Changeport's operators, page by
-page: the customer console at the domain's `console.` address, and the
-operator console under `/operator` for Changeport's staff. The console's
+page: the customer console, and the operator console under `/operator` for
+Changeport's staff. Both are one address for every customer:
+`https://console.changeport.app` in prod, `https://console.dev.changeport.app`
+in dev and `http://localhost:8088` on kind; a user's Clerk organization
+picks the customer, and customers get no subdomains of their own
+([terraform/README.md](../terraform/README.md#addresses)). The console's
 end-to-end tests (`web/e2e`, `just ui-e2e`) exercise every page on kind.
 
 ## Customers
