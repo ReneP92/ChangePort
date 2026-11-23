@@ -182,14 +182,59 @@ with the cluster's AWS roles.
   issue certificates, wildcards included. The provisioning service names
   customers under them (`internal/provisioning`).
 
+### Addresses
+
+Every name Changeport serves, by where it runs. Each environment's names sit
+under its own branch of the domain, so dev never shares a parent name, and
+with it cookies, with prod: `console.dev.changeport.app`, not
+`dev.console.changeport.app`.
+
+| | Local (kind) | Dev (AWS) | Prod (AWS) |
+|---|---|---|---|
+| Landing site | `http://localhost:5173` (`just site-dev`), `http://localhost:4174` (`vite preview`) | none | `https://changeport.app`, and `www.` redirecting to it |
+| Console | `http://localhost:8088` | `https://console.dev.changeport.app` | `https://console.changeport.app` |
+| Kafka endpoints | `*.<customer>.kafka.changeport.test` | `*.<customer>.kafka.dev.changeport.app` | `*.<customer>.kafka.changeport.app` |
+| Sign-in (Clerk) | Clerk's development instance | Clerk's development instance | `clerk.changeport.app`, `accounts.changeport.app` |
+
+- **One console for every customer.** A user's Clerk organization picks the
+  customer, and each of its environments shows under `/e/<environment>/`,
+  as `https://console.changeport.app/e/staging/topics`; the operator
+  console is `/operator` on the same address. Customers get no subdomains
+  of their own: the console is one deployment, accepts only its own
+  address's sessions, and needs no DNS or certificate per customer, and
+  customers' names stay out of DNS and certificate logs. A dedicated
+  address for one customer can be added later beside it.
+- **A customer's environments** are clusters of their own in prod, each
+  with an opaque customer ID in its Kafka names, such as
+  `bootstrap.c-7f3k2q.kafka.changeport.app`; the environment's name is not
+  in them, so renaming it changes only the console's URLs. Dev is
+  Changeport's own environment for testing on AWS, not a customer's.
+- **Locally**, the console stays on `localhost`, which browsers treat as
+  secure without HTTPS and Clerk's development instances expect. A
+  `changeport.app` name would need HTTPS on the laptop, as `.app` is
+  HTTPS-only in browsers, and a public record pointing at `127.0.0.1`,
+  which some routers drop. Kafka needs a name per broker, so it uses
+  `changeport.test`, reserved and never public, which `hack/host-dns.sh`
+  points at the host gateway.
+- **Still to come:** the console's records and Clerk's production instance
+  with its records (#58), and external-dns and cert-manager on EKS (#28).
+  The site's, the CAA and the Kafka zones' records are written here.
+
+### Cloudflare tokens
+
 Dev's and prod's Terraform reach Cloudflare with an API token in
 `CLOUDFLARE_API_TOKEN`. In the Cloudflare dashboard, My Profile, API
 Tokens, create two custom tokens, each for the zone `changeport.app` only:
 
-- one with **Zone: Read** and **DNS: Edit**, for `just tf-plan` and
-  `just tf-apply` on a laptop, kept in your password manager;
+- one with **Zone: Read** and **DNS: Edit**, for applies: in your password
+  manager for `just tf-plan` and `just tf-apply` on a laptop, passed in
+  per command and never written to a file, and as the environment secret
+  `CLOUDFLARE_API_TOKEN` of the GitHub environments `dev` and `prod`, for
+  the apply workflow (#212). Both environments deploy from `main` only, and
+  `prod` waits for an approval, so no branch, pull request or fork reaches
+  the token;
 - one with **Zone: Read** and **DNS: Read**, for the plans in CI, as the
-  secret `CLOUDFLARE_PLAN_API_TOKEN`.
+  repository secret `CLOUDFLARE_PLAN_API_TOKEN`.
 
 A token covers the whole zone, so dev's Terraform may change prod's
 records too; Terraform only changes the records it wrote. Cloudflare refuses
