@@ -79,10 +79,11 @@ language, with its lag over the last hour; and, last, how to connect, with
 
 Keeping the brokers ready and every partition in sync is Changeport's job,
 so while they are, **Health** says so in a line, with the open transactions,
-which are the customer's; its counts and brokers are a click away. Once a
-broker is not ready, a partition is out of sync or offline, or the cluster
-has no active controller, it shows them by itself, unless the viewer has
-closed them.
+which are the customer's; its counts and brokers are a click away. Once no
+broker runs, a broker is not ready, a partition is out of sync or offline,
+or the cluster does not have exactly one active controller, it shows them by
+itself, whatever the viewer chose while all was well, unless they close
+them; its line names a controller problem too.
 
 **What needs attention** lists the common Kafka problems the console found
 in the cluster's topics, consumer groups and producers over the last 15
