@@ -163,7 +163,7 @@ test("a visitor signs up, requests a trial, an operator approves, and the visito
     timeout: 4 * 60_000,
   });
   await page.getByRole("button", { name: "Skip to the overview" }).click();
-  await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Health", exact: true })).toBeVisible();
 
   // The operator extends the trial by a month, which the visitor sees, and
   // then converts the customer, whose cluster stays.

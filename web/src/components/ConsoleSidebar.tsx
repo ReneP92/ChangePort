@@ -11,6 +11,7 @@ import {
   Inbox,
   Keyboard,
   LayoutDashboard,
+  Plug,
   Layers,
   LibraryBig,
   LogOut,
@@ -340,6 +341,13 @@ function EnvironmentSection({
               icon={Database}
               label="Sources"
               active={page("/sources")}
+              onClick={close}
+            />
+            <SubItem
+              to={environmentPath(environment.name, "/connect")}
+              icon={Plug}
+              label="Connect"
+              active={page("/connect")}
               onClick={close}
             />
             <SubItem

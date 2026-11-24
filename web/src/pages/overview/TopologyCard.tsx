@@ -35,6 +35,7 @@ const lagText = (seconds: number) =>
  * behind each group is. Pointing at a node picks out its edges.
  */
 export function TopologyCard() {
+  const envPath = useEnvironmentPath();
   const topology = useTopology();
   const alerts = useAlerts();
   const box = useRef<HTMLDivElement>(null);
@@ -97,7 +98,14 @@ export function TopologyCard() {
         <div ref={box} className="relative -mx-1 overflow-x-auto px-1">
           {layout && layout.nodes.length === 0 && (
             <p className="text-muted-foreground">
-              Nothing flows yet. Once clients produce and consume, they show here.
+              Nothing flows yet. Once clients produce and consume, they show here.{" "}
+              <Link
+                to={envPath("/connect")}
+                className="text-foreground underline underline-offset-4"
+              >
+                Connect an app
+              </Link>
+              .
             </p>
           )}
           {layout && layout.nodes.length > 0 && (

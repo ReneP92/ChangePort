@@ -46,8 +46,8 @@ A new customer lands on a welcome page instead of the overview, while their
 cluster is still being created or has no topics yet. It takes them from
 their cluster to their own first message in four steps, and **Skip to the
 overview** is always there. Once they finish or skip it, this browser
-remembers, and the Connection card's "Open the getting started guide"
-brings it back.
+remembers, and the Connect page's "Open the getting started guide" brings
+it back.
 
 1. **Your cluster.** What a topic, a producer and a consumer group are, in
    plain words, and the cluster's progress, part by part, while it is being
@@ -72,10 +72,21 @@ The overview of a ready cluster, in the order a customer needs it: its
 active alerts and what needs attention, which ask them to act; the brokers'
 health, with the transactions open and how long the oldest has been;
 throughput, with what changed meanwhile; how data flows from producers
-through topics to consumer groups; the topics with their retention,
-tiering, size and traffic; how far behind each consumer group is, in plain
-language, with its lag over the last hour; and, last, how to connect, with
-`client.properties` for admins, which the getting started guide leads to.
+through topics to consumer groups, which leads to the Connect page while
+nothing flows yet; the topics with their retention, tiering, size and
+traffic; and how far behind each consumer group is, in plain language, with
+its lag over the last hour.
+
+**Connect**, a page of its own under each environment in the sidebar, is how
+apps connect: those that write and those that read alike, with the same
+address and credentials, so it is not a kind of source. It shows the
+bootstrap address, the security settings and the user, with
+`client.properties` for admins (members are told to ask one), and the
+connection guide's examples in every language it has, Python, Go and
+JavaScript first as on the welcome page, for a topic the customer picks.
+Topics a Postgres source writes are not offered, as a test message there
+would land among the database's changes; while the cluster has no other
+topic, the examples write to `my-topic`, with a link to create one.
 
 Keeping the brokers ready and every partition in sync is Changeport's job,
 so while they are, **Health** says so in a line, with the open transactions,

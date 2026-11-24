@@ -449,15 +449,15 @@ just web-dev
 just console-reload
 ```
 
-A customer whose cluster is ready sees its overview: how to connect, with a
-`client.properties` download for the organization's admins (it holds the
-admin user's password), the brokers' health and the partitions' from the
-metrics store, the cluster's throughput over the last hour to week, and the
+A customer whose cluster is ready sees its overview: what needs attention,
+the brokers' health and the partitions' from the metrics store, the cluster's throughput over the last hour to week, and the
 topics with their retention, tiering, size and throughput, and how far
 behind each consumer group is, in plain language ("3 minutes behind"), with
-its lag over the last hour as the agent measures it. The console reads
-the topics as the `changeport-console` Kafka user, which cannot read or write
-messages.
+its lag over the last hour as the agent measures it. How to connect has a
+page of its own, Connect, with a `client.properties` download for the
+organization's admins (it holds the admin user's password) and the
+connection guide's examples. The console reads the topics as the
+`changeport-console` Kafka user, which cannot read or write messages.
 
 The organization's admins also create and delete topics there, within the
 guardrails of `internal/topics`, which the console serves to the web app at
@@ -553,8 +553,8 @@ run's throwaway `+clerk_test` users, two customer organizations with a
 customer each, and a staff member; the tests sign in through the form and
 with Clerk's testing helpers, and check in the browser and the API that a
 customer sees only their own cluster and never the operator console. On the
-overview, an admin downloads `client.properties` and produces with it from
-the kind network, and a member sees how to connect but not the password. An
+Connect page, an admin downloads `client.properties` and produces with it
+from the kind network, and a member sees how to connect but not the password. An
 admin creates a topic keeping an hour of messages, checks with the Kafka
 tools that it is tiered, reads it with a consumer group, and deletes it
 after the warning about that group; a member cannot change topics. A

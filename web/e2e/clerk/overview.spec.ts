@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { readFixtures } from "./fixtures";
-import { card, connect, kafka, openOverview, openWorkspaceMenu } from "./helpers";
+import { card, connect, kafka, openEnvironment, openOverview, openWorkspaceMenu } from "./helpers";
 
 // The overview of customer A's cluster, which the setup waits to be ready.
 
@@ -15,9 +15,12 @@ test("an admin downloads client.properties and produces with it", async ({ page 
   const a = fixtures.customers.a;
   const bootstrap = `bootstrap.${a.id}.kafka.changeport.test:9094`;
   const main = page.getByRole("main");
-  await expect(main.getByText(bootstrap)).toBeVisible();
   await expect(main.getByText("The broker is ready; every partition is in sync")).toBeVisible();
 
+  // How to connect has a page of its own, in the sidebar.
+  await openEnvironment(page, "production", "Connect");
+  await expect(page).toHaveURL(/\/e\/production\/connect$/);
+  await expect(card(page, "Connection").getByText(bootstrap)).toBeVisible();
   const downloading = page.waitForEvent("download");
   await card(page, "Connection")
     .getByRole("button", { name: "Download client.properties" })
@@ -46,7 +49,16 @@ test("an admin downloads client.properties and produces with it", async ({ page 
     "one\ntwo\nthree\n",
   );
 
-  // The topic shows, with its size once the brokers' metrics have it.
+  // The examples write to it once picked.
+  await page.reload();
+  const examples = card(page, "Examples");
+  await examples.getByRole("combobox", { name: "Topic" }).click();
+  await page.getByRole("option", { name: topic, exact: true }).click();
+  await expect(examples).toContainText(`export TOPIC=${topic}`);
+
+  // The topic shows on the overview, with its size once the brokers'
+  // metrics have it.
+  await openEnvironment(page, "production");
   const row = main.getByRole("row").filter({ hasText: topic });
   await expect(async () => {
     await page.reload();
@@ -74,6 +86,7 @@ test("the sidebar names the user's one organization", async ({ page }) => {
 
 test("a member sees how to connect, but not the credentials", async ({ page }) => {
   await openOverview(page, fixtures.users.memberA);
+  await openEnvironment(page, "production", "Connect");
   const main = page.getByRole("main");
   const connection = card(page, "Connection");
   await expect(

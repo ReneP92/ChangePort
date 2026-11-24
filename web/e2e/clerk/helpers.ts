@@ -10,20 +10,27 @@ export async function openOverview(page: Page, user: UserFixture): Promise<void>
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: user.email });
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Health", exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
 }
 
 /**
- * Opens environment's overview from the sidebar: its section unfolds, when
- * it isn't already, and lists the pages of its cluster.
+ * Opens a page of environment's from the sidebar, its overview unless named:
+ * its section unfolds, when it isn't already, and lists the pages of its
+ * cluster.
  */
-export async function openEnvironment(page: Page, environment: string): Promise<void> {
+export async function openEnvironment(
+  page: Page,
+  environment: string,
+  name = "Overview",
+): Promise<void> {
   const nav = page.getByRole("navigation", { name: "Console" });
   const pages = nav.getByRole("list", { name: environment, exact: true });
   if (!(await pages.isVisible())) {
     await nav.getByRole("button", { name: new RegExp(`^${environment}\\b`) }).click();
   }
-  await pages.getByRole("link", { name: "Overview" }).click();
+  await pages.getByRole("link", { name, exact: true }).click();
 }
 
 /**
@@ -48,13 +55,20 @@ export function card(page: Page, heading: string): Locator {
     .filter({ has: page.getByRole("heading", { name: heading, exact: true }) });
 }
 
-/** Downloads the admin user's client.properties from the overview into path. */
+/**
+ * Downloads the admin user's client.properties into path from the Connect
+ * page of the environment shown, and comes back to the page it was on.
+ */
 export async function downloadClientProperties(page: Page, path: string): Promise<void> {
+  const back = page.url();
+  const environment = /^\/e\/([^/]+)/.exec(new URL(back).pathname)?.[1] ?? "production";
+  await openEnvironment(page, environment, "Connect");
   const downloading = page.waitForEvent("download");
   await card(page, "Connection")
     .getByRole("button", { name: "Download client.properties" })
     .click();
   await (await downloading).saveAs(path);
+  await page.goto(back);
 }
 
 /**

@@ -43,7 +43,7 @@ test("dark mode switches on and off, and is kept", async ({ page }) => {
     }).observe(document, { childList: true, subtree: true });`,
   });
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Health", exact: true })).toBeVisible();
   await expect(html).toHaveClass(/\bdark\b/);
   expect(
     await page.evaluate(() => (globalThis as unknown as { darkAtBody?: boolean }).darkAtBody),
@@ -60,7 +60,7 @@ test("another tab follows the switch, at phone width with its menu closed", asyn
   try {
     await phone.setViewportSize({ width: 390, height: 844 });
     await phone.goto("/");
-    await expect(phone.getByRole("heading", { name: "Connection" })).toBeVisible();
+    await expect(phone.getByRole("heading", { name: "Health", exact: true })).toBeVisible();
 
     // Switched from the keyboard, the menu staying open.
     const toggle = await darkMode(page);
