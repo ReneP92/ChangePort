@@ -126,6 +126,7 @@ function useGoTo(): GoTo[] {
     return [
       { key: "o", label: "the overview", path: environmentPath("/") },
       { key: "s", label: "sources", path: environmentPath("/sources") },
+      { key: "c", label: "connect", path: environmentPath("/connect") },
       { key: "a", label: "alerts", path: environmentPath("/alerts") },
       { key: "e", label: "environments", path: "/environments" },
       { key: "t", label: "the team", path: "/team" },

@@ -28,7 +28,7 @@ const examples = [
   ...connectingExamples.filter((example) => !starters.includes(example)),
 ];
 
-/** What the examples write to while the cluster has no topic of its own. */
+/** What the examples write to until a topic is picked, or the cluster has one. */
 const placeholderTopic = "my-topic";
 
 /**
@@ -60,9 +60,10 @@ function ConnectView({ customer, admin }: { customer: Customer; admin: boolean }
 
 /**
  * The connection guide's examples, in every language it has, for a topic
- * the customer picks: each sends a message to it and reads it back as a
- * consumer group. Topics a Postgres source writes are left out, as a test
- * message there would land among the database's changes.
+ * the customer picks: each sends a test message to it and reads it back as
+ * a consumer group. None is picked for them, as the topic's own consumers
+ * read that message too. Topics a Postgres source writes are left out, as
+ * the message would land among the database's changes.
  */
 function ExamplesCard({ customer, admin }: { customer: Customer; admin: boolean }) {
   const envPath = useEnvironmentPath();
@@ -70,7 +71,7 @@ function ExamplesCard({ customer, admin }: { customer: Customer; admin: boolean 
   const topics = useTopics();
   const own = (topics.data ?? []).filter((topic) => topic.source === undefined);
   const [picked, setPicked] = useState<string>();
-  const topic = own.find((t) => t.name === picked)?.name ?? own[0]?.name;
+  const topic = own.find((t) => t.name === picked)?.name;
   return (
     <Card>
       <CardHeader>
@@ -87,38 +88,54 @@ function ExamplesCard({ customer, admin }: { customer: Customer; admin: boolean 
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
+        {topics.isPending && <p className="text-muted-foreground">Loading the topics</p>}
+        {topics.isError && <p className="text-destructive">{topics.error.message}</p>}
         {topics.data && own.length === 0 && (
           <p className="text-muted-foreground">
             The examples write to {placeholderTopic} until this cluster has a topic of its own.{" "}
-            <Link to={envPath("/")} className="text-foreground underline underline-offset-4">
-              Create one on the overview
-            </Link>
-            .
+            {admin ? (
+              <>
+                <Link to={envPath("/")} className="text-foreground underline underline-offset-4">
+                  Create one on the overview
+                </Link>
+                .
+              </>
+            ) : (
+              "Ask an admin of your organization to create one."
+            )}
           </p>
         )}
         {own.length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <Label htmlFor="example-topic">Topic</Label>
-            <Select value={topic} onValueChange={setPicked}>
-              <SelectTrigger id="example-topic" className="w-64 max-w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {own.map((t) => (
-                  <SelectItem key={t.name} value={t.name}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <Label htmlFor="example-topic">Topic</Label>
+              <Select value={topic ?? ""} onValueChange={setPicked}>
+                <SelectTrigger id="example-topic" className="w-64 max-w-full">
+                  <SelectValue placeholder="Pick a topic" />
+                </SelectTrigger>
+                <SelectContent>
+                  {own.map((t) => (
+                    <SelectItem key={t.name} value={t.name}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-muted-foreground">
+              Its consumers read the test message too, so a topic for trying the examples out is
+              safest.
+            </p>
           </div>
         )}
-        <Examples
-          examples={examples}
-          bootstrap={connection.data?.bootstrapAddress ?? customer.bootstrapAddress ?? ""}
-          username={connection.data?.username ?? "admin"}
-          topic={topic ?? placeholderTopic}
-        />
+        {!topics.isPending && (
+          <Examples
+            examples={examples}
+            bootstrap={connection.data?.bootstrapAddress ?? customer.bootstrapAddress ?? ""}
+            username={connection.data?.username ?? "admin"}
+            topic={topic ?? placeholderTopic}
+          />
+        )}
       </CardContent>
     </Card>
   );

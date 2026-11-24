@@ -29,8 +29,8 @@ Changeport's mark at the sidebar's foot opens **Help**, as Linear's does.
 It leads to the getting started guide of the environment shown, to support
 by email when the console has an address for it (`CHANGEPORT_SUPPORT_EMAIL`,
 see the runbook), and to the keyboard shortcuts. As in Linear, G then a
-page's key goes to it: O the overview, S sources, A alerts, E environments
-and T the team, or for operators F the fleet, C customers and R trial
+page's key goes to it: O the overview, S sources, C connect, A alerts, E
+environments and T the team, or for operators F the fleet, C customers and R trial
 requests. Cmd-/ (ctrl-/) lists them. Keys typed into a field, or while a
 dialog or menu is open, are left alone.
 
@@ -84,9 +84,11 @@ bootstrap address, the security settings and the user, with
 `client.properties` for admins (members are told to ask one), and the
 connection guide's examples in every language it has, Python, Go and
 JavaScript first as on the welcome page, for a topic the customer picks.
-Topics a Postgres source writes are not offered, as a test message there
-would land among the database's changes; while the cluster has no other
-topic, the examples write to `my-topic`, with a link to create one.
+None is picked for them, as each example writes a test message, which the
+topic's own consumers read too. Topics a Postgres source writes are not
+offered, as the message would land among the database's changes. Until a
+topic is picked, the examples write to `my-topic`; a cluster without topics
+of its own links admins to create one and tells members to ask an admin.
 
 Keeping the brokers ready and every partition in sync is Changeport's job,
 so while they are, **Health** says so in a line, with the open transactions,

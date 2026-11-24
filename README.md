@@ -450,7 +450,8 @@ just console-reload
 ```
 
 A customer whose cluster is ready sees its overview: what needs attention,
-the brokers' health and the partitions' from the metrics store, the cluster's throughput over the last hour to week, and the
+the brokers' health and the partitions' from the metrics store, the
+cluster's throughput over the last hour to week, and the
 topics with their retention, tiering, size and throughput, and how far
 behind each consumer group is, in plain language ("3 minutes behind"), with
 its lag over the last hour as the agent measures it. How to connect has a
