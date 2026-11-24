@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Link } from "react-router";
 import { useConnection, useDownloadClientProperties } from "@/api/queries";
 import { Button } from "@/components/ui/button";
@@ -31,9 +31,11 @@ export function ConnectionCard({ admin }: { admin: boolean }) {
           <dl className="grid grid-cols-1 gap-y-1 sm:grid-cols-[max-content_1fr] sm:gap-x-6 sm:gap-y-2 [&>dd]:min-w-0 [&>dd]:break-words max-sm:[&>dd]:mb-2">
             <dt className="text-muted-foreground">Bootstrap servers</dt>
             <dd>
-              <code className="break-all">
-                {connection.data.bootstrapAddress ?? "Known once the cluster is ready"}
-              </code>
+              {connection.data.bootstrapAddress ? (
+                <Address address={connection.data.bootstrapAddress} />
+              ) : (
+                "Known once the cluster is ready"
+              )}
             </dd>
             <dt className="text-muted-foreground">Security protocol</dt>
             <dd>
@@ -56,7 +58,7 @@ export function ConnectionCard({ admin }: { admin: boolean }) {
           </dl>
         )}
         {admin ? (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Button
               onClick={() => {
                 setDownloadError(null);
@@ -81,5 +83,23 @@ export function ConnectionCard({ admin }: { admin: boolean }) {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * A host and port that may wrap on a narrow screen, after a dot or before
+ * the port, never inside a name or the port.
+ */
+function Address({ address }: { address: string }) {
+  const parts = address.split(/(?<=\.)|(?=:)/);
+  return (
+    <code>
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && <wbr />}
+          {part}
+        </Fragment>
+      ))}
+    </code>
   );
 }

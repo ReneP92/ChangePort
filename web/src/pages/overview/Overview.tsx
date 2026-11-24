@@ -13,8 +13,10 @@ import { TopicsCard } from "@/pages/overview/TopicsCard";
 import { TopologyCard } from "@/pages/overview/TopologyCard";
 
 /**
- * A ready cluster: its active alerts, what needs attention, how to connect, its health,
- * throughput, how data flows through it, topics and consumer groups.
+ * A ready cluster: its active alerts and what needs attention, which ask the
+ * customer to act, first; its health, throughput, how data flows through it,
+ * topics and consumer groups; and how to connect, which the getting started
+ * guide leads to, last.
  */
 export function Overview({ customer, admin }: { customer: Customer; admin: boolean }) {
   const crumbs = useEnvironmentCrumb();
@@ -27,12 +29,12 @@ export function Overview({ customer, admin }: { customer: Customer; admin: boole
     >
       <AlertsBanner />
       <DiagnosesCard />
-      <ConnectionCard admin={admin} />
       <HealthCard />
       <ThroughputCard />
       <TopologyCard />
       <TopicsCard admin={admin} />
       <ConsumerGroupsCard />
+      <ConnectionCard admin={admin} />
     </Page>
   );
 }

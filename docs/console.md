@@ -68,13 +68,21 @@ brings it back.
    consumer group that read it back. Members, who cannot read messages,
    see it arrive by the topic's traffic.
 
-The overview of a ready cluster: its active alerts; what needs attention;
-how to connect, with `client.properties` for admins; the brokers' health,
-with the transactions open and how long the oldest has been; throughput,
-with what changed meanwhile; how data flows from producers through topics
-to consumer groups; the topics with their retention, tiering, size and
-traffic; and how far behind each consumer group is, in plain language, with
-its lag over the last hour.
+The overview of a ready cluster, in the order a customer needs it: its
+active alerts and what needs attention, which ask them to act; the brokers'
+health, with the transactions open and how long the oldest has been;
+throughput, with what changed meanwhile; how data flows from producers
+through topics to consumer groups; the topics with their retention,
+tiering, size and traffic; how far behind each consumer group is, in plain
+language, with its lag over the last hour; and, last, how to connect, with
+`client.properties` for admins, which the getting started guide leads to.
+
+Keeping the brokers ready and every partition in sync is Changeport's job,
+so while they are, **Health** says so in a line, with the open transactions,
+which are the customer's; its counts and brokers are a click away. Once a
+broker is not ready, a partition is out of sync or offline, or the cluster
+has no active controller, it shows them by itself, unless the viewer has
+closed them.
 
 **What needs attention** lists the common Kafka problems the console found
 in the cluster's topics, consumer groups and producers over the last 15
