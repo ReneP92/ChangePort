@@ -31,9 +31,12 @@ that is down, and act on it; see [runbook.md](runbook.md).
 | `PostgresSourceSlotFilling` | A source's slot keeps more than the threshold's share of what the database's `max_slot_wal_keep_size` allows, for 10 minutes | 50% |
 
 Each alert can be turned off. The errors threshold is shared by the two
-error alerts. Settings take effect within a minute. The Postgres sources'
-rules are in `deploy/base/alerting/rules/postgres-sources.yaml`, with the
-alerts whose thresholds are fixed:
+error alerts. Settings take effect within two minutes: the provisioner
+exports them within seconds, VictoriaMetrics scrapes it every 30 seconds
+and answers queries 30 seconds behind, and vmalert evaluates the rules
+every 30 seconds. The Postgres sources' rules are in
+`deploy/base/alerting/rules/postgres-sources.yaml`, with the alerts whose
+thresholds are fixed:
 
 - `PostgresSourceStalled` (for the customer) and
   `PostgresSourceConnectorStalled` (for operators): a running source has

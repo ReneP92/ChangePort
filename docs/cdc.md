@@ -661,7 +661,7 @@ of this design with the Connect image, Apicurio 3.3.3 and Postgres 17:
 - **`hack/cdc-alerts-test.sh`** (`just cdc-alerts-test`), in a suite of its
   own (`alerts`), as it waits about 15 minutes for the alerts,
   sets the customer's source thresholds as the console does and sees them
-  reach the rules within a minute, one turned off having none. Then it
+  reach the metrics store within two minutes, one turned off having none. Then it
   takes away the source role's `REPLICATION`: the connector retries without
   end and never fails, and its phase stays Streaming. As the database is
   written to, the stall alerts fire, and the slot's share of a 64 MB

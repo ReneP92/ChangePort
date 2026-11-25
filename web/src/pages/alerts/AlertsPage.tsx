@@ -229,7 +229,7 @@ function ThresholdsCard({
         </CardTitle>
         <CardDescription>
           {admin
-            ? "Changes take effect within a minute."
+            ? "Changes take effect within two minutes."
             : "Ask an admin of your organization to change these."}
         </CardDescription>
       </CardHeader>

@@ -3,7 +3,7 @@
 # one on a source that stops reading without failing (docs/alerts.md), end to
 # end on kind, against the Postgres that stands in for a customer's
 # database: the customer's thresholds, set as the console sets them, reach
-# the rules within a minute, and one turned off has none. The source's role
+# the metrics store within two minutes, and one turned off has none. The source's role
 # then loses REPLICATION, which keeps its connector from reading the WAL
 # while it retries without end, Connect calls it running and its phase stays
 # Streaming: as the database is written to, its stall alerts fire, and so
@@ -47,12 +47,13 @@ set_alerts() {
   kubectl -n "$namespace" get alertsettings alerts -o json | jq --argjson change "$1" '.spec *= $change' |
     kubectl replace --as "$console" -f - >/dev/null
 }
-# Waits up to a minute until the customer's threshold of an alert is value,
-# or, with value absent, until it has none, as the rules see it.
+# Waits up to two minutes until the customer's threshold of an alert is
+# value, or, with value absent, until it has none, as the metrics store
+# answers queries: within a minute, measured on kind, of a change.
 expect_threshold() {
   local alert=$1 want=${2:-absent} got=""
   metrics_port_forward
-  for _ in $(seq 12); do
+  for _ in $(seq 24); do
     got=$(curl -s "http://127.0.0.1:$METRICS_PORT/api/v1/query" \
       --data-urlencode "query=changeport_alert_threshold{tenant=\"$customer\",alert=\"$alert\"}" |
       jq -r '.data.result[0].value[1] // "absent"')
@@ -60,7 +61,7 @@ expect_threshold() {
     sleep 5
   done
   kill "$METRICS_FORWARD" 2>/dev/null || true
-  [[ $got == "$want" ]] || die "the threshold of $alert is $got a minute after the change, not $want"
+  [[ $got == "$want" ]] || die "the threshold of $alert is $got two minutes after the change, not $want"
 }
 # Writes WAL the source's slot keeps, as the customer's applications would.
 write_wal() { pg -c "SELECT pg_logical_emit_message(true, 'changeport-test', repeat('x', $1))" >/dev/null; }
@@ -131,7 +132,7 @@ check_alerts "$customer" "$source_name" PostgresSourceStalled,PostgresSourceConn
 [[ $(source_field .status.phase) == Streaming ]] ||
   die "the stalled source is in phase $(source_field .status.phase), where nothing else would have told"
 
-log "The customer turns the slot's alert off, and it stops within a minute"
+log "The customer turns the slot's alert off, and it stops within two minutes"
 set_alerts '{"sourceSlotFilling":{"enabled":false}}'
 expect_threshold PostgresSourceSlotFilling
 check_alerts "$customer" "$source_name" PostgresSourceStalled,PostgresSourceConnectorStalled 6

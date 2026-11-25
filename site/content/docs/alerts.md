@@ -35,7 +35,7 @@ to change one, enter it again.
 
 Admins set when the alerts about your applications and
 [Postgres sources](#postgres-sources) fire, on the Alerts page, and can turn
-each one off. Changes take effect within a minute.
+each one off. Changes take effect within two minutes.
 
 | Alert                                | Fires when                                                                                                                           | Default    |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
