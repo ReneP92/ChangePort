@@ -1,11 +1,10 @@
 import { useState } from "react";
 import type { Customer } from "@/api/client";
 import { useConnection, useDownloadClientProperties } from "@/api/queries";
-import { CodeBlock } from "@/components/CodeBlock";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import connectingExamples from "@/lib/connecting-examples.json";
-import { exampleEnvironment, onboardingExamples } from "@/lib/onboarding";
+import { onboardingExamples } from "@/lib/onboarding";
+import { Examples } from "@/pages/connect/Examples";
 import { StepTitle } from "@/pages/welcome/StepTitle";
 
 // Python, Go and JavaScript, the languages most teams new to Kafka start in.
@@ -61,38 +60,11 @@ export function ConnectStep({
           {downloadError}
         </p>
       )}
-      <CodeBlock label="Shell" code={exampleEnvironment(bootstrap, username, topic)} />
-      <Tabs defaultValue={examples[0]?.language} className="gap-3">
-        {/* The tabs scroll sideways on phones rather than the page. */}
-        <div className="-mx-1 overflow-x-auto px-1 pb-1">
-          <TabsList>
-            {examples.map((example) => (
-              <TabsTrigger key={example.language} value={example.language} className="px-2.5">
-                {tabName(example.language)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
-        {examples.map((example) => (
-          <TabsContent
-            key={example.language}
-            value={example.language}
-            className="flex flex-col gap-3"
-          >
-            {example.install && <CodeBlock label="Install the client" code={example.install} />}
-            <CodeBlock label={tabName(example.language)} code={example.code} />
-          </TabsContent>
-        ))}
-      </Tabs>
+      <Examples examples={examples} bootstrap={bootstrap} username={username} topic={topic} />
       <p className="text-muted-foreground">
         Each example sends a message to {topic} and reads it back as a consumer group. Run it in the
         next step, and watch your message arrive.
       </p>
     </>
   );
-}
-
-/** The JavaScript example runs on Node.js, which the guide's heading names. */
-function tabName(language: string): string {
-  return language === "Node.js" ? "JavaScript (Node.js)" : language;
 }

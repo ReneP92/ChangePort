@@ -1,7 +1,7 @@
 import { clerk } from "@clerk/testing/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { readFixtures, type UserFixture } from "./fixtures";
-import { connect, expectNoSidewaysScroll, kafka } from "./helpers";
+import { connect, expectNoSidewaysScroll, kafka, openEnvironment } from "./helpers";
 
 // The welcome page (docs/console.md): from a topic to the customer's own
 // first message, which shows as it arrives, then the consumer group that
@@ -98,9 +98,11 @@ test("an admin creates a topic, connects, and sees their first message arrive", 
   // Done, the customer goes to their cluster, and stays there.
   await main.getByRole("button", { name: "Go to your cluster" }).click();
   await expect(page).toHaveURL(/\/e\/production$/);
-  await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Health", exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Health", exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
 });
 
 test("members follow the steps, and ask an admin for the credentials", async ({ page }) => {
@@ -109,14 +111,12 @@ test("members follow the steps, and ask an admin for the credentials", async ({ 
   await expect(main.getByRole("button", { name: "Create topic" })).toHaveCount(0);
 });
 
-test("the welcome page can be skipped, and the Connection card opens it again", async ({
-  page,
-}) => {
+test("the welcome page can be skipped, and the Connect page opens it again", async ({ page }) => {
   const main = await openWelcome(page, fixtures.users.adminA);
   await main.getByRole("button", { name: "Skip to the overview" }).click();
   await expect(page).toHaveURL(/\/e\/production$/);
-  const connection = page.getByRole("heading", { name: "Connection" });
-  await expect(connection).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Health", exact: true })).toBeVisible();
+  await openEnvironment(page, "production", "Connect");
   await page.getByRole("link", { name: "Open the getting started guide" }).click();
   await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByRole("heading", { name: "Welcome to Changeport" })).toBeVisible();

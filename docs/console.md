@@ -29,8 +29,8 @@ Changeport's mark at the sidebar's foot opens **Help**, as Linear's does.
 It leads to the getting started guide of the environment shown, to support
 by email when the console has an address for it (`CHANGEPORT_SUPPORT_EMAIL`,
 see the runbook), and to the keyboard shortcuts. As in Linear, G then a
-page's key goes to it: O the overview, S sources, A alerts, E environments
-and T the team, or for operators F the fleet, C customers and R trial
+page's key goes to it: O the overview, S sources, C connect, A alerts, E
+environments and T the team, or for operators F the fleet, C customers and R trial
 requests. Cmd-/ (ctrl-/) lists them. Keys typed into a field, or while a
 dialog or menu is open, are left alone.
 
@@ -46,8 +46,8 @@ A new customer lands on a welcome page instead of the overview, while their
 cluster is still being created or has no topics yet. It takes them from
 their cluster to their own first message in four steps, and **Skip to the
 overview** is always there. Once they finish or skip it, this browser
-remembers, and the Connection card's "Open the getting started guide"
-brings it back.
+remembers, and the Connect page's "Open the getting started guide" brings
+it back.
 
 1. **Your cluster.** What a topic, a producer and a consumer group are, in
    plain words, and the cluster's progress, part by part, while it is being
@@ -68,13 +68,35 @@ brings it back.
    consumer group that read it back. Members, who cannot read messages,
    see it arrive by the topic's traffic.
 
-The overview of a ready cluster: its active alerts; what needs attention;
-how to connect, with `client.properties` for admins; the brokers' health,
-with the transactions open and how long the oldest has been; throughput,
-with what changed meanwhile; how data flows from producers through topics
-to consumer groups; the topics with their retention, tiering, size and
+The overview of a ready cluster, in the order a customer needs it: its
+active alerts and what needs attention, which ask them to act; the brokers'
+health, with the transactions open and how long the oldest has been;
+throughput, with what changed meanwhile; how data flows from producers
+through topics to consumer groups, which leads to the Connect page while
+nothing flows yet; the topics with their retention, tiering, size and
 traffic; and how far behind each consumer group is, in plain language, with
 its lag over the last hour.
+
+**Connect**, a page of its own under each environment in the sidebar, is how
+apps connect: those that write and those that read alike, with the same
+address and credentials, so it is not a kind of source. It shows the
+bootstrap address, the security settings and the user, with
+`client.properties` for admins (members are told to ask one), and the
+connection guide's examples in every language it has, Python, Go and
+JavaScript first as on the welcome page, for a topic the customer picks.
+None is picked for them, as each example writes a test message, which the
+topic's own consumers read too. Topics a Postgres source writes are not
+offered, as the message would land among the database's changes. Until a
+topic is picked, the examples write to `my-topic`; a cluster without topics
+of its own links admins to create one and tells members to ask an admin.
+
+Keeping the brokers ready and every partition in sync is Changeport's job,
+so while they are, **Health** says so in a line, with the open transactions,
+which are the customer's; its counts and brokers are a click away. Once no
+broker runs, a broker is not ready, a partition is out of sync or offline,
+or the cluster does not have exactly one active controller, it shows them by
+itself, whatever the viewer chose while all was well, unless they close
+them; its line names a controller problem too.
 
 **What needs attention** lists the common Kafka problems the console found
 in the cluster's topics, consumer groups and producers over the last 15

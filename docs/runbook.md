@@ -188,7 +188,7 @@ proves the names to Let's Encrypt with a record in the `kafka.*` hosted zone
 (see [Certificates](#certificates)).
 
 When the customer is `Ready`, its admins download `client.properties` in the
-console (Overview, Connection) and connect as [connecting.md](../site/content/docs/connecting.md)
+console (Connect, under the environment) and connect as [connecting.md](../site/content/docs/connecting.md)
 describes. Operators can print the same file:
 
 ```bash
@@ -352,7 +352,7 @@ kubectl -n changeport logs deploy/changeport-console --since=24h |
 
 Write the line's `offsets_before` one entry a line into `offsets.csv`, then,
 with the customer's consumers of the group stopped, move it back as the
-customer's own user, with the `client.properties` the console's overview
+customer's own user, with the `client.properties` the console's Connect page
 downloads (on kind, `just kafka-client c-7f3k2q` opens a shell with it at
 `/config/client.properties`):
 

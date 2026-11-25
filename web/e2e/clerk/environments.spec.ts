@@ -63,9 +63,11 @@ test("an operator adds an environment, and its topics are its own", async ({ pag
     await expect(page).toHaveURL(/\/e\/staging$/);
     const main = page.getByRole("main");
     await expect(main.getByText(`Customer ${staging}, the staging environment`)).toBeVisible();
+    await openEnvironment(page, "staging", "Connect");
     await expect(card(page, "Connection")).toContainText(
       `bootstrap.${staging}.kafka.changeport.test:9094`,
     );
+    await openEnvironment(page, "staging");
 
     // A topic in staging is staging's alone.
     const topic = `staging-${fixtures.run}`;

@@ -6,9 +6,9 @@ SCRAM-SHA-512) on port 9094, from anywhere on the internet.
 
 ## Your connection details
 
-In the Changeport console, an admin of your organization opens **Overview** and
-downloads `client.properties` from the **Connection** card. It holds everything
-a client needs:
+In the Changeport console, an admin of your organization opens **Connect**
+under your environment in the sidebar and downloads `client.properties`. It
+holds everything a client needs:
 
 ```properties
 bootstrap.servers=bootstrap.<your-cluster-id>.kafka.changeport.<tld>:9094
