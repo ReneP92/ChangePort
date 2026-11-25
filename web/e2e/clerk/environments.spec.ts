@@ -50,6 +50,15 @@ test("an operator adds an environment, and its topics are its own", async ({ pag
     await expect(operator.getByRole("main").getByText("Ready", { exact: true })).toBeVisible({
       timeout: 6 * 60_000,
     });
+    // The operators' list shows one customer, with its two environments.
+    await operator
+      .getByRole("navigation", { name: "Breadcrumb" })
+      .getByRole("link", { name: "Customers" })
+      .click();
+    const customer = operator.getByRole("main").getByRole("rowgroup").filter({ hasText: a.id });
+    await expect(customer.getByRole("rowheader")).toContainText("2 environments");
+    await expect(customer.getByRole("link")).toHaveText(["production", "staging"]);
+    await expectNoSidewaysScroll(operator);
 
     // The admin switches to it: a new cluster, so its welcome page first.
     await openOverview(page, fixtures.users.adminA);

@@ -121,9 +121,11 @@ test("an operator lands on the fleet, and sees every customer", async ({ page })
     .getByRole("link", { name: "Customers" })
     .click();
   await expect(page.getByRole("heading", { name: "Customers", level: 1 })).toBeVisible();
+  // A customer's rows: one, or its name above its environments, as A's
+  // once environments.spec.ts adds one.
   for (const customer of [a, b]) {
     await expect(
-      page.getByRole("main").getByRole("row").filter({ hasText: customer.id }),
+      page.getByRole("main").getByRole("rowgroup").filter({ hasText: customer.id }),
     ).toContainText(customer.displayName);
   }
 });

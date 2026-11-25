@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import type { Customer, EnvironmentUsage } from "@/api/client";
 import { useCustomerUsage, useCustomers, useMe } from "@/api/queries";
 import { StatusBadge } from "@/components/CustomerSummary";
+import { byOrganization } from "@/lib/customers";
 import { formatBytes } from "@/lib/format";
 import { parts } from "@/lib/parts";
 import { formatDay, trialEnding, trialLeft } from "@/lib/trials";
@@ -44,6 +45,7 @@ function CustomerTable() {
   if (customers.isError) {
     return <Notice title="The console is unavailable">{customers.error.message}</Notice>;
   }
+  const usageOf = (customer: Customer) => usage.data?.find((u) => u.customerID === customer.id);
   return (
     <Page title="Customers" actions={<ProvisionCustomerDialog />}>
       {customers.data.length === 0 ? (
@@ -64,49 +66,60 @@ function CustomerTable() {
                 <th className="py-2 font-medium">Status</th>
               </tr>
             </thead>
-            <tbody>
-              {customers.data.map((customer) => (
-                <tr key={customer.id} className="border-b last:border-0">
-                  <td className="py-3 whitespace-nowrap">
-                    <Link
-                      to={`/operator/customers/${customer.id}`}
-                      className="font-medium underline-offset-4 hover:underline"
-                    >
-                      {customer.displayName}
-                    </Link>
-                    <div className="text-muted-foreground">
-                      {customer.id} · {customer.environment}
-                      {customer.deletionProtection && " · protected"}
-                    </div>
-                  </td>
-                  <td className="py-3 whitespace-nowrap">{customer.profile}</td>
-                  <td className="py-3 whitespace-nowrap">
-                    <TrialCell customer={customer} />
-                  </td>
-                  <td className="py-3 text-right whitespace-nowrap tabular-nums">
-                    {usage.isPending ? (
-                      <span className="text-muted-foreground">Loading</span>
-                    ) : (
-                      <ProcessedCell
-                        usage={usage.data?.find((u) => u.customerID === customer.id)}
-                      />
-                    )}
-                  </td>
-                  <td className="py-3">
-                    <ConditionDots customer={customer} />
-                  </td>
-                  <td className="py-3">
-                    {/* Long messages wrap below the badge, never to a sliver. */}
-                    <div className="flex min-w-60 flex-col items-start gap-1">
-                      <StatusBadge customer={customer} />
-                      {!customer.ready && (
-                        <span className="text-muted-foreground">{customer.status.message}</span>
+            {byOrganization(customers.data).map((environments) => {
+              const [first] = environments;
+              if (first === undefined) {
+                return null;
+              }
+              // A customer with one environment, as most are, takes one row.
+              if (environments.length === 1) {
+                return (
+                  <tbody key={first.id} className="border-b last:border-0">
+                    <EnvironmentRow
+                      customer={first}
+                      usage={usageOf(first)}
+                      usagePending={usage.isPending}
+                    />
+                  </tbody>
+                );
+              }
+              // One with more heads its environments, which follow it indented.
+              const usages = environments.map(usageOf);
+              return (
+                <tbody key={first.id} className="border-b last:border-0">
+                  <tr>
+                    <th scope="rowgroup" className="pt-3 font-normal whitespace-nowrap">
+                      <span id={`customer-${first.id}`} className="font-medium">
+                        {first.displayName}
+                      </span>
+                      <span className="block text-muted-foreground">
+                        {environments.length} environments
+                      </span>
+                    </th>
+                    <td />
+                    <td />
+                    <td className="pt-3 text-right whitespace-nowrap tabular-nums">
+                      {usage.isPending ? (
+                        <span className="text-muted-foreground">Loading</span>
+                      ) : (
+                        <ProcessedCell usage={total(usages)} />
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+                    </td>
+                    <td />
+                    <td />
+                  </tr>
+                  {environments.map((customer, i) => (
+                    <EnvironmentRow
+                      key={customer.id}
+                      customer={customer}
+                      usage={usages[i]}
+                      usagePending={usage.isPending}
+                      nestedUnder={`customer-${first.id}`}
+                    />
+                  ))}
+                </tbody>
+              );
+            })}
           </table>
         </div>
       )}
@@ -114,8 +127,98 @@ function CustomerTable() {
   );
 }
 
+/**
+ * A customer's environment, each a Customer and a cluster of its own. On its
+ * own it is named for its customer; nested under its customer, for itself.
+ */
+function EnvironmentRow({
+  customer,
+  usage,
+  usagePending,
+  nestedUnder,
+}: {
+  customer: Customer;
+  usage: EnvironmentUsage | undefined;
+  usagePending: boolean;
+  /** The ID of the customer's name the environment is listed under, if any. */
+  nestedUnder?: string;
+}) {
+  const nested = nestedUnder !== undefined;
+  const protection = customer.deletionProtection && " · protected";
+  return (
+    <tr>
+      {/* Nested, a rule the row's full height joins it to its siblings. */}
+      <td
+        className={
+          nested
+            ? "py-3 whitespace-nowrap shadow-[inset_1px_0_0_var(--border)]"
+            : "py-3 whitespace-nowrap"
+        }
+      >
+        <div className={nested ? "pl-3" : undefined}>
+          <Link
+            to={`/operator/customers/${customer.id}`}
+            className="font-medium underline-offset-4 hover:underline"
+            // Out of the table, as in a list of links, it says whose it is.
+            aria-describedby={nestedUnder}
+          >
+            {nested ? customer.environment : customer.displayName}
+          </Link>
+          <div className="text-muted-foreground">
+            {nested ? customer.id : `${customer.id} · ${customer.environment}`}
+            {protection}
+          </div>
+        </div>
+      </td>
+      <td className="py-3 whitespace-nowrap">{customer.profile}</td>
+      <td className="py-3 whitespace-nowrap">
+        <TrialCell customer={customer} />
+      </td>
+      <td className="py-3 text-right whitespace-nowrap tabular-nums">
+        {usagePending ? (
+          <span className="text-muted-foreground">Loading</span>
+        ) : (
+          <ProcessedCell usage={usage} />
+        )}
+      </td>
+      <td className="py-3">
+        <ConditionDots customer={customer} />
+      </td>
+      <td className="py-3">
+        {/* Long messages wrap below the badge, never to a sliver. */}
+        <div className="flex min-w-60 flex-col items-start gap-1">
+          <StatusBadge customer={customer} />
+          {!customer.ready && (
+            <span className="text-muted-foreground">{customer.status.message}</span>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+/** What environments processed together, if every one's is known. */
+function total(
+  usages: (EnvironmentUsage | undefined)[],
+): Pick<EnvironmentUsage, "bytesIn" | "bytesOut"> {
+  let bytesIn = 0;
+  let bytesOut = 0;
+  for (const usage of usages) {
+    if (usage?.bytesIn === undefined || usage.bytesOut === undefined) {
+      return {};
+    }
+    bytesIn += usage.bytesIn;
+    bytesOut += usage.bytesOut;
+  }
+  return { bytesIn, bytesOut };
+}
+
 /** The bytes a customer's cluster processed over the last 30 days, in and out. */
-function ProcessedCell({ usage }: { usage: EnvironmentUsage | undefined }) {
+function ProcessedCell({
+  usage,
+}: {
+  usage: Pick<EnvironmentUsage, "bytesIn" | "bytesOut"> | undefined;
+}) {
   const { bytesIn, bytesOut } = usage ?? {};
   if (bytesIn === undefined || bytesOut === undefined) {
     return <span className="text-muted-foreground">Not known</span>;
