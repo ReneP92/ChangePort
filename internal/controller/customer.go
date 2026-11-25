@@ -149,6 +149,13 @@ func (r *CustomerReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 		// reconciliation.
 		return ctrl.Result{}, r.notReady(ctx, &customer, v1alpha1.ReasonInvalidSpec, err.Error())
 	}
+	// The alerts' thresholds go first: the customer waits for a change to
+	// them, and provisioning takes seconds.
+	settings, err := r.alertSettings(ctx, spec.Namespace())
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	recordAlertThresholds(customer.Name, settings)
 	if spec.Sources, err = r.sources(ctx, spec); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -214,11 +221,6 @@ func (r *CustomerReconciler) reconcile(ctx context.Context, req ctrl.Request) (c
 	if err := r.updateStatus(ctx, &customer, status); err != nil {
 		return ctrl.Result{}, err
 	}
-	settings, err := r.alertSettings(ctx, spec.Namespace())
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	recordAlertThresholds(customer.Name, settings)
 	requeue := r.ResyncInterval
 	if !progress.Ready() || !progress.CDC.Ready {
 		requeue = r.PollInterval

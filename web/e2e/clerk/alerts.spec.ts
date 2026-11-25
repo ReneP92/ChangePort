@@ -56,6 +56,17 @@ test("a stalled consumer group raises an alert in the console and at a webhook, 
   await openAlerts(page);
   const lag = page.getByRole("spinbutton", { name: "A consumer group falls behind, in minutes" });
   await expect(lag).toHaveValue("10");
+  // The Postgres sources' thresholds, which the cdc suite tunes.
+  const sources = page.getByRole("region", { name: "Postgres sources" });
+  await expect(
+    sources.getByRole("spinbutton", { name: "A source is behind its database, in minutes" }),
+  ).toHaveValue("15");
+  await expect(
+    sources.getByRole("spinbutton", { name: "A source holds back a lot of history, in GB" }),
+  ).toHaveValue("20");
+  await expect(
+    sources.getByRole("spinbutton", { name: "A source's slot is filling up, in %" }),
+  ).toHaveValue("50");
   await lag.fill("1");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();

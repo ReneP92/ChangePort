@@ -1468,6 +1468,17 @@ export interface components {
             consumerStuck: components["schemas"]["SecondsThreshold"];
             throttling: components["schemas"]["MillisecondsThreshold"];
             errors: components["schemas"]["PercentThreshold"];
+            sourceBehind: components["schemas"]["SecondsThreshold"];
+            sourceRetainedWAL: components["schemas"]["GigabytesThreshold"];
+            sourceSlotFilling: components["schemas"]["PercentThreshold"];
+        };
+        GigabytesThreshold: {
+            enabled: boolean;
+            /**
+             * Format: int64
+             * @description In GB, 10^9 bytes
+             */
+            gigabytes: number;
         };
         MillisecondsThreshold: {
             enabled: boolean;

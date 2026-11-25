@@ -80,6 +80,57 @@ type ErrorsAlert struct {
 	Percent int64 `json:"percent"`
 }
 
+// SourceBehindAlert is the alert on a Postgres source whose changes reach
+// Kafka late.
+type SourceBehindAlert struct {
+	// Enabled turns the alert on.
+	// +kubebuilder:default=true
+	// +optional
+	Enabled bool `json:"enabled"`
+
+	// Seconds is how long ago in its database the changes a source writes
+	// may have happened.
+	// +kubebuilder:validation:Minimum=60
+	// +kubebuilder:validation:Maximum=86400
+	// +kubebuilder:default=900
+	// +optional
+	Seconds int64 `json:"seconds"`
+}
+
+// SourceRetainedWALAlert is the alert on a Postgres source whose replication
+// slot keeps a lot of WAL in a database without max_slot_wal_keep_size,
+// which has no limit to measure against.
+type SourceRetainedWALAlert struct {
+	// Enabled turns the alert on.
+	// +kubebuilder:default=true
+	// +optional
+	Enabled bool `json:"enabled"`
+
+	// Gigabytes is how much WAL a slot may keep, in GB (10^9 bytes).
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=10000
+	// +kubebuilder:default=20
+	// +optional
+	Gigabytes int64 `json:"gigabytes"`
+}
+
+// SourceSlotFillingAlert is the alert on a Postgres source whose replication
+// slot keeps a share of the WAL its database's max_slot_wal_keep_size
+// allows; past the limit, the database invalidates the slot.
+type SourceSlotFillingAlert struct {
+	// Enabled turns the alert on.
+	// +kubebuilder:default=true
+	// +optional
+	Enabled bool `json:"enabled"`
+
+	// Percent is the share of the limit a slot may keep.
+	// +kubebuilder:validation:Minimum=10
+	// +kubebuilder:validation:Maximum=95
+	// +kubebuilder:default=50
+	// +optional
+	Percent int64 `json:"percent"`
+}
+
 // AlertReceiver is where else a customer's alerts go: a write-once Secret of
 // type AlertReceiverSecretType in the customer's namespace, which the
 // console writes and only the provisioner reads.
@@ -138,6 +189,24 @@ type AlertSettingsSpec struct {
 	// +optional
 	Errors ErrorsAlert `json:"errors"`
 
+	// SourceBehind is the alert on a Postgres source whose changes reach
+	// Kafka late.
+	// +kubebuilder:default={}
+	// +optional
+	SourceBehind SourceBehindAlert `json:"sourceBehind"`
+
+	// SourceRetainedWAL is the alert on a Postgres source that keeps a lot
+	// of WAL in a database without a limit.
+	// +kubebuilder:default={}
+	// +optional
+	SourceRetainedWAL SourceRetainedWALAlert `json:"sourceRetainedWAL"`
+
+	// SourceSlotFilling is the alert on a Postgres source that keeps a share
+	// of its database's limit.
+	// +kubebuilder:default={}
+	// +optional
+	SourceSlotFilling SourceSlotFillingAlert `json:"sourceSlotFilling"`
+
 	// Receivers are where the alerts go besides the console.
 	// +kubebuilder:default={}
 	// +optional
@@ -151,11 +220,16 @@ var DefaultAlertSettings = AlertSettingsSpec{
 	ConsumerStuck: ConsumerStuckAlert{Enabled: true, Seconds: 900},
 	Throttling:    ThrottlingAlert{Enabled: true, Milliseconds: 100},
 	Errors:        ErrorsAlert{Enabled: true, Percent: 5},
+
+	SourceBehind:      SourceBehindAlert{Enabled: true, Seconds: 900},
+	SourceRetainedWAL: SourceRetainedWALAlert{Enabled: true, Gigabytes: 20},
+	SourceSlotFilling: SourceSlotFillingAlert{Enabled: true, Percent: 50},
 }
 
 // AlertSettings are a customer's settings of the alerts about their own
 // applications: consumer lag, stuck consumers, throttling and errors, and
-// where the alerts go besides the console. A customer has at most one, named
+// their Postgres sources falling behind or keeping WAL, and where the alerts
+// go besides the console. A customer has at most one, named
 // alerts, in its namespace; without it the defaults apply.
 //
 // +kubebuilder:object:root=true

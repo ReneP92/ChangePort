@@ -908,8 +908,11 @@ The metadata version can never go back down, so upgrade in two steps:
 ## A Postgres source fails
 
 Alerts: `PostgresSourceFailed`, `PostgresSourceTaskFailed`,
-`PostgresSourceBehind`, `PostgresSourceRetainedWALHigh`,
-`PostgresSourceSlotNearLimit`, `PostgresSourcePausedLong`.
+`PostgresSourceRetainedWALHigh`, `PostgresSourceSlotFilling`,
+`PostgresSourceSlotNearLimit`, `PostgresSourcePausedLong`. The customers set
+the thresholds of their own (`PostgresSourceRetainedWALHigh`,
+`PostgresSourceSlotFilling` and `PostgresSourceBehind`) on the console's
+Alerts page; the operators' are fixed.
 
 A source that does not stream keeps its replication slot, and the slot keeps
 every change since in the customer's database: its WAL grows on the
@@ -941,19 +944,67 @@ reads its topics.
    kubectl -n customer-c-7f3k2q annotate kafkaconnector shop-x1y2z3 strimzi.io/restart=true
    ```
 
-3. **A source that runs but falls behind** (`PostgresSourceBehind`): the
-   database writes changes faster than the source reads them, or the Kafka
-   Connect worker is short of CPU or memory. Check the worker's pod
-   (`kubectl -n customer-c-7f3k2q top pod changeport-connect-connect-0`) and
-   the brokers' health; `debezium_streaming_queueremainingcapacity` near 0
-   means Kafka is the bottleneck.
+3. **A source that runs but falls behind**: see
+   [A Postgres source falls behind](#a-postgres-source-falls-behind).
 
-4. **WAL close to the limit** (`PostgresSourceSlotNearLimit`): the database
+4. **WAL close to the limit** (`PostgresSourceSlotNearLimit`, and the
+   customer's `PostgresSourceSlotFilling` before it): the database
    invalidates the slot once it keeps `max_slot_wal_keep_size` of WAL, after
    which the source needs a new slot and copies its tables again. Fix the
    cause within the hour, or ask the customer to raise the limit for now.
    Without a limit (`PostgresSourceRetainedWALHigh`), the WAL fills the
    database's disk instead; the customer should set one.
+
+## A Postgres source falls behind
+
+Alerts: `PostgresSourceConnectorBehind` (an hour behind, for operators),
+`PostgresSourceBehind` (the customer's threshold).
+
+The source streams, but the changes it writes to Kafka happened longer and
+longer ago: the database writes changes faster than the connector reads
+them, and its slot keeps the difference as WAL.
+
+1. A large batch in the customer's database is the usual cause, and the
+   source catches up once it is done; `debezium_streaming_millisecondsbehindsource`
+   falls again.
+2. Otherwise check the Kafka Connect worker
+   (`kubectl -n customer-c-7f3k2q top pod changeport-connect-connect-0`): a
+   worker at its CPU or memory limit needs more. Then the brokers' health;
+   `debezium_streaming_queueremainingcapacity` near 0 means Kafka is the
+   bottleneck.
+
+## A Postgres source stalls
+
+Alerts: `PostgresSourceConnectorStalled` (for operators),
+`PostgresSourceStalled` (for the customer).
+
+For about 35 minutes the source has written nothing to Kafka, not even the
+heartbeat it writes every minute, while its slot keeps more and more WAL,
+and nothing reports a failure: Connect says the connector and its task
+run, and the source's phase stays Streaming. Debezium's own metrics go with
+its task, so `PostgresSourceBehind` cannot fire; the slot's readings come
+from the source controller, through the database, and go on.
+
+1. **Read the connector's log.** A connector that cannot reach its database
+   retries without end, which the worker's log shows:
+
+   ```bash
+   kubectl -n customer-c-7f3k2q logs changeport-connect-connect-0 --since=1h | grep shop- | grep -E 'ERROR|WARN|Retry'
+   ```
+
+2. **The database refuses its replication connection** (`must be superuser
+   or replication role`, `no pg_hba.conf entry`, a timeout): the role lost
+   its `REPLICATION` attribute, or a firewall or `pg_hba.conf` change lets
+   the controller's queries in but no longer the replication connection.
+   Ask the customer to check them; the source reads again once it connects,
+   on its next try.
+3. **Nothing in the log:** restart the connector, and if it stays stalled,
+   the worker:
+
+   ```bash
+   kubectl -n customer-c-7f3k2q annotate kafkaconnector shop-x1y2z3 strimzi.io/restart=true
+   kubectl -n customer-c-7f3k2q delete pod changeport-connect-connect-0
+   ```
 
 ## A source's database is unreachable
 

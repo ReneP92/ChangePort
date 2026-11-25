@@ -76,8 +76,9 @@ func forgetCustomerMetrics(tenant string) {
 }
 
 // recordAlertThresholds records the thresholds of a customer's alerts about
-// its own applications (deploy/base/alerting/rules/customers.yaml), in the
-// units the rules compare them in; an alert that is off has none.
+// its own applications and Postgres sources (customers.yaml and
+// postgres-sources.yaml in deploy/base/alerting/rules), in the units the
+// rules compare them in; an alert that is off has none.
 func recordAlertThresholds(tenant string, settings v1alpha1.AlertSettingsSpec) {
 	thresholds := []struct {
 		alert   string
@@ -89,6 +90,9 @@ func recordAlertThresholds(tenant string, settings v1alpha1.AlertSettingsSpec) {
 		{"ClientThrottled", settings.Throttling.Enabled, float64(settings.Throttling.Milliseconds)},
 		{"TopicRequestErrors", settings.Errors.Enabled, float64(settings.Errors.Percent) / 100},
 		{"ClientRecordErrors", settings.Errors.Enabled, float64(settings.Errors.Percent) / 100},
+		{"PostgresSourceBehind", settings.SourceBehind.Enabled, float64(settings.SourceBehind.Seconds)},
+		{"PostgresSourceRetainedWALHigh", settings.SourceRetainedWAL.Enabled, float64(settings.SourceRetainedWAL.Gigabytes) * 1e9},
+		{"PostgresSourceSlotFilling", settings.SourceSlotFilling.Enabled, float64(settings.SourceSlotFilling.Percent) / 100},
 	}
 	for _, t := range thresholds {
 		if t.enabled {

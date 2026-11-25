@@ -172,7 +172,9 @@ smoke tests both clusters, runs the metrics, deletion protection, agent, lag,
 client telemetry, console, tiered storage, host access, connection guide,
 Postgres and CDC runtime tests, and removes the second customer again; its failover suite freezes a zone and drains a
 broker of a three-zone customer; its cdc suite takes a Postgres CDC source
-from created through streaming and paused to deleted. CI runs the three on
+from created through streaming and paused to deleted; its chaos suite
+disrupts a three-broker customer at the worst moments; and its alerts suite
+tunes a source's alerts and stalls it until they fire. CI runs them on
 separate clusters at once; locally `just e2e` runs them one after the other:
 
 ```bash

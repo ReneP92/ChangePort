@@ -118,12 +118,15 @@ func TestMembersReadAlertsAndOnlyAdminsChangeThem(t *testing.T) {
 }
 
 const defaultThresholds = `{"consumerLag":{"enabled":true,"seconds":600},"consumerStuck":{"enabled":true,"seconds":900},` +
-	`"throttling":{"enabled":true,"milliseconds":100},"errors":{"enabled":true,"percent":5}}`
+	`"throttling":{"enabled":true,"milliseconds":100},"errors":{"enabled":true,"percent":5},` +
+	`"sourceBehind":{"enabled":true,"seconds":901},"sourceRetainedWAL":{"enabled":true,"gigabytes":20},` +
+	`"sourceSlotFilling":{"enabled":true,"percent":50}}`
 
 func TestAdminsChangeThresholds(t *testing.T) {
 	f := newFixture(t)
 	admin := f.signer.token(t, session{user: "user_3", org: "org_acme", role: "admin"})
-	changed := strings.NewReplacer(`"seconds":600`, `"seconds":60`, `"throttling":{"enabled":true`, `"throttling":{"enabled":false`).Replace(defaultThresholds)
+	changed := strings.NewReplacer(`"seconds":600`, `"seconds":60`, `"throttling":{"enabled":true`, `"throttling":{"enabled":false`,
+		`"gigabytes":20`, `"gigabytes":2`, `"sourceSlotFilling":{"enabled":true`, `"sourceSlotFilling":{"enabled":false`).Replace(defaultThresholds)
 	status, body := send(t, f.handler, http.MethodPut, "/api/customer/alert-settings", admin, changed)
 	settings := decode[api.AlertSettings](t, body)
 	if status != 200 || settings.Thresholds.ConsumerLag.Seconds != 60 || settings.Thresholds.Throttling.Enabled ||
@@ -133,6 +136,13 @@ func TestAdminsChangeThresholds(t *testing.T) {
 	stored := f.alertSettings.settings["acme"]
 	if stored == nil || stored.Spec.ConsumerLag.Seconds != 60 || stored.Spec.Throttling.Enabled || stored.Spec.Errors.Percent != 5 {
 		t.Errorf("stored %+v", stored)
+	}
+	if stored != nil && (stored.Spec.SourceBehind.Seconds != 901 || stored.Spec.SourceRetainedWAL.Gigabytes != 2 ||
+		stored.Spec.SourceSlotFilling.Enabled || stored.Spec.SourceSlotFilling.Percent != 50) {
+		t.Errorf("stored the sources' thresholds %+v %+v %+v", stored.Spec.SourceBehind, stored.Spec.SourceRetainedWAL, stored.Spec.SourceSlotFilling)
+	}
+	if settings.Defaults.SourceRetainedWAL.Gigabytes != 20 || settings.Thresholds.SourceRetainedWAL.Gigabytes != 2 {
+		t.Errorf("the sources' thresholds read back as %+v, defaults %+v", settings.Thresholds.SourceRetainedWAL, settings.Defaults.SourceRetainedWAL)
 	}
 	if !strings.Contains(f.log.String(), `"msg":"alert thresholds changed","audit":true,"tenant":"acme","user":"user_3"`) {
 		t.Errorf("no audit log of the change: %s", f.log)
@@ -146,6 +156,9 @@ func TestAdminsChangeThresholds(t *testing.T) {
 		strings.Replace(defaultThresholds, `"seconds":900`, `"seconds":86401`, 1),
 		strings.Replace(defaultThresholds, `"milliseconds":100`, `"milliseconds":0`, 1),
 		strings.Replace(defaultThresholds, `"percent":5`, `"percent":101`, 1),
+		strings.Replace(defaultThresholds, `"seconds":901`, `"seconds":30`, 1),
+		strings.Replace(defaultThresholds, `"gigabytes":20`, `"gigabytes":0`, 1),
+		strings.Replace(defaultThresholds, `"percent":50`, `"percent":99`, 1),
 	} {
 		if status, body := send(t, f.handler, http.MethodPut, "/api/customer/alert-settings", admin, invalid); status != 400 || !strings.Contains(body, "threshold must be from") {
 			t.Errorf("changing the thresholds to %s = %d %s, want 400", invalid, status, body)

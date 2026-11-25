@@ -261,7 +261,7 @@ jobs:
       - run: just dev-up
         env:
           # (An empty string is false in expressions, so the demo is the true branch.)
-          DEMO_CUSTOMER: ${{ (matrix.suite == 'core' || matrix.suite == 'cdc') && 'demo' || '' }}
+          DEMO_CUSTOMER: ${{ (matrix.suite == 'core' || matrix.suite == 'cdc' || matrix.suite == 'alerts') && 'demo' || '' }}
       - run: just e2e ${{ matrix.suite }}
       - if: matrix.suite == 'core'
         run: just platform-check

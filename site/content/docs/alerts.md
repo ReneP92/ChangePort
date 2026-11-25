@@ -33,15 +33,19 @@ to change one, enter it again.
 
 ## Thresholds
 
-Admins set when the alerts about your applications fire, on the Alerts
-page, and can turn each one off. Changes take effect within a minute.
+Admins set when the alerts about your applications and
+[Postgres sources](#postgres-sources) fire, on the Alerts page, and can turn
+each one off. Changes take effect within two minutes.
 
-| Alert                         | Fires when                                                                                                  | Default    |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------- |
-| A consumer group falls behind | Its oldest unread message on a topic is older than the threshold, for a minute                              | 10 minutes |
-| A consumer group is stuck     | It has not committed on a topic for longer than the threshold, while messages wait for it and keep arriving | 15 minutes |
-| A client is throttled         | The brokers delay its requests for longer than the threshold at a time, for 5 minutes                       | 100 ms     |
-| Requests fail                 | More than the threshold of a topic's requests, or of a producer's messages, fail, for 5 minutes             | 5%         |
+| Alert                                | Fires when                                                                                                                           | Default    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| A consumer group falls behind        | Its oldest unread message on a topic is older than the threshold, for a minute                                                       | 10 minutes |
+| A consumer group is stuck            | It has not committed on a topic for longer than the threshold, while messages wait for it and keep arriving                          | 15 minutes |
+| A client is throttled                | The brokers delay its requests for longer than the threshold at a time, for 5 minutes                                                | 100 ms     |
+| Requests fail                        | More than the threshold of a topic's requests, or of a producer's messages, fail, for 5 minutes                                      | 5%         |
+| A source is behind its database      | The changes a source writes happened longer ago in the database than the threshold, for 5 minutes                                    | 15 minutes |
+| A source holds back a lot of history | A database without `max_slot_wal_keep_size` keeps more of the source's history than the threshold, for 30 minutes                    | 20 GB      |
+| A source's slot is filling up        | A database with `max_slot_wal_keep_size` keeps more of the source's history than the threshold's share of that limit, for 10 minutes | 50%        |
 
 ## A consumer group falls behind
 
@@ -101,26 +105,54 @@ and [a producer's messages fail](troubleshooting/producer-errors.md).
 ## Postgres sources
 
 These alerts are about a [Postgres source](postgres.md) and the database it
-reads. Their thresholds are fixed.
+reads. You set the thresholds of the first three, as [above](#thresholds);
+the others are fixed.
 
 ### A source holds back a lot of history
 
-The database keeps more than 20 GB of change history (WAL) that the source
-has not read yet, for 30 minutes (`PostgresSourceRetainedWALHigh`). A
-paused, failed or slow source makes it grow, on your database's disk.
+Your database has no `max_slot_wal_keep_size`, and keeps more change history
+(WAL) that the source has not read yet than your threshold, 20 GB unless
+you changed it, for 30 minutes (`PostgresSourceRetainedWALHigh`). A paused,
+failed or slow source makes it grow, on your database's disk, with nothing
+to stop it.
 
 - Check the source's page: is it paused, failed, or behind?
-- Make sure `max_slot_wal_keep_size` is set, so that the history can never
-  fill your disk. See
+- Set `max_slot_wal_keep_size`, so that the history can never fill your
+  disk. See
   [Keeping your database safe](postgres.md#keeping-your-database-safe).
+
+### A source's slot is filling up
+
+Your database's `max_slot_wal_keep_size` limits how much history the source's
+replication slot may keep, and the slot keeps more of it than your
+threshold, half of the limit unless you changed it, for 10 minutes
+(`PostgresSourceSlotFilling`). Past the limit, the database invalidates the
+slot, and the source has to copy its tables again.
+
+- Check the source's page: is it paused, failed, or behind?
+- If the source is behind because the database changes faster than usual,
+  raise the limit, if the disk has room, until it catches up.
 
 ### A source is behind its database
 
-The changes the source writes to Kafka happened in the database more than
-15 minutes ago, for 15 minutes (`PostgresSourceBehind`). The database
-changes faster than the source can stream, often during a large batch
-update. It usually catches up once the batch is done; if it keeps falling
-further behind, contact us.
+The changes the source writes to Kafka happened in the database longer ago
+than your threshold, 15 minutes unless you changed it, for 5 minutes
+(`PostgresSourceBehind`). The database changes faster than the source can
+stream, often during a large batch update. It usually catches up once the
+batch is done; if it keeps falling further behind, contact us.
+
+### A source has stopped reading its database
+
+For about 35 minutes, the source has written nothing to Kafka, not even the
+heartbeat it writes every minute, while the history its slot keeps grows
+(`PostgresSourceStalled`). It has not failed: something keeps it from
+reading, most often its connection to the database, and it keeps trying
+again, while changes wait in your database. We are told too.
+
+- Check that the source's role still has the `REPLICATION` attribute, and
+  can still connect from Changeport's addresses, which the source's page
+  lists.
+- If both are fine, contact us.
 
 ### Changeport can't reach a source's database
 

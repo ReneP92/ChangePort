@@ -248,6 +248,11 @@ cdc-test customer="demo":
 cdc-recovery-test customer="demo":
     hack/cdc-recovery-test.sh {{customer}}
 
+# Tune a Postgres CDC source's alerts as the customer, then stall the source until they fire
+[group('Local development (kind + Strimzi)')]
+cdc-alerts-test customer="demo":
+    hack/cdc-alerts-test.sh {{customer}}
+
 # Freeze a broker of a three-broker customer until alerting pages, and see the page resolve
 [group('Local development (kind + Strimzi)')]
 alerting-test customer="ha":
@@ -328,7 +333,7 @@ provision customer="acme" profile="dev":
 deprovision customer="acme":
     go run ./cmd/provisioner deprovision -context {{ kube_context }} -customer {{ customer }} -wait
 
-# Run the end-to-end suites on kind: core, failover, cdc, chaos or all (chaos takes 25 minutes); KEEP=1 keeps the customers
+# Run the end-to-end suites on kind: core, failover, cdc, chaos, alerts or all (chaos takes 25 minutes); KEEP=1 keeps the customers
 [group('Local development (kind + Strimzi)')]
 e2e suite="all" customer="acme":
     SUITE={{ suite }} hack/e2e.sh {{ customer }}

@@ -809,10 +809,13 @@ type AlertSettings struct {
 
 // AlertThresholds defines model for AlertThresholds.
 type AlertThresholds struct {
-	ConsumerLag   SecondsThreshold      `json:"consumerLag"`
-	ConsumerStuck SecondsThreshold      `json:"consumerStuck"`
-	Errors        PercentThreshold      `json:"errors"`
-	Throttling    MillisecondsThreshold `json:"throttling"`
+	ConsumerLag       SecondsThreshold      `json:"consumerLag"`
+	ConsumerStuck     SecondsThreshold      `json:"consumerStuck"`
+	Errors            PercentThreshold      `json:"errors"`
+	SourceBehind      SecondsThreshold      `json:"sourceBehind"`
+	SourceRetainedWAL GigabytesThreshold    `json:"sourceRetainedWAL"`
+	SourceSlotFilling PercentThreshold      `json:"sourceSlotFilling"`
+	Throttling        MillisecondsThreshold `json:"throttling"`
 }
 
 // Broker defines model for Broker.
@@ -1139,6 +1142,14 @@ type FleetCluster struct {
 
 // FleetClusterState Down: clients cannot use it, or a part of it, or a page about its health fires. Degraded: it works, with less to spare than it should, as while a change rolls through it. Unknown: no broker reports metrics, so it is down or not scraped. Starting and deleting follow its provisioning, unless its alerts say worse.
 type FleetClusterState string
+
+// GigabytesThreshold defines model for GigabytesThreshold.
+type GigabytesThreshold struct {
+	Enabled bool `json:"enabled"`
+
+	// Gigabytes In GB, 10^9 bytes
+	Gigabytes int64 `json:"gigabytes"`
+}
 
 // Health The brokers, and the partitions' health from the brokers' metrics,
 // which are absent until the metrics store has them

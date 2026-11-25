@@ -407,6 +407,16 @@ func TestReconcileExportsTheAlertThresholds(t *testing.T) {
 	if got := threshold("TopicRequestErrors"); got != 0.05 {
 		t.Errorf("default error threshold = %v, want 0.05", got)
 	}
+	// The Postgres sources', in the units of the metrics they compare with.
+	if got := threshold("PostgresSourceBehind"); got != 900 {
+		t.Errorf("default source behind threshold = %v, want 900 seconds", got)
+	}
+	if got := threshold("PostgresSourceRetainedWALHigh"); got != 20e9 {
+		t.Errorf("default retained WAL threshold = %v, want 20e9 bytes", got)
+	}
+	if got := threshold("PostgresSourceSlotFilling"); got != 0.5 {
+		t.Errorf("default slot filling threshold = %v, want 0.5", got)
+	}
 
 	settings := &v1alpha1.AlertSettings{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "customer-acme", Name: v1alpha1.AlertSettingsName},
@@ -414,6 +424,8 @@ func TestReconcileExportsTheAlertThresholds(t *testing.T) {
 	}
 	settings.Spec.ConsumerLag.Seconds = 120
 	settings.Spec.Throttling.Enabled = false
+	settings.Spec.SourceRetainedWAL.Gigabytes = 2
+	settings.Spec.SourceSlotFilling.Enabled = false
 	if err := c.Create(t.Context(), settings); err != nil {
 		t.Fatal(err)
 	}
@@ -425,6 +437,12 @@ func TestReconcileExportsTheAlertThresholds(t *testing.T) {
 	}
 	if alertThreshold.DeleteLabelValues("acme", "ClientThrottled") {
 		t.Error("the throttling alert is off, but has a threshold")
+	}
+	if got := threshold("PostgresSourceRetainedWALHigh"); got != 2e9 {
+		t.Errorf("retained WAL threshold = %v, want the settings' 2e9 bytes", got)
+	}
+	if alertThreshold.DeleteLabelValues("acme", "PostgresSourceSlotFilling") {
+		t.Error("the slot filling alert is off, but has a threshold")
 	}
 }
 

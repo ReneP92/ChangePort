@@ -2611,7 +2611,7 @@ components:
             $ref: "#/components/schemas/Alert"
     AlertThresholds:
       type: object
-      required: [consumerLag, consumerStuck, throttling, errors]
+      required: [consumerLag, consumerStuck, throttling, errors, sourceBehind, sourceRetainedWAL, sourceSlotFilling]
       properties:
         consumerLag:
           $ref: "#/components/schemas/SecondsThreshold"
@@ -2621,6 +2621,22 @@ components:
           $ref: "#/components/schemas/MillisecondsThreshold"
         errors:
           $ref: "#/components/schemas/PercentThreshold"
+        sourceBehind:
+          $ref: "#/components/schemas/SecondsThreshold"
+        sourceRetainedWAL:
+          $ref: "#/components/schemas/GigabytesThreshold"
+        sourceSlotFilling:
+          $ref: "#/components/schemas/PercentThreshold"
+    GigabytesThreshold:
+      type: object
+      required: [enabled, gigabytes]
+      properties:
+        enabled:
+          type: boolean
+        gigabytes:
+          type: integer
+          format: int64
+          description: In GB, 10^9 bytes
     MillisecondsThreshold:
       type: object
       required: [enabled, milliseconds]
