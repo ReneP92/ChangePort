@@ -191,7 +191,7 @@ with it cookies, with prod: `console.dev.changeport.app`, not
 
 | | Local (kind) | Dev (AWS) | Prod (AWS) |
 |---|---|---|---|
-| Landing site | `http://localhost:5173` (`just site-dev`), `http://localhost:4174` (`vite preview`) | none | `https://changeport.app`, and `www.` redirecting to it |
+| Landing site | `http://localhost:5174` (`just site-dev`), `http://localhost:4174` (`vite preview`) | none | `https://changeport.app`, and `www.` redirecting to it |
 | Console | `http://localhost:8088` | `https://console.dev.changeport.app` | `https://console.changeport.app` |
 | Kafka endpoints | `*.<customer>.kafka.changeport.test` | `*.<customer>.kafka.dev.changeport.app` | `*.<customer>.kafka.changeport.app` |
 | Sign-in (Clerk) | Clerk's development instance | Clerk's development instance | `clerk.changeport.app`, `accounts.changeport.app` |
