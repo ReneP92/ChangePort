@@ -658,7 +658,8 @@ of this design with the Connect image, Apicurio 3.3.3 and Postgres 17:
   says why, and its alerts fire; recovered with the runbook's steps, it
   streams from a new slot with its table copied again, and its alerts are
   quiet.
-- **`hack/cdc-alerts-test.sh`** (`just cdc-alerts-test`), in the same suite,
+- **`hack/cdc-alerts-test.sh`** (`just cdc-alerts-test`), in a suite of its
+  own (`alerts`), as it waits about 15 minutes for the alerts,
   sets the customer's source thresholds as the console does and sees them
   reach the rules within a minute, one turned off having none. Then it
   takes away the source role's `REPLICATION`: the connector retries without

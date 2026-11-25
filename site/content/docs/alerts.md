@@ -143,7 +143,7 @@ batch is done; if it keeps falling further behind, contact us.
 
 ### A source has stopped reading its database
 
-For 30 minutes, the source has written nothing to Kafka, not even the
+For about 35 minutes, the source has written nothing to Kafka, not even the
 heartbeat it writes every minute, while the history its slot keeps grows
 (`PostgresSourceStalled`). It has not failed: something keeps it from
 reading, most often its connection to the database, and it keeps trying

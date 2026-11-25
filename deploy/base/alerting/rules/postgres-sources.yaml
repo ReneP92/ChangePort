@@ -127,15 +127,18 @@ groups:
       # status nor Debezium's own metrics, which go with its task, show.
       # Connect's count of written records does not tell either, as each
       # retry writes a notification. The slot's readings come from the
-      # database, through the source controller, so they go on. A snapshot
-      # writes no heartbeats, so only streaming sources count. No heartbeat
-      # in 5 minutes, and more WAL than at any time in the last 15, which a
-      # database written to now and then gives, as the slot's only grows;
-      # held for 30.
+      # database, through the source controller, so they go on. A source
+      # copies its tables while changes stream, so a snapshotting source
+      # writes heartbeats too. Only while the customer's brokers are
+      # scraped: without their metrics, every source would look stalled. No
+      # heartbeat in 5 minutes, and more WAL than at any time in the last
+      # 15, which a database written to now and then gives, as a stalled
+      # slot's only grows; held for 30.
       - alert: PostgresSourceStalled
         expr: &stalled >-
           changeport_source_retained_wal_bytes > min_over_time(changeport_source_retained_wal_bytes[15m])
-          and on (tenant, source) (changeport_source_phase{phase="Streaming"} == 1)
+          and on (tenant, source) (changeport_source_phase{phase=~"Snapshotting|Streaming"} == 1)
+          and on (tenant) (max by (tenant) (up{job="kafka"}) == 1)
           unless on (tenant, source) (
             label_replace(
               sum by (tenant, topic) (increase(kafka_server_brokertopicmetrics_messagesinpersec_total{topic=~"changeport[.]cdc[.]heartbeat[.].+"}[5m])),

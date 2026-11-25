@@ -19,7 +19,7 @@
 # $GITHUB_OUTPUT; and which file marked each job, on stderr.
 set -euo pipefail
 
-suites=(e2e_core e2e_cdc e2e_failover e2e_chaos)
+suites=(e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts)
 jobs=(go terraform web site "${suites[@]}" console kafka_image connect_image images)
 declare -A need why
 for job in "${jobs[@]}"; do need[$job]=false; done
@@ -74,7 +74,8 @@ while IFS= read -r file; do
     failover-test.sh | alerting-test.sh) mark "$file" e2e_failover ;;
     load.sh) mark "$file" e2e_failover e2e_chaos ;;
     usage-test.sh) mark "$file" e2e_core e2e_failover ;;
-    cdc-test.sh | cdc-recovery-test.sh | cdc-alerts-test.sh) mark "$file" e2e_cdc ;;
+    cdc-test.sh | cdc-recovery-test.sh) mark "$file" e2e_cdc ;;
+    cdc-alerts-test.sh) mark "$file" e2e_alerts ;;
     # The core suite's lag test and the console's signed-in tests run
     # Kafka's tools with these.
     kafka-with.sh | Transaction.java) mark "$file" e2e_core console ;;

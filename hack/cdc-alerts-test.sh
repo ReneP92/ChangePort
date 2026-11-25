@@ -71,7 +71,7 @@ cleanup() {
   # The stand-in database keeps a 1 GB limit, as the setup guide recommends.
   pg -c "ALTER SYSTEM SET max_slot_wal_keep_size = '1GB'" -c "SELECT pg_reload_conf()" >/dev/null 2>&1 || true
   pg -c "ALTER ROLE \"$role\" REPLICATION" >/dev/null 2>&1 || true
-  kubectl -n "$namespace" delete alertsettings alerts --ignore-not-found >/dev/null 2>&1 || true
+  [[ -z ${CREATED_SETTINGS:-} ]] || kubectl -n "$namespace" delete alertsettings alerts --ignore-not-found >/dev/null 2>&1 || true
   kubectl -n "$namespace" delete postgressource "$source_name" --ignore-not-found --timeout=3m >/dev/null 2>&1 || true
   cdcsql -step cleanup -tables "$tables" | pg >/dev/null 2>&1 || true
   pg -c "SELECT pg_drop_replication_slot('$slot') FROM pg_replication_slots WHERE slot_name = '$slot' AND NOT active" >/dev/null 2>&1 || true
@@ -91,6 +91,7 @@ metadata:
   namespace: $namespace
 spec: {}
 SETTINGS
+CREATED_SETTINGS=1
 expect_threshold PostgresSourceBehind 900
 expect_threshold PostgresSourceRetainedWALHigh 20000000000
 expect_threshold PostgresSourceSlotFilling 0.5
@@ -121,10 +122,11 @@ done
   sleep 15
 done) &
 WRITER=$!
-# The stall rule wants 5 minutes without a heartbeat, and the slot's share
-# of a 64 MB limit passes the customer's 10% at 6.4 MB.
+# The stall rule wants 5 minutes without a heartbeat. A 64 MB limit lets a
+# slot keep 64 to 80 MiB, as the database counts whole segments, so 12 MB
+# passes the customer's 10% of it.
 pg -c "ALTER SYSTEM SET max_slot_wal_keep_size = '64MB'" -c "SELECT pg_reload_conf()" >/dev/null
-for _ in $(seq 8); do write_wal 1000000; done
+for _ in $(seq 12); do write_wal 1000000; done
 check_alerts "$customer" "$source_name" PostgresSourceStalled,PostgresSourceConnectorStalled,PostgresSourceSlotFilling 48
 [[ $(source_field .status.phase) == Streaming ]] ||
   die "the stalled source is in phase $(source_field .status.phase), where nothing else would have told"

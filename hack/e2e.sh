@@ -25,13 +25,13 @@
 # alerting pages, and the page resolves once it is back. The cdc suite takes a Postgres CDC source
 # of the demo customer from created through streaming and paused to deleted,
 # then makes the database lose a source's slot and recovers it as the
-# runbook says, and stalls a source to check its alerts and the customer's
-# thresholds. The chaos suite crashes a three-broker customer's active
+# runbook says. The alerts suite sets the demo customer's source thresholds
+# and stalls one of its sources until its alerts fire (hack/cdc-alerts-test.sh). The chaos suite crashes a three-broker customer's active
 # controller, cuts one broker off the others, and takes down the Kafka agent,
 # the provisioning controller, the Strimzi operator and tiered storage's
 # object store, each at the worst moment, under load (hack/chaos-test.sh).
-# SUITE=core, failover, cdc or chaos runs one (default: all four, one after the
-# other). Set KEEP=1 to keep the customers. Run just dev-up first.
+# SUITE=core, failover, cdc, chaos or alerts runs one (default: all five, one
+# after the other). Set KEEP=1 to keep the customers. Run just dev-up first.
 # shellcheck source=lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -48,8 +48,8 @@ stay_awake
 
 SUITE=${SUITE:-all}
 case $SUITE in
-core | failover | cdc | chaos | all) ;;
-*) die "SUITE must be core, failover, cdc, chaos or all, not $SUITE" ;;
+core | failover | cdc | chaos | alerts | all) ;;
+*) die "SUITE must be core, failover, cdc, chaos, alerts or all, not $SUITE" ;;
 esac
 
 core_suite() {
@@ -110,6 +110,8 @@ fi
 if [[ $SUITE == cdc || $SUITE == all ]]; then
   "$ROOT/hack/cdc-test.sh" "$DEMO_CUSTOMER"
   "$ROOT/hack/cdc-recovery-test.sh" "$DEMO_CUSTOMER"
+fi
+if [[ $SUITE == alerts || $SUITE == all ]]; then
   "$ROOT/hack/cdc-alerts-test.sh" "$DEMO_CUSTOMER"
 fi
 log "End-to-end test passed ($SUITE)"

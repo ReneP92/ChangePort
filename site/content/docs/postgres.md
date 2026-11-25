@@ -88,10 +88,10 @@ grow. The console shows how much each source holds back, and alerts you:
 - **Pausing a source** keeps its place: it catches up from where it
   stopped when it runs again. Meanwhile your database keeps every change,
   so don't pause for long. After a day, an alert says so.
-- **A source that falls behind**, **holds back a lot of history** or
-  **stops reading** gets an alert, as does **a database Changeport can't
-  reach**. Admins choose when the first two fire, on the console's Alerts
-  page. See [Alerts](alerts.md#postgres-sources).
+- **A source that falls behind**, **holds back a lot of history**, **nears
+  your limit** or **stops reading** gets an alert, as does **a database
+  Changeport can't reach**. Admins choose when the first three fire, on the
+  console's Alerts page. See [Alerts](alerts.md#postgres-sources).
 - **The limit you set** (`max_slot_wal_keep_size`) protects your disk:
   past it, your database drops the source's slot rather than fill up. The
   source then fails and says why, and needs a new copy of its tables to

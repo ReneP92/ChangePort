@@ -36,9 +36,11 @@ rules are in `deploy/base/alerting/rules/postgres-sources.yaml`, with the
 alerts whose thresholds are fixed:
 
 - `PostgresSourceStalled` (for the customer) and
-  `PostgresSourceConnectorStalled` (for operators): a streaming source has
-  written no heartbeat for 30 minutes, while its slot keeps more and more
-  WAL. Its connector stopped reading without failing, as when it cannot
+  `PostgresSourceConnectorStalled` (for operators): a running source has
+  written no heartbeat for about 35 minutes (5 minutes without one, held
+  for 30), while its slot keeps more and more WAL, and only while its
+  customer's brokers are scraped, as without their metrics every source
+  would look stalled. Its connector stopped reading without failing, as when it cannot
   open its replication connection and retries without end: Connect calls
   it running, its phase stays Streaming, and Debezium's own metrics, which
   `PostgresSourceBehind` reads, go with its task. A source writes its

@@ -978,7 +978,7 @@ them, and its slot keeps the difference as WAL.
 Alerts: `PostgresSourceConnectorStalled` (for operators),
 `PostgresSourceStalled` (for the customer).
 
-For 30 minutes the source has written nothing to Kafka, not even the
+For about 35 minutes the source has written nothing to Kafka, not even the
 heartbeat it writes every minute, while its slot keeps more and more WAL,
 and nothing reports a failure: Connect says the connector and its task
 run, and the source's phase stays Streaming. Debezium's own metrics go with
