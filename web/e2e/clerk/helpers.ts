@@ -57,7 +57,9 @@ export function card(page: Page, heading: string): Locator {
 
 /**
  * Downloads the admin user's client.properties into path from the Connect
- * page of the environment shown, and comes back to the page it was on.
+ * page of the environment shown, and goes back to the page it was on, as
+ * the browser's Back does: within the app, without loading it, and Clerk,
+ * again.
  */
 export async function downloadClientProperties(page: Page, path: string): Promise<void> {
   const back = page.url();
@@ -68,7 +70,8 @@ export async function downloadClientProperties(page: Page, path: string): Promis
     .getByRole("button", { name: "Download client.properties" })
     .click();
   await (await downloading).saveAs(path);
-  await page.goto(back);
+  await page.goBack();
+  await expect(page).toHaveURL(back);
 }
 
 /**
