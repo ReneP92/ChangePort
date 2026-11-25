@@ -572,6 +572,52 @@ run removes what a crashed run left behind after an hour:
 just ui-e2e
 ```
 
+### Local addresses
+
+| Address | What it is | Runs with | Changes when |
+|---|---|---|---|
+| <http://localhost:8088> | The console as it runs on EKS: its Go backend and the web app built into one image, on kind | `just dev-up` | `just console-reload` rebuilds and rolls it out |
+| <http://localhost:5173> | The console's web app from the working tree, Vite's dev server, which sends `/api` to the console at 8088 | `just web-dev` | A file under `web/` is saved |
+| <http://localhost:5174> | The landing site and the customer docs from the working tree | `just site-dev` | A file under `site/` is saved |
+| <http://localhost:4174> | The landing site as built into `site/dist` | `BUN_DIR=site hack/bun.sh run preview`, after `just site-build` | It is built again |
+| `*.<customer>.kafka.changeport.test:9094` | Customers' Kafka clusters, through the host gateway | `just dev-up` | |
+
+The console at 8088 is always needed: it is what signs in and answers the
+API, also for 5173, and what the end-to-end tests use. The dev server at
+5173 is only worth running while working on the web app, as it shows what
+8088 will show after the next `just console-reload`. The addresses in dev
+and prod are in
+[terraform/README.md](terraform/README.md#addresses).
+
+## Landing site
+
+The public site at the domain's root, `https://changeport.app`: what
+Changeport is, how a trial works, the call to action that leads to the
+console's trial request, the privacy policy and the terms, and the customer
+docs under `/docs/`. It is plain HTML and Tailwind in `site/`, built by
+Vite into `site/dist`, a folder of static files ([docs/site.md](docs/site.md)).
+
+```bash
+just site-dev     # hot reload on http://localhost:5174
+just site-check   # type-check, format-check, build, test, then Lighthouse
+```
+
+- **Hosting:** CloudFront serves it from a private S3 bucket,
+  `changeport-prod-site`, in the prod AWS account, with its certificate
+  validated and its records written in the domain's zone on Cloudflare, with
+  Cloudflare's proxy off. All of it is `terraform/modules/static-site`, used
+  by `terraform/environments/prod` only; dev has no landing site
+  ([terraform/README.md](terraform/README.md#landing-site-modulesstatic-site-prod-only)).
+- **Publishing:** `.github/workflows/publish-site.yml` checks the site on
+  every push to main, builds it with the console at `console.<domain>`,
+  and uploads main's newest commit to the bucket (`hack/publish-site.sh`),
+  without waiting for the rest of CI, so a merge goes live a few minutes
+  after it lands.
+- **Not live yet:** the prod account is not applied (#10), so there is no
+  bucket or distribution, and the workflow skips until the repository
+  variables `SITE_DOMAIN`, `SITE_BUCKET`, `SITE_DISTRIBUTION_ID` and
+  `SITE_PUBLISH_ROLE_ARN` are set from prod's `site_publishing` output.
+
 ## Checks
 
 ```bash
