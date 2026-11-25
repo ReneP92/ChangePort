@@ -184,8 +184,9 @@ func (s *Server) alertSettingsOf(ctx context.Context, caller *customerContext) (
 }
 
 // thresholdLimits are the limits of the thresholds, as the CRD has them.
-var thresholdLimits = struct{ lag, stuck, throttling, percent [2]int64 }{
+var thresholdLimits = struct{ lag, stuck, throttling, percent, sourceBehind, sourceWAL, sourceSlot [2]int64 }{
 	lag: [2]int64{60, 86400}, stuck: [2]int64{300, 86400}, throttling: [2]int64{10, 60000}, percent: [2]int64{1, 100},
+	sourceBehind: [2]int64{60, 86400}, sourceWAL: [2]int64{1, 10000}, sourceSlot: [2]int64{10, 95},
 }
 
 // thresholdsProblem says what is wrong with thresholds, if anything.
@@ -203,6 +204,9 @@ func thresholdsProblem(t api.AlertThresholds) *api.Problem {
 		check("stuck consumer", t.ConsumerStuck.Seconds, thresholdLimits.stuck, "seconds"),
 		check("throttling", t.Throttling.Milliseconds, thresholdLimits.throttling, "milliseconds"),
 		check("errors", t.Errors.Percent, thresholdLimits.percent, "percent"),
+		check("source behind", t.SourceBehind.Seconds, thresholdLimits.sourceBehind, "seconds"),
+		check("retained WAL", t.SourceRetainedWAL.Gigabytes, thresholdLimits.sourceWAL, "GB"),
+		check("slot filling", t.SourceSlotFilling.Percent, thresholdLimits.sourceSlot, "percent"),
 	} {
 		if p != nil {
 			return p
@@ -237,6 +241,9 @@ func (s *Server) ChangeAlertSettings(ctx context.Context, request api.ChangeAler
 	settings.Spec.ConsumerStuck = v1alpha1.ConsumerStuckAlert{Enabled: t.ConsumerStuck.Enabled, Seconds: t.ConsumerStuck.Seconds}
 	settings.Spec.Throttling = v1alpha1.ThrottlingAlert{Enabled: t.Throttling.Enabled, Milliseconds: t.Throttling.Milliseconds}
 	settings.Spec.Errors = v1alpha1.ErrorsAlert{Enabled: t.Errors.Enabled, Percent: t.Errors.Percent}
+	settings.Spec.SourceBehind = v1alpha1.SourceBehindAlert{Enabled: t.SourceBehind.Enabled, Seconds: t.SourceBehind.Seconds}
+	settings.Spec.SourceRetainedWAL = v1alpha1.SourceRetainedWALAlert{Enabled: t.SourceRetainedWAL.Enabled, Gigabytes: t.SourceRetainedWAL.Gigabytes}
+	settings.Spec.SourceSlotFilling = v1alpha1.SourceSlotFillingAlert{Enabled: t.SourceSlotFilling.Enabled, Percent: t.SourceSlotFilling.Percent}
 	if err := s.alertSettings.Save(ctx, caller.id(), settings); errors.Is(err, ErrAlertSettingsChanged) {
 		return api.ChangeAlertSettings409JSONResponse{ConflictJSONResponse: api.ConflictJSONResponse(alertSettingsChanged)}, nil
 	} else if err != nil {
@@ -349,6 +356,10 @@ func toAPIThresholds(spec v1alpha1.AlertSettingsSpec) api.AlertThresholds {
 		ConsumerStuck: api.SecondsThreshold{Enabled: spec.ConsumerStuck.Enabled, Seconds: spec.ConsumerStuck.Seconds},
 		Throttling:    api.MillisecondsThreshold{Enabled: spec.Throttling.Enabled, Milliseconds: spec.Throttling.Milliseconds},
 		Errors:        api.PercentThreshold{Enabled: spec.Errors.Enabled, Percent: spec.Errors.Percent},
+
+		SourceBehind:      api.SecondsThreshold{Enabled: spec.SourceBehind.Enabled, Seconds: spec.SourceBehind.Seconds},
+		SourceRetainedWAL: api.GigabytesThreshold{Enabled: spec.SourceRetainedWAL.Enabled, Gigabytes: spec.SourceRetainedWAL.Gigabytes},
+		SourceSlotFilling: api.PercentThreshold{Enabled: spec.SourceSlotFilling.Enabled, Percent: spec.SourceSlotFilling.Percent},
 	}
 }
 

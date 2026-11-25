@@ -45,6 +45,7 @@ expect "hack/load.sh" e2e_failover e2e_chaos
 expect "hack/alerting-test.sh" e2e_failover
 expect "hack/usage-test.sh" e2e_core e2e_failover
 expect "hack/cdc-recovery-test.sh" e2e_cdc
+expect "hack/cdc-alerts-test.sh" e2e_cdc
 expect "hack/lag-test.sh" e2e_core
 expect "hack/smoke-test.sh" go e2e_core e2e_cdc e2e_failover e2e_chaos console images
 expect "hack/ui-e2e.sh" go e2e_core e2e_cdc e2e_failover e2e_chaos console images

@@ -51,7 +51,7 @@ function Alerts({ admin }: { admin: boolean }) {
     <Page
       crumbs={crumbs}
       title="Alerts"
-      description="Changeport watches how your applications use your cluster: consumer groups that fall behind or stop, clients that are throttled, and requests that fail."
+      description="Changeport watches how your applications use your cluster: consumer groups that fall behind or stop, clients that are throttled, and requests that fail; and your Postgres sources, which may fall behind or hold back history in your database."
     >
       <ActiveCard />
       {settings.isPending && <p className="text-sm text-muted-foreground">Loading settings</p>}
@@ -95,6 +95,8 @@ function ActiveCard() {
 /** One threshold of the form: how it reads, and how its value converts. */
 interface Threshold {
   key: keyof AlertThresholds;
+  /** What the alert is about: the customer's applications, or their Postgres sources. */
+  group: "applications" | "sources";
   title: string;
   description: string;
   unit: string;
@@ -109,6 +111,7 @@ interface Threshold {
 const thresholds: Threshold[] = [
   {
     key: "consumerLag",
+    group: "applications",
     title: "A consumer group falls behind",
     description: "When its oldest unconsumed message on a topic is older than",
     unit: "minutes",
@@ -120,6 +123,7 @@ const thresholds: Threshold[] = [
   },
   {
     key: "consumerStuck",
+    group: "applications",
     title: "A consumer group is stuck",
     description: "When it has not committed on a topic, while messages wait and arrive, for",
     unit: "minutes",
@@ -131,6 +135,7 @@ const thresholds: Threshold[] = [
   },
   {
     key: "throttling",
+    group: "applications",
     title: "A client is throttled",
     description: "When the brokers delay a client's requests, for 5 minutes, by more than",
     unit: "ms",
@@ -142,6 +147,7 @@ const thresholds: Threshold[] = [
   },
   {
     key: "errors",
+    group: "applications",
     title: "Requests fail",
     description:
       "When, for 5 minutes, the share of a topic's requests or a producer's records that fail is over",
@@ -152,7 +158,51 @@ const thresholds: Threshold[] = [
     set: (t, value) => ({ ...t, errors: { ...t.errors, percent: value } }),
     format: (t) => `${String(t.errors.percent)}%`,
   },
+  {
+    key: "sourceBehind",
+    group: "sources",
+    title: "A source is behind its database",
+    description:
+      "When, for 5 minutes, the changes a source writes happened in its database longer ago than",
+    unit: "minutes",
+    min: 1,
+    max: 1440,
+    get: (t) => t.sourceBehind.seconds / 60,
+    set: (t, value) => ({ ...t, sourceBehind: { ...t.sourceBehind, seconds: value * 60 } }),
+    format: (t) => formatDuration(t.sourceBehind.seconds),
+  },
+  {
+    key: "sourceRetainedWAL",
+    group: "sources",
+    title: "A source holds back a lot of history",
+    description:
+      "When, for 30 minutes, a database without max_slot_wal_keep_size keeps more of a source's history than",
+    unit: "GB",
+    min: 1,
+    max: 10000,
+    get: (t) => t.sourceRetainedWAL.gigabytes,
+    set: (t, value) => ({ ...t, sourceRetainedWAL: { ...t.sourceRetainedWAL, gigabytes: value } }),
+    format: (t) => `${String(t.sourceRetainedWAL.gigabytes)} GB`,
+  },
+  {
+    key: "sourceSlotFilling",
+    group: "sources",
+    title: "A source's slot is filling up",
+    description:
+      "When, for 10 minutes, a source's slot keeps more of what its database's max_slot_wal_keep_size allows than",
+    unit: "%",
+    min: 10,
+    max: 95,
+    get: (t) => t.sourceSlotFilling.percent,
+    set: (t, value) => ({ ...t, sourceSlotFilling: { ...t.sourceSlotFilling, percent: value } }),
+    format: (t) => `${String(t.sourceSlotFilling.percent)}%`,
+  },
 ];
+
+const groups = [
+  { key: "applications", title: "Your applications" },
+  { key: "sources", title: "Postgres sources" },
+] as const;
 
 function ThresholdsCard({
   settings,
@@ -193,71 +243,91 @@ function ThresholdsCard({
             }
           }}
         >
-          <ul className="flex flex-col divide-y">
-            {thresholds.map((threshold) => {
-              const enabled = draft[threshold.key].enabled;
-              const id = `threshold-${threshold.key}`;
-              const bad = invalid.includes(threshold);
-              return (
-                <li
-                  key={threshold.key}
-                  className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      id={`${id}-enabled`}
-                      className="mt-0.5"
-                      checked={enabled}
-                      disabled={!admin}
-                      onCheckedChange={(checked) => {
-                        setDraft({
-                          ...draft,
-                          [threshold.key]: { ...draft[threshold.key], enabled: checked === true },
-                        });
-                      }}
-                    />
-                    <div className="flex flex-col gap-0.5">
-                      <Label htmlFor={`${id}-enabled`}>{threshold.title}</Label>
-                      <span className="text-muted-foreground">
-                        {threshold.description}
-                        {!admin && ` ${threshold.format(settings.thresholds)}.`}
-                        {!admin && !settings.thresholds[threshold.key].enabled && " Off."}
-                      </span>
-                    </div>
-                  </div>
-                  {admin && (
-                    <div className="flex shrink-0 flex-col gap-1 pl-7 sm:items-end sm:pl-0">
-                      <div className="flex items-center gap-2">
-                        <Input
-                          id={id}
-                          aria-label={`${threshold.title}, in ${threshold.unit}`}
-                          aria-invalid={bad}
-                          type="number"
-                          inputMode="numeric"
-                          min={threshold.min}
-                          max={threshold.max}
-                          className="w-24 text-right tabular-nums"
-                          disabled={!enabled}
-                          value={typed[threshold.key] ?? String(threshold.get(draft))}
-                          onChange={(event) => {
-                            setTyped({ ...typed, [threshold.key]: event.target.value });
-                            const value = Number(event.target.value);
-                            setDraft(threshold.set(draft, event.target.value === "" ? NaN : value));
-                          }}
-                        />
-                        <span className="w-14 text-muted-foreground">{threshold.unit}</span>
-                      </div>
-                      <span className={bad ? "text-destructive" : "text-xs text-muted-foreground"}>
-                        {bad
-                          ? `From ${String(threshold.min)} to ${String(threshold.max)}`
-                          : `Default ${threshold.format(settings.defaults)}`}
-                      </span>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          {groups.map((group) => (
+            <section
+              key={group.key}
+              aria-labelledby={`thresholds-${group.key}`}
+              className="flex flex-col gap-3"
+            >
+              <h3 id={`thresholds-${group.key}`} className="font-medium">
+                {group.title}
+              </h3>
+              <ul className="flex flex-col divide-y">
+                {thresholds
+                  .filter((threshold) => threshold.group === group.key)
+                  .map((threshold) => {
+                    const enabled = draft[threshold.key].enabled;
+                    const id = `threshold-${threshold.key}`;
+                    const bad = invalid.includes(threshold);
+                    return (
+                      <li
+                        key={threshold.key}
+                        className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            id={`${id}-enabled`}
+                            className="mt-0.5"
+                            checked={enabled}
+                            disabled={!admin}
+                            onCheckedChange={(checked) => {
+                              setDraft({
+                                ...draft,
+                                [threshold.key]: {
+                                  ...draft[threshold.key],
+                                  enabled: checked === true,
+                                },
+                              });
+                            }}
+                          />
+                          <div className="flex flex-col gap-0.5">
+                            <Label htmlFor={`${id}-enabled`}>{threshold.title}</Label>
+                            <span className="text-muted-foreground">
+                              {threshold.description}
+                              {!admin && ` ${threshold.format(settings.thresholds)}.`}
+                              {!admin && !settings.thresholds[threshold.key].enabled && " Off."}
+                            </span>
+                          </div>
+                        </div>
+                        {admin && (
+                          <div className="flex shrink-0 flex-col gap-1 pl-7 sm:items-end sm:pl-0">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                id={id}
+                                aria-label={`${threshold.title}, in ${threshold.unit}`}
+                                aria-invalid={bad}
+                                type="number"
+                                inputMode="numeric"
+                                min={threshold.min}
+                                max={threshold.max}
+                                className="w-24 text-right tabular-nums"
+                                disabled={!enabled}
+                                value={typed[threshold.key] ?? String(threshold.get(draft))}
+                                onChange={(event) => {
+                                  setTyped({ ...typed, [threshold.key]: event.target.value });
+                                  const value = Number(event.target.value);
+                                  setDraft(
+                                    threshold.set(draft, event.target.value === "" ? NaN : value),
+                                  );
+                                }}
+                              />
+                              <span className="w-14 text-muted-foreground">{threshold.unit}</span>
+                            </div>
+                            <span
+                              className={bad ? "text-destructive" : "text-xs text-muted-foreground"}
+                            >
+                              {bad
+                                ? `From ${String(threshold.min)} to ${String(threshold.max)}`
+                                : `Default ${threshold.format(settings.defaults)}`}
+                            </span>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+              </ul>
+            </section>
+          ))}
           {admin && (
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={!changed || invalid.length > 0 || change.isPending}>

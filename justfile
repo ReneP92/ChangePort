@@ -248,6 +248,11 @@ cdc-test customer="demo":
 cdc-recovery-test customer="demo":
     hack/cdc-recovery-test.sh {{customer}}
 
+# Tune a Postgres CDC source's alerts as the customer, then stall the source until they fire
+[group('Local development (kind + Strimzi)')]
+cdc-alerts-test customer="demo":
+    hack/cdc-alerts-test.sh {{customer}}
+
 # Freeze a broker of a three-broker customer until alerting pages, and see the page resolve
 [group('Local development (kind + Strimzi)')]
 alerting-test customer="ha":

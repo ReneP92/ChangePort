@@ -657,9 +657,18 @@ of this design with the Connect image, Apicurio 3.3.3 and Postgres 17:
   `max_slot_wal_keep_size` and filling the WAL. Resumed, the source fails,
   says why, and its alerts fire; recovered with the runbook's steps, it
   streams from a new slot with its table copied again, and its alerts are
-  quiet. Both tests evaluate the alerting rules against VictoriaMetrics for
-  their source (`internal/alerts`), whose unit tests also check every rule's
-  runbook section and metrics.
+  quiet.
+- **`hack/cdc-alerts-test.sh`** (`just cdc-alerts-test`), in the same suite,
+  sets the customer's source thresholds as the console does and sees them
+  reach the rules within a minute, one turned off having none. Then it
+  takes away the source role's `REPLICATION`: the connector retries without
+  end and never fails, and its phase stays Streaming. As the database is
+  written to, the stall alerts fire, and the slot's share of a 64 MB
+  `max_slot_wal_keep_size` passes the customer's 10%, until the customer
+  turns that alert off. With `REPLICATION` back, the source reads again,
+  and its alerts are quiet. The three tests evaluate the alerting rules
+  against VictoriaMetrics for their source (`internal/alerts`), whose unit
+  tests also check every rule's runbook section and metrics.
 - **The console's tests** (`internal/console`) cover each route of the API
   and the guardrails, and run the console's Kubernetes calls against a real
   API server (envtest) as its service account, with its ClusterRole and its

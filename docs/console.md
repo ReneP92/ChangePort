@@ -342,9 +342,10 @@ there are no prices yet (docs/PROJECT_PLAN.md).
 
 ## Alerts
 
-Alerts about the customer's own applications (see [alerts.md](alerts.md)),
-under Alerts in the sidebar, which counts the active ones. Admins set each
-alert's threshold and where alerts go: Slack, PagerDuty or a webhook. A
+Alerts about the customer's own applications and Postgres sources (see
+[alerts.md](alerts.md)), under Alerts in the sidebar, which counts the active
+ones. Admins set each alert's threshold, in two groups, the applications'
+and the sources', and where alerts go: Slack, PagerDuty or a webhook. A
 receiver's secret is never shown again once entered, only a hint.
 
 An alert shows at the top of the overview and as a badge on the topic or

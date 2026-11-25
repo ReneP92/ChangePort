@@ -116,7 +116,7 @@ series, so it raises no alerts:
 | `changeport_customer_brokers` | The brokers the cluster runs, as its profile (`profile`) says |
 | `changeport_customer_provisioned_timestamp_seconds` | When the cluster first became Ready; absent before, so that alerts about a cluster that is down wait for it |
 | `changeport_customer_trial_ends_timestamp_seconds` | When the customer's trial ends; absent for a customer not on a trial |
-| `changeport_alert_threshold` | The threshold of each of the customer's alerts about its own applications (`alert`), from its alert settings or the defaults ([alerts.md](alerts.md)); absent while the alert is off |
+| `changeport_alert_threshold` | The threshold of each of the customer's alerts about its own applications and Postgres sources (`alert`), from its alert settings or the defaults ([alerts.md](alerts.md)); absent while the alert is off |
 
 Two jobs read what Kubernetes components know about customers, each series
 with the `tenant` (and `cluster`) of its `namespace`, `customer-<tenant>`:

@@ -5,7 +5,8 @@ them when something looks wrong: a consumer group that falls behind or
 stops, clients that are throttled, requests that fail, and Postgres sources
 that hold back their database. Alerts show in the console as they fire and
 clear, and go to the customer's own Slack, PagerDuty or webhook. Admins
-choose the thresholds of the alerts about their applications.
+choose the thresholds of the alerts about their applications and their
+Postgres sources.
 
 What each alert means for the customer, and what to do about it, is in the
 customer docs: [site/content/docs/alerts.md](../site/content/docs/alerts.md),
@@ -25,11 +26,28 @@ that is down, and act on it; see [runbook.md](runbook.md).
 | `ClientThrottled` | A client is throttled for longer than the threshold at a time, for 5 minutes | 100 ms |
 | `TopicRequestErrors` | More than the threshold of a topic's produce and fetch requests fail, for 5 minutes | 5% |
 | `ClientRecordErrors` | A producer fails to send more than the threshold of its records, for 5 minutes | 5% |
+| `PostgresSourceBehind` | The changes a Postgres source writes happened in its database longer ago than the threshold, for 5 minutes | 15 minutes |
+| `PostgresSourceRetainedWALHigh` | A source's slot keeps more WAL than the threshold in a database without `max_slot_wal_keep_size`, for 30 minutes | 20 GB |
+| `PostgresSourceSlotFilling` | A source's slot keeps more than the threshold's share of what the database's `max_slot_wal_keep_size` allows, for 10 minutes | 50% |
 
 Each alert can be turned off. The errors threshold is shared by the two
 error alerts. Settings take effect within a minute. The Postgres sources'
-alerts for customers (`deploy/base/alerting/rules/postgres-sources.yaml`)
-have fixed thresholds.
+rules are in `deploy/base/alerting/rules/postgres-sources.yaml`, with the
+alerts whose thresholds are fixed:
+
+- `PostgresSourceStalled` (for the customer) and
+  `PostgresSourceConnectorStalled` (for operators): a streaming source has
+  written no heartbeat for 30 minutes, while its slot keeps more and more
+  WAL. Its connector stopped reading without failing, as when it cannot
+  open its replication connection and retries without end: Connect calls
+  it running, its phase stays Streaming, and Debezium's own metrics, which
+  `PostgresSourceBehind` reads, go with its task. A source writes its
+  heartbeat to `changeport.cdc.heartbeat.<source>` every minute, which the
+  brokers' per-topic metrics count; Connect's count of written records does
+  not tell, as each retry writes a notification.
+- `PostgresSourceConnectorBehind` (for operators): a source more than an
+  hour behind, whatever the customer allows, before its slot nears the
+  limit, where `PostgresSourceSlotNearLimit` pages at 80%.
 
 ## How it works
 
@@ -40,8 +58,9 @@ For operators:
   (`v1alpha1.DefaultAlertSettings`, which the CRD's defaults match). The
   provisioner exports each customer's thresholds as
   `changeport_alert_threshold{tenant, alert}`, and the rules in
-  `deploy/base/alerting/rules/customers.yaml` compare with them, so one set
-  of rules serves every customer. An alert that is off has no threshold.
+  `deploy/base/alerting/rules/customers.yaml` and `postgres-sources.yaml`
+  compare with them, so one set of rules serves every customer. An alert
+  that is off has no threshold.
 - **Receivers:** the console writes each receiver's secret once into a
   Secret of type `changeport.io/alert-receiver` in the customer's namespace,
   which the console's admission policy allows it and nothing else, and
