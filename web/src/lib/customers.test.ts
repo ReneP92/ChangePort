@@ -1,6 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import type { Customer } from "@/api/client";
-import { byOrganization } from "@/lib/customers";
+import {
+  byOrganization,
+  collapsedCustomers,
+  customerKey,
+  foldSummary,
+  rememberCollapsed,
+} from "@/lib/customers";
 
 function customer(
   id: string,
@@ -49,5 +55,64 @@ describe("byOrganization", () => {
       customer("c-bbbbbb", "Acme", "production"),
     ]);
     expect(groups).toHaveLength(2);
+  });
+});
+
+describe("collapsed customers", () => {
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  test("are remembered in this browser, none at first", () => {
+    expect(collapsedCustomers()).toEqual(new Set());
+    rememberCollapsed(new Set(["org_hooli", "customer:acme"]));
+    expect(collapsedCustomers()).toEqual(new Set(["org_hooli", "customer:acme"]));
+  });
+
+  test("are none when storage holds something else", () => {
+    localStorage.setItem("changeport.operator.collapsed-customers", "{not json");
+    expect(collapsedCustomers()).toEqual(new Set());
+    localStorage.setItem("changeport.operator.collapsed-customers", '{"org_hooli":true}');
+    expect(collapsedCustomers()).toEqual(new Set());
+  });
+
+  test("are keyed by organization, or by the environment without one", () => {
+    expect(
+      customerKey(customer("c-prod01", "Hooli", "production", { organizationID: "org_hooli" })),
+    ).toBe("org_hooli");
+    expect(customerKey(customer("acme", "Acme", "production", { organizationID: "" }))).toBe(
+      "customer:acme",
+    );
+  });
+});
+
+describe("foldSummary", () => {
+  const env = (id: string, extra: Partial<Customer>) =>
+    customer(id, "Hooli", id, { organizationID: "org_hooli", ...extra });
+
+  test("counts the ready among those that stay, and wants attention for one that is not", () => {
+    expect(foldSummary([env("a", { ready: true }), env("b", { ready: true })])).toEqual({
+      text: "2 of 2 ready",
+      attention: false,
+    });
+    expect(foldSummary([env("a", { ready: true }), env("b", { ready: false })])).toEqual({
+      text: "1 of 2 ready",
+      attention: true,
+    });
+  });
+
+  test("says which are being deleted, which want no attention", () => {
+    expect(
+      foldSummary([env("a", { ready: true }), env("b", { ready: false, deleting: true })]),
+    ).toEqual({
+      text: "1 of 1 ready, 1 being deleted",
+      attention: false,
+    });
+    expect(
+      foldSummary([
+        env("a", { ready: false, deleting: true }),
+        env("b", { ready: false, deleting: true }),
+      ]),
+    ).toEqual({ text: "2 being deleted", attention: false });
   });
 });
