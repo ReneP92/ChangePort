@@ -29,7 +29,7 @@ const suggested = ["production", "staging", "dev"];
 export function EnvironmentsCard({ customer }: { customer: Customer }) {
   const customers = useCustomers();
   const siblings = (customers.data ?? []).filter(
-    (c) => customer.organizationID !== undefined && c.organizationID === customer.organizationID,
+    (c) => !!customer.organizationID && c.organizationID === customer.organizationID,
   );
   return (
     <Card>
@@ -67,7 +67,7 @@ export function EnvironmentsCard({ customer }: { customer: Customer }) {
             A trial is one environment. Convert the customer to add more.
           </p>
         ) : (
-          customer.organizationID !== undefined && (
+          !!customer.organizationID && (
             <div>
               <AddEnvironmentDialog
                 customer={customer}

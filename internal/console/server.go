@@ -831,10 +831,14 @@ func toAPI(c *v1alpha1.Customer) api.Customer {
 		Environment:        environmentOf(c),
 		Profile:            api.CustomerProfile(c.Spec.Profile),
 		DeletionProtection: c.Spec.DeletionProtection,
-		OrganizationID:     ptr.To(c.Spec.ClerkOrganizationID),
 		CreatedAt:          c.CreationTimestamp.UTC(),
 		Conditions:         []api.Condition{},
 		Status:             api.Status{Reason: v1alpha1.ReasonPending, Message: "Waiting for the provisioning controller"},
+	}
+	// A customer without an organization, such as one provisioned from the
+	// command line, has none to name.
+	if c.Spec.ClerkOrganizationID != "" {
+		out.OrganizationID = ptr.To(c.Spec.ClerkOrganizationID)
 	}
 	if c.Status.BootstrapAddress != "" {
 		out.BootstrapAddress = ptr.To(c.Status.BootstrapAddress)

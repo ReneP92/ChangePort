@@ -50,6 +50,27 @@ test("an operator adds an environment, and its topics are its own", async ({ pag
     await expect(operator.getByRole("main").getByText("Ready", { exact: true })).toBeVisible({
       timeout: 6 * 60_000,
     });
+    // The operators' list shows one customer, with its two environments.
+    await operator
+      .getByRole("navigation", { name: "Breadcrumb" })
+      .getByRole("link", { name: "Customers" })
+      .click();
+    const customer = operator.getByRole("main").getByRole("rowgroup").filter({ hasText: a.id });
+    await expect(customer.getByRole("rowheader")).toContainText("2 environments");
+    await expect(customer.getByRole("link")).toHaveText(["production", "staging"]);
+    await expectNoSidewaysScroll(operator);
+    // The operator folds them away, the customer then saying how many are
+    // ready, and the browser remembers it.
+    const fold = customer.getByRole("button", { expanded: true });
+    await fold.click();
+    await expect(customer.getByRole("link")).toHaveCount(0);
+    await expect(customer).toContainText("2 of 2 ready");
+    await operator.reload();
+    const unfold = customer.getByRole("button", { expanded: false });
+    await expect(unfold).toBeVisible();
+    await expect(customer.getByRole("link")).toHaveCount(0);
+    await unfold.click();
+    await expect(customer.getByRole("link")).toHaveText(["production", "staging"]);
 
     // The admin switches to it: a new cluster, so its welcome page first.
     await openOverview(page, fixtures.users.adminA);

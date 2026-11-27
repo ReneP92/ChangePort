@@ -424,7 +424,14 @@ runbook says what each state means
 health for its cluster.
 
 **Customers** lists every customer with a dot per part of its cluster, its
-profile, its trial and what it processed over the last 30 days. Provisioning
+profile, its trial and what it processed over the last 30 days. A customer
+with several environments, each a cluster of its own, heads them with its
+name, their number and what they processed together, and lists them under
+it: production first, then by name, and those being removed last. (Its
+console puts the environment it opens by default first, which this list does
+not know.) The operator can fold a customer's environments away, the customer
+then saying how many of them are ready, and the browser remembers which.
+Provisioning
 one takes its name, which also names its Clerk organization, its profile,
 deletion protection and an optional invitation for its first admin; the new
 customer's page then follows its cluster as it gets ready. Deprovisioning
