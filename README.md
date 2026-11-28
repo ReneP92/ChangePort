@@ -572,6 +572,36 @@ run removes what a crashed run left behind after an hour:
 just ui-e2e
 ```
 
+### Snowflake
+
+The Snowflake destination's tests
+([milestone](https://github.com/ReneP92/changeport/milestone/12)) need a real
+Snowflake account, as nothing emulates Snowflake for the Go driver. Changeport's
+test account is `SYPDVTT-YQB46600`, Standard edition on AWS us-west-2; its
+region does not matter, as CI's runners are not in AWS. It holds nothing but
+the tests' objects, set up by `hack/snowflake-test-account.sql`, which an
+account admin runs in a Snowsight worksheet:
+
+- **A cap:** the resource monitor `CHANGEPORT_MONTHLY` stops the account at 20
+  credits a month (about $40 to $60), warning the account admins at 75%.
+- **A warehouse:** `CHANGEPORT_TEST_WH`, extra small, suspended after a minute
+  without queries.
+- **A role and a user:** the role `CHANGEPORT_TEST` owns the database
+  `CHANGEPORT_TEST`, where each test run makes a schema of its own, as
+  Snowflake cannot limit a role to databases of some names. It may also
+  create users, roles and network policies, to play a customer running the
+  setup SQL the console generates. The service user `CHANGEPORT_TEST_CI` signs
+  in with a key pair only.
+
+Local runs take the account, the user and the private key from `.env` (see
+`.env.sample`); CI takes them from the variables `SNOWFLAKE_ACCOUNT` and
+`SNOWFLAKE_TEST_USER` and the secret `SNOWFLAKE_TEST_PRIVATE_KEY`. To rotate
+the key, make a new pair, put the private key in `.env` and the secret, and
+run the script again with the public key: it changes nothing else.
+
+The account began as a 30-day trial on 27 November 2026: it needs a card by
+about 27 December 2026, or it suspends and the tests fail.
+
 ### Local addresses
 
 | Address | What it is | Runs with | Changes when |
