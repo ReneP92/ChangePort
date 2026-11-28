@@ -4,7 +4,8 @@ A customer connects their Postgres database in the console and picks tables.
 Each table then streams into a topic of its own over logical replication (the
 write-ahead log), starting with a snapshot of the rows already there. This is
 the source half of change data capture. Delivering the tables on to a
-warehouse is the CDC product of Phase 9.
+warehouse is the destination half, starting with Snowflake
+([snowflake.md](snowflake.md)).
 
 It is tracked in the
 [Postgres CDC source milestone](https://github.com/ReneP92/changeport/milestone/11),

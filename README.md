@@ -80,6 +80,7 @@ for progress.
 | [Phase 1: Single-tenant data plane](https://github.com/ReneP92/changeport/milestone/2) | Dec 25, 2026 |
 | [Phase 2: Observability](https://github.com/ReneP92/changeport/milestone/3) | Mar 5, 2027 |
 | [Postgres CDC source](https://github.com/ReneP92/changeport/milestone/11), pulled forward from Phase 7 ([docs/cdc.md](docs/cdc.md)) | No date yet |
+| [Snowflake destination](https://github.com/ReneP92/changeport/milestone/12), pulled forward from Phase 9 ([docs/snowflake.md](docs/snowflake.md)) | No date yet |
 | [Phase 3: Guidance layer](https://github.com/ReneP92/changeport/milestone/4) | Apr 16, 2027 |
 | [Phase 4: Replay, hardening and design-partner launch](https://github.com/ReneP92/changeport/milestone/5) | Jun 11, 2027 |
 | [Phase 5: Grow to 50 customers](https://github.com/ReneP92/changeport/milestone/6) | Oct 15, 2027 |
@@ -593,9 +594,11 @@ account admin runs in a Snowsight worksheet:
   setup SQL the console generates. The service user `CHANGEPORT_TEST_CI` signs
   in with a key pair only.
 
-Local runs take the account, the user and the private key from `.env` (see
-`.env.sample`); CI takes them from the variables `SNOWFLAKE_ACCOUNT` and
-`SNOWFLAKE_TEST_USER` and the secret `SNOWFLAKE_TEST_PRIVATE_KEY`. To rotate
+`just snowflake-test` runs the tests with the account, the user and the
+private key from `.env` (see `.env.sample`); `just test` skips them, as they
+use credits. CI's Go job runs them for the changes that can change their
+results, with the variables `SNOWFLAKE_ACCOUNT` and `SNOWFLAKE_TEST_USER` and
+the secret `SNOWFLAKE_TEST_PRIVATE_KEY`. To rotate
 the key, make a new pair, put the private key in `.env` and the secret, and
 run the script again with the public key: it changes nothing else.
 
