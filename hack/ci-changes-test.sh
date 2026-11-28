@@ -36,6 +36,9 @@ expect "images/connect/Dockerfile" connect_image e2e_core e2e_cdc e2e_failover e
 expect "internal/console/messages.go" go e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console images
 expect "deploy/base/alerting/rules/postgres-sources.yaml" go e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console images
 expect "hack/cdc-test.sh" e2e_cdc
+expect "internal/snowflake/merge_test.go" go snowflake e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console images
+expect "go.sum" go snowflake e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console images
+expect "hack/go-test.sh" go snowflake e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console images
 expect "api/openapi.yaml" go web e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console images
 expect "hack/bun.sh" site web go console e2e_core
 expect "site/index.html
@@ -50,10 +53,10 @@ expect "hack/lag-test.sh" e2e_core
 expect "hack/smoke-test.sh" go e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console images
 expect "hack/ui-e2e.sh" go e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console images
 expect "hack/ci-changes-test.sh" ""
-expect "hack/ci-changes.sh" go terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console kafka_image connect_image images
-expect ".github/workflows/ci.yml" go terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console kafka_image connect_image images
-expect "justfile" go terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console kafka_image connect_image images
-expect "hack/lib.sh" go terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console kafka_image connect_image images
+expect "hack/ci-changes.sh" go snowflake terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console kafka_image connect_image images
+expect ".github/workflows/ci.yml" go snowflake terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console kafka_image connect_image images
+expect "justfile" go snowflake terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console kafka_image connect_image images
+expect "hack/lib.sh" go snowflake terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console kafka_image connect_image images
 
 # Every script a suite of hack/e2e.sh runs marks that suite, so that a
 # script one more suite comes to run is not left to the suites it ran in.
@@ -97,7 +100,7 @@ suites "internal/agent/markers.go" '["core","cdc","failover","chaos","alerts"]'
 suites "site/index.html" '[]'
 
 all=$("$changes" --all 2>/dev/null | awk -F= '$2 == "true" { print $1 }' | sort | xargs)
-want=$(printf '%s\n' go terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console kafka_image connect_image images | sort | xargs)
+want=$(printf '%s\n' go snowflake terraform web site e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts console kafka_image connect_image images | sort | xargs)
 [[ $all == "$want" ]] || {
   printf -- '--all runs [%s], not every job [%s]\n' "$all" "$want" >&2
   failed=1

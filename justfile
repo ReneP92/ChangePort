@@ -20,6 +20,12 @@ build:
 test:
     hack/go-test.sh
 
+# Run the Snowflake destination's tests against the Snowflake test account in
+# .env (README.md, Snowflake); `just test` skips them unless CI passes it
+[group('Go')]
+snowflake-test *flags:
+    hack/snowflake-test.sh {{ flags }}
+
 # Build the pinned tools from tools/go.mod into bin/
 [group('Go')]
 tools:

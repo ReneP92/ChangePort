@@ -32,6 +32,7 @@ jobs:
     runs-on: ubuntu-26.04
     outputs:
       go: ${{ steps.changes.outputs.go }}
+      snowflake: ${{ steps.changes.outputs.snowflake }}
       terraform: ${{ steps.changes.outputs.terraform }}
       web: ${{ steps.changes.outputs.web }}
       site: ${{ steps.changes.outputs.site }}
@@ -80,7 +81,33 @@ jobs:
           git diff --exit-code
       - name: Lint
         run: just lint
+      # The Snowflake destination's tests run against the Snowflake test
+      # account (README.md, Snowflake), for changes that can change their
+      # results, as they use its credits. Where its secret is not available,
+      # as in pull requests from forks, they skip with a notice; on main and
+      # in this repository's pull requests, a missing secret fails the job.
+      - id: snowflake
+        name: Check for the Snowflake test account
+        if: needs.changes.outputs.snowflake == 'true'
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ vars.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_TEST_USER: ${{ vars.SNOWFLAKE_TEST_USER }}
+          SNOWFLAKE_TEST_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_TEST_PRIVATE_KEY }}
+          FROM_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          if [ -n "$SNOWFLAKE_TEST_PRIVATE_KEY" ] && [ -n "$SNOWFLAKE_ACCOUNT" ] && [ -n "$SNOWFLAKE_TEST_USER" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          elif [ "$FROM_FORK" = true ]; then
+            echo "::notice title=Snowflake tests skipped::The Snowflake test account is not available to pull requests from forks, so the Snowflake destination's tests did not run."
+          else
+            echo "::error title=No Snowflake test account::The variables SNOWFLAKE_ACCOUNT and SNOWFLAKE_TEST_USER and the secret SNOWFLAKE_TEST_PRIVATE_KEY are needed (README.md, Snowflake)."
+            exit 1
+          fi
       - name: Test
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ steps.snowflake.outputs.available == 'true' && vars.SNOWFLAKE_ACCOUNT || '' }}
+          SNOWFLAKE_TEST_USER: ${{ steps.snowflake.outputs.available == 'true' && vars.SNOWFLAKE_TEST_USER || '' }}
+          SNOWFLAKE_TEST_PRIVATE_KEY: ${{ steps.snowflake.outputs.available == 'true' && secrets.SNOWFLAKE_TEST_PRIVATE_KEY || '' }}
         run: just test
 
   # The just recipes download the Terraform that hack/lib.sh pins, as on a

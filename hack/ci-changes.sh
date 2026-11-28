@@ -20,7 +20,9 @@
 set -euo pipefail
 
 suites=(e2e_core e2e_cdc e2e_failover e2e_chaos e2e_alerts)
-jobs=(go terraform web site "${suites[@]}" console kafka_image connect_image images)
+# snowflake is the Go job's tests against the Snowflake test account, which
+# use its credits: they run for changes that can change their results.
+jobs=(go snowflake terraform web site "${suites[@]}" console kafka_image connect_image images)
 declare -A need why
 for job in "${jobs[@]}"; do need[$job]=false; done
 
@@ -63,6 +65,9 @@ while IFS= read -r file; do
   # suite's console test run on.
   hack/bun.sh | hack/playwright-install.sh) mark "$file" site web go console e2e_core ;;
   terraform/* | hack/terraform.sh) mark "$file" terraform ;;
+  # The Snowflake destination's code, the driver it is built on, and the
+  # scripts that run its tests.
+  internal/snowflake/* | go.mod | go.sum | hack/go-test.sh | hack/snowflake-test.sh) mark "$file" go snowflake "${suites[@]}" console images ;;
   # The Kafka and Connect images run in every cluster on kind.
   images/kafka/* | hack/kafka-image-test.sh) mark "$file" kafka_image "${suites[@]}" console ;;
   images/connect/* | hack/connect-image-test.sh) mark "$file" connect_image "${suites[@]}" console ;;
